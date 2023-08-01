@@ -2,6 +2,10 @@
 // ©2021-2023 Stichting Zeilvaart Warmond
 // Flutter/Dart Track & Trace app for Android, iOS and web
 //
+// Version 3.0.2
+// - Added more maps and map overlays
+// - saved some more mapmenu stuff in shared preferences
+//
 // Version 3.0.1
 // - minor cosmetic changes in the event menu
 //
@@ -24,6 +28,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
+import 'package:intl/intl.dart';
 //
 final isDeviceMobile = kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android);
 //
@@ -33,6 +38,7 @@ const server = 'https://tt.zeilvaartwarmond.nl/';
 //
 // vars for getting physical device info and the phoneId
 late MediaQueryData queryData;    // needed for getting the screen width and height
+double menuOffset = 0;            // used to calculate the offset of the menutext from the top of the screen
 int screenWidth = 0;
 int screenHeight = 0;
 
@@ -95,12 +101,14 @@ List windColorTable = [
   '#ff5225', '#ff08d1', '#e50cff', '#b026ff', '#8334ff', '#7f0000', '#000000' ];
 //
 // variables used for following ships and zooming
+//
 Map<String, bool> following = {};
 int followCounter = 0;
 bool followAll = true;
 bool autoZoom = true;
 //
 // vars for the movement of ships and wind markers in time
+//
 const speedIndexInitialValue = 4;
 int speedIndex = speedIndexInitialValue;     // index in the following table en position of the speed slider, default = 3 min/sec
 List<int> speedTable = [0,         10,           30,           60,          180,         300,         900,          1800,         3600];
@@ -117,6 +125,7 @@ bool replayPause = false;
 const replayRate = 50;      // milliseconds = 20 frames/second
 //
 // UI messages in the EventSelection menu
+//
 String selectionMessage = '';
 String eventTitle = "Kies een evenement";
 //
@@ -126,7 +135,6 @@ bool showShipMenu = false;
 bool showInfoPage = false;
 bool showShipInfo = false;
 String infoTextHTML = '';       // HTML text for the info page from {server}/html/app-info-page.html
-String windyURL = '';           // URL for the windy page after a long press on the map
 String shipInfoHTML = '';       // HTML from get-shipinfo.php
 //
 bool testing = false;           // double tap the title of the app to set to true.
@@ -134,48 +142,37 @@ bool testing = false;           // double tap the title of the app to set to tru
 //
 const String bgColorBlack = '#000000';
 const String bgColorWhite = '#ffffff';
-const Map<String, dynamic> mapTileProviderData = {
+//
+// set up an initial single default maptileprovider
+//
+Map<String, dynamic> mapTileProviderData = {
   'Standaard': {
     'URL': 'https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/standaard/EPSG:3857/{z}/{x}/{y}.png',
-    'bgColor': bgColorBlack,
+    'wmsbaseURL': '',
+    'wmslayers': [],
+    'bgColor': '#000000',
     'subDomains': [],
-    'maxZoom' : 19.0,
-    'attrib': 'Kadaster.nl',
+    'maxZoom': 19.0,
+    'attrib': 'Kadaster',
     'attribLink': 'https://www.kadaster.nl'},
-  'Grijs': {
-    'URL': 'https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/grijs/EPSG:3857/{z}/{x}/{y}.png',
-    'bgColor': bgColorBlack,
-    'subDomains': [],
-    'maxZoom' : 19.0,
-    'attrib': 'Kadaster.nl',
-    'attribLink': 'https://www.kadaster.nl'},
-  'Satelliet': {
-    'URL': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
-        '?token=AAPK98f1d23951d54ec6af3162442bf68e054QnQLuJueZ8pkCU6hV6vAcwoykak2mZeyCj8Y3-MIMAOSPZtZm4jHvwxGw_kcMJv',
-    'bgColor': bgColorWhite,
-    'subDomains': [],
-    'maxZoom' : 19.0,
-    'attrib': 'Esri, Maxar, others...',
-    'attribLink': 'https://www.esri.com'},
-  'Open Street Map': {
-    'URL': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-    'bgColor': bgColorBlack,
-    'subDomains': [],
-    'maxZoom' : 19.0,
-    'attrib': 'Open Street Map Contributors',
-    'attribLink': 'https://www.openstreetmap.org/'},
 };
 String selectedMapType = mapTileProviderData.keys.toList()[0];
+Map<String, dynamic> overlayTileProviderData = {};
+String selectedOverlayType = '';
+bool mapOverlay = false;
 String markerBackgroundColor = mapTileProviderData[selectedMapType]['bgColor'];
 //
-bool openSeaMapOverlay = false;
 bool windMarkersOn = true;
 bool showRoute = true;
 bool showRouteLabels = false;
 bool showShipLabels = true;
 bool showShipSpeeds = false;
+//
+// define two markers for map locations
 late Icon locationMarkerIconBlack;
 late Icon locationMarkerIconWhite;
+late AppBar myAppBar;
+//
 //------------------------------------------------------------------------------
 //
 // Here our app starts (more or less)
@@ -298,7 +295,15 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       infoTextHTML = '';
     }
     //
-    // Get the maptype from local storage (from a previous session)
+    // get the complete list of map tile providers from the server
+    //
+    final resp = await http.get(Uri.parse('${server}get/maptileproviders.json'));
+    if (resp.statusCode == 200) {
+      mapTileProviderData = jsonDecode(resp.body)['basemaps'];
+      overlayTileProviderData = jsonDecode(resp.body)['overlays'];
+    }
+    //
+    // Get the selectedmaptype from local storage (from a previous session)
     //
     String? type = prefs.getString('maptype');
     type ??= mapTileProviderData.keys.toList()[0];     // set maptype to default if nothing in local storage
@@ -306,13 +311,42 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (!mapTileProviderData.keys.toList().contains(selectedMapType)) {
       //set maptype to first maptype if the stored maptype is no longer in the mapTileProviderData list
       selectedMapType = mapTileProviderData.keys.toList()[0];
+      prefs.setString('maptype', selectedMapType);
     }
     markerBackgroundColor = mapTileProviderData[selectedMapType]['bgColor'];
     //
-    // see if we had the Open Sea Layer on during the previous session
+    // see if we had the overlay layer on during the previous session
     //
-    bool? a = prefs.getBool('openseamapoverlay');
-    openSeaMapOverlay = (a == null) ? false : a;
+    bool? a = prefs.getBool('mapoverlay');
+    mapOverlay = (a == null) ? false : a;
+    prefs.setBool('mapoverlay', mapOverlay);
+    // and see if the user selected an overlay in the previous session
+    type = prefs.getString('overlaytype');
+    type ??= overlayTileProviderData.keys.toList()[0];
+    selectedOverlayType = type;
+    if (!overlayTileProviderData.keys.toList().contains(selectedOverlayType)) {
+      //set overlaytype to first overlaytype if the stored maptype is no longer in the overlayTileProviderData list
+      selectedOverlayType = overlayTileProviderData.keys.toList()[0];
+      prefs.setString('overlaytype', selectedOverlayType);
+    }
+    //
+    // get/set some other shared preference stuff
+    //
+    a = prefs.getBool('windmarkers');
+    windMarkersOn = (a == null) ? true : a;
+    prefs.setBool('windmarkers', windMarkersOn);
+    a = prefs.getBool('showroute');
+    showRoute = (a == null) ? true : a;
+    prefs.setBool('showroute', showRoute);
+    a = prefs.getBool('routelabels');
+    showRouteLabels = (a == null) ? false : a;
+    prefs.setBool('routelabels', showRouteLabels);
+    a = prefs.getBool('shiplabels');
+    showShipLabels = (a == null) ? true : a;
+    prefs.setBool('shiplabels', showShipLabels);
+    a = prefs.getBool('shipspeeds');
+    showShipSpeeds = (a == null) ? false : a;
+    prefs.setBool('shipspeeds', showShipSpeeds);
     //
     // Get the event domain from a previous session
     //
@@ -403,6 +437,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       return {};
     }
   }
+  // the trails and replay files contain timestamps in seconds. We need milisecconds...
   Map<String, dynamic> convertTimes(a)  {
     a['starttime'] = a['starttime'] * 1000;
     a['endtime'] = a['endtime'] * 1000;
@@ -444,6 +479,65 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   //
   @override
   Widget build(BuildContext context) {
+    myAppBar = AppBar(        // define the appbar here, so that we can use it's height when positioning the menu's
+      backgroundColor: Colors.blueGrey[700]?.withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu) ? 1 : 0.3) ,
+      elevation: 0,
+      titleSpacing: 0.0,
+      leading: IconButton(        // tappable SZW logo
+          padding: const EdgeInsets.all(0),
+          icon: Image.asset('assets/images/whiteSZWicon.png'),
+          onPressed: () {
+            showShipMenu = showMapMenu = showInfoPage = showShipInfo = false;
+            showEventMenu = replayPause= !showEventMenu;
+            setState(() { });
+          }
+      ),
+      title: InkWell(     // the InkWell makes the title "tappable"
+        onTap: () {       // show the eventMenu and allow the user to make a selection
+          showShipMenu = showMapMenu = showInfoPage = showShipInfo = false;
+          showEventMenu = replayPause = !showEventMenu;
+          setState(() { });
+        },
+        onDoubleTap: () async {   // toggles testing mode and reloads the dirList, with or without underscored events
+          testing = !testing;
+          dirList = await fetchDirList();
+          eventList = [];
+          dirList.forEach((k, v) => eventList.add(k));
+          eventYearList = [];
+          eventDayList = [];
+        },
+        child: Text(eventTitle),
+      ),
+      actions: [
+        IconButton(           // button for the infoPage
+          visualDensity: VisualDensity.compact,
+          onPressed: () {
+            showEventMenu = showShipMenu = showMapMenu = showShipInfo = false;
+            showInfoPage = replayPause = !showInfoPage;
+            setState(() {  });
+          },
+          icon: const Icon(Icons.info), //Image.asset('assets/images/ic_info_button.png'),
+        ),
+        IconButton(           // button for the mapMenu
+          visualDensity: VisualDensity.compact,
+          onPressed: () {
+            showEventMenu = showShipMenu = showInfoPage = showShipInfo = false;
+            showMapMenu = replayPause = !showMapMenu;
+            setState(() {  });
+          },
+          icon: const Icon(Icons.map),  //Image.asset('assets/images/mapicon.png'),
+        ),
+        IconButton(           // button for the shipList
+          visualDensity: VisualDensity.compact,
+          onPressed: () {
+            showEventMenu = showMapMenu = showInfoPage = showShipInfo = false;
+            showShipMenu = replayPause = !showShipMenu;
+            setState(() {  });
+          },
+          icon: const Icon(Icons.sailing),
+        ),
+      ],
+    );
     return MaterialApp(
       title: eventTitle,
       theme: ThemeData (      // some basic colours
@@ -458,6 +552,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       home: Builder(builder: (BuildContext context) {
         screenWidth = MediaQuery.of(context).size.width.toInt();
         screenHeight = MediaQuery.of(context).size.height.toInt();
+        menuOffset = MediaQuery.of(context).viewPadding.top + myAppBar.preferredSize.height;
         return Scaffold(
           extendBodyBehindAppBar: true,
           //
@@ -493,7 +588,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           //
           floatingActionButtonLocation: FloatingActionButtonLocation.endDocked,
           floatingActionButton: (followCounter > 0 && !showShipMenu && !showInfoPage && !showMapMenu) ?
-          Padding(
+            Padding(
               padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),   // move the button up from the bottom of the screen
               // to make place for the time slider
               child: FloatingActionButton(
@@ -507,66 +602,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 backgroundColor: Colors.blueGrey[700]?.withOpacity(0.5),
                 child: Text((autoZoom) ? ' auto\nzoom\n  off' : ' auto\nzoom', style: const TextStyle(fontSize: 11)),
               )
-          ) : null,
-          appBar: AppBar(
-            backgroundColor: Colors.blueGrey[700]?.withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu) ? 1 : 0.3) ,
-            elevation: 0,
-            titleSpacing: 0.0,
-            leading: IconButton(        // tappable SZW logo
-                padding: const EdgeInsets.all(0),
-                icon: Image.asset('assets/images/whiteSZWicon.png'),
-                onPressed: () {
-                  showShipMenu = showMapMenu = showInfoPage = showShipInfo = false;
-                  showEventMenu = replayPause= !showEventMenu;
-                  setState(() { });
-                }
-            ),
-            title: InkWell(     // the InkWell makes the title "tappable"
-              onTap: () {       // show the eventMenu and allow the user to make a selection
-                showShipMenu = showMapMenu = showInfoPage = showShipInfo = false;
-                showEventMenu = replayPause = !showEventMenu;
-                setState(() { });
-              },
-              onDoubleTap: () async {   // toggles testing mode and reloads the dirList, with or without underscored events
-                testing = !testing;
-                dirList = await fetchDirList();
-                eventList = [];
-                dirList.forEach((k, v) => eventList.add(k));
-                eventYearList = [];
-                eventDayList = [];
-              },
-              child: Text(eventTitle),
-            ),
-            actions: [
-              IconButton(           // button for the infoPage
-                visualDensity: VisualDensity.compact,
-                onPressed: () {
-                  showEventMenu = showShipMenu = showMapMenu = showShipInfo = false;
-                  showInfoPage = replayPause = !showInfoPage;
-                  setState(() {  });
-                },
-                icon: const Icon(Icons.info), //Image.asset('assets/images/ic_info_button.png'),
-              ),
-              IconButton(           // button for the mapMenu
-                visualDensity: VisualDensity.compact,
-                onPressed: () {
-                  showEventMenu = showShipMenu = showInfoPage = showShipInfo = false;
-                  showMapMenu = replayPause = !showMapMenu;
-                  setState(() {  });
-                },
-                icon: const Icon(Icons.map),  //Image.asset('assets/images/mapicon.png'),
-              ),
-              IconButton(           // button for the shipList
-                visualDensity: VisualDensity.compact,
-                onPressed: () {
-                  showEventMenu = showMapMenu = showInfoPage = showShipInfo = false;
-                  showShipMenu = replayPause = !showShipMenu;
-                  setState(() {  });
-                },
-                icon: const Icon(Icons.sailing),
-              ),
-            ],
-          ),
+            ) : null,
+          appBar: myAppBar,
           body: Stack(                            // this is the outer stack
             alignment: Alignment.topLeft,
             children: [
@@ -594,7 +631,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   //
   //----------------------------------------------------------------------------
   //
-  // the UI elements jnot defined above. Hopefully the names speak for themselves
+  // the UI elements defined above. Hopefully the names speak for themselves
   //
   FlutterMap uiFlutterMap() {
     return FlutterMap(                     // fills the complete body as bottom layer in the UI
@@ -612,7 +649,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           },
           onLongPress: (_, latlng) {
             if (eventStatus == 'live' || eventStatus == 'pre-event') {
-              windyURL = 'https://embed.windy.com/embed2.html?lat=${latlng.latitude}&lon=${latlng.longitude}'
+              String windyURL = 'https://embed.windy.com/embed2.html?lat=${latlng.latitude}&lon=${latlng.longitude}'
                   '&detailLat=${latlng.latitude}&detailLon=${latlng.longitude}'
                   '&width=$screenWidth&height=$screenHeight&zoom=11&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker='
                   '&calendar=now&pressure=&type=map&location=coordinates&detail=true&metricWind=bft&metricTemp=%C2%B0C&radarRange=-1';
@@ -625,30 +662,54 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           }
       ),
       nonRotatedChildren: [
-        SimpleAttributionWidget(
-          source: Text(mapTileProviderData[selectedMapType]['attrib'], overflow: TextOverflow.ellipsis),
-          backgroundColor: Colors.black12,
-          onTap: () async {
-            showEventMenu = showShipMenu = showMapMenu = showShipInfo = false;
-            final Uri url = Uri.parse(mapTileProviderData[selectedMapType]['attribLink']);
-            await launchUrl(url, mode: LaunchMode.platformDefault);
-            setState(() {  });
-          },
-        )
+        RichAttributionWidget(
+          popupBackgroundColor: Colors.white70,
+          alignment: AttributionAlignment.bottomRight,
+          showFlutterMapAttribution: false,
+          animationConfig: const ScaleRAWA(),
+          permanentHeight: 32,
+          attributions: [
+            TextSourceAttribution(
+              'Basiskaart ${mapTileProviderData[selectedMapType]['attrib']}',
+              textStyle: const TextStyle(color: Colors.black87),
+              onTap: () => launchUrl(Uri.parse(mapTileProviderData[selectedMapType]['attribLink']),
+                  mode: LaunchMode.platformDefault)
+            ),
+            (mapOverlay && overlayTileProviderData.isNotEmpty) ? TextSourceAttribution(
+              'Kaartoverlay ${overlayTileProviderData[selectedOverlayType]['attrib']}',
+              textStyle: const TextStyle(color: Colors.black87),
+              onTap: () => launchUrl(Uri.parse(overlayTileProviderData[selectedOverlayType]['attribLink']),
+                mode: LaunchMode.platformDefault)
+            ) : const TextSourceAttribution(""),
+            TextSourceAttribution('2011-${DateFormat('yyyy').format(DateTime.now())} Stichting Zeilvaart Warmond',
+              textStyle: const TextStyle(color: Colors.black87),
+              onTap: () => launchUrl(Uri.parse('https://www.zeilvaartwarmond.nl'))
+            )
+          ],
+        ),
       ],
       children: [
         TileLayer(
-            urlTemplate: mapTileProviderData[selectedMapType]['URL'],
-            subdomains: List<String>.from(mapTileProviderData[selectedMapType]['subDomains']),
-            maxZoom: mapTileProviderData[selectedMapType]['maxZoom'],
-            userAgentPackageName: 'nl.zeilvaartwarmond.szwtracktrace'
+          wmsOptions: (mapTileProviderData[selectedMapType]['wmsbaseURL'] == '') ? null : WMSTileLayerOptions(
+            baseUrl: mapTileProviderData[selectedMapType]['wmsbaseURL'],
+            layers: mapTileProviderData[selectedMapType]['wmslayers'].cast<String>(),
+          ),
+          urlTemplate: mapTileProviderData[selectedMapType]['URL'],
+          subdomains: List<String>.from(mapTileProviderData[selectedMapType]['subDomains']),
+          maxZoom: mapTileProviderData[selectedMapType]['maxZoom'],
+          userAgentPackageName: 'nl.zeilvaartwarmond.szwtracktrace'
         ),
-        TileLayer(
-          urlTemplate: 'https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',
-          tileBounds: (openSeaMapOverlay) ? LatLngBounds(const LatLng(-90,0), const LatLng(90,180)) : LatLngBounds(const LatLng(0,0), const LatLng(0,0)),
+        (mapOverlay && overlayTileProviderData.isNotEmpty) ? TileLayer(
+          wmsOptions: (overlayTileProviderData[selectedOverlayType]['wmsbaseURL'] == '') ? null : WMSTileLayerOptions(
+            baseUrl: overlayTileProviderData[selectedOverlayType]['wmsbaseURL'],
+            layers: overlayTileProviderData[selectedOverlayType]['wmslayers'].cast<String>(),
+          ),
+          urlTemplate: overlayTileProviderData[selectedOverlayType]['URL'],
+          subdomains: List<String>.from(overlayTileProviderData[selectedOverlayType]['subDomains']),
+          tileBounds: (mapOverlay) ? LatLngBounds(const LatLng(-90,0), const LatLng(90,180)) : LatLngBounds(const LatLng(0,0), const LatLng(0,0)),
           backgroundColor: Colors.transparent,
           userAgentPackageName: 'nl.zeilvaartwarmond.szwtracktrace',
-        ),
+        ) : Container(),
         PolylineLayer(polylines: routeLineList + shipTrailList),
         MarkerLayer(markers: routeLabelList + routeMarkerList + windMarkerList + shipLabelList + shipMarkerList),
       ],
@@ -816,6 +877,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                     )
                 ),
               ),
+              const SizedBox(width: 35) // to give the attibution logos some space
             ],
           ),
           SizedBox(               // give those poor iPhone owners some space for their microphone....
@@ -830,8 +892,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       child: (showEventMenu) ? Container(
           color: Colors.blueGrey[700],
           width: 275,
-          padding: const EdgeInsets.fromLTRB(20, 20, 10, 0),
+          padding:  EdgeInsets.fromLTRB(10.0, menuOffset + 10.0, 10.0, 10.0),
           child: ListView(
+              padding: EdgeInsets.zero,
               children: [
                 const Text("Evenement menu\n", style: TextStyle(fontSize: 20)),
                 PopupMenuButton(
@@ -933,7 +996,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
               Container(
                 width: 275,
                 color: Colors.blueGrey[700],
-                padding: const EdgeInsets.fromLTRB(10.0, 105.0, 10.0, 10.0),
+                padding: EdgeInsets.fromLTRB(10.0, menuOffset + 10.0, 10.0, 10.0),
                 child: SingleChildScrollView(
                     child: Column(
                       children: [
@@ -1039,11 +1102,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
               Container(
                   width: 275,
                   color: Colors.blueGrey[700],
-                  padding: const EdgeInsets.fromLTRB(10.0, 10.0, 10.0, 10.0),
+                  padding: EdgeInsets.fromLTRB(10.0, menuOffset + 10.0, 10.0, 10.0),
                   child: SingleChildScrollView(
                       child: Column(
                           children: [
                             ListView.builder(
+                                padding: EdgeInsets.zero,
                                 shrinkWrap: true,
                                 physics: const NeverScrollableScrollPhysics(),
                                 itemCount: mapTileProviderData.keys.toList().length,
@@ -1083,14 +1147,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                                 }
                             ),
                             const Divider(color: Colors.black38),
-                            Row(
+                            (selectedOverlayType == "") ? Container() : Row(
                                 mainAxisAlignment: MainAxisAlignment.start,
                                 mainAxisSize:MainAxisSize.max,
                                 children: [
                                   const Expanded(
                                     child: Padding(
                                       padding: EdgeInsets.all(5),
-                                      child: Text('Open Sea Map overlay'),
+                                      child: Text('Kaart overlay'),
                                     ),
                                   ),
                                   Checkbox(
@@ -1098,16 +1162,56 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                                       activeColor: Colors.white70,
                                       checkColor: Colors.black87,
                                       side: const BorderSide(color: Colors.white70),
-                                      value: openSeaMapOverlay,
+                                      value: mapOverlay,
                                       onChanged: (value) {
-                                        openSeaMapOverlay = value!;
-                                        prefs.setBool('openseamapoverlay', openSeaMapOverlay);
+                                        mapOverlay = value!;
+                                        prefs.setBool('mapoverlay', mapOverlay);
                                         showMapMenu = replayPause= false;
                                         setState(() {  });
                                       }
                                   ),
                                 ]
                             ),
+                            (selectedOverlayType == "") ? Container() : ListView.builder(
+                                padding: EdgeInsets.zero,
+                                shrinkWrap: true,
+                                physics: const NeverScrollableScrollPhysics(),
+                                itemCount: overlayTileProviderData.keys.toList().length,
+                                itemBuilder: (BuildContext context, index) {
+                                  return Row(
+                                      mainAxisAlignment: MainAxisAlignment.start,
+                                      mainAxisSize:MainAxisSize.max,
+                                      children: [
+                                        Expanded(
+                                          child: Padding(
+                                            padding: const EdgeInsets.fromLTRB(20,0,5,5),
+                                            child: Text(overlayTileProviderData.keys.toList()[index])
+                                          ),
+                                        ),
+                                        Radio(
+                                            activeColor: Colors.white70,
+                                            visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
+                                            value: overlayTileProviderData.keys.toList()[index],
+                                            groupValue: selectedOverlayType,
+                                            onChanged: (x) {
+                                              selectedOverlayType = x as String;
+                                              prefs.setString('overlaytype', selectedOverlayType);
+                                              showMapMenu = replayPause= false;
+                                              if (!replayRunning && eventStatus != "" && eventStatus != 'pre-event') {
+                                                // we need the eventStatus to be non-blank, otherwise the markers of the ships, labels and wind will be
+                                                // moved when the markers are not initialized yet.
+                                                // And if replay is running, we will update every xx milliseconds, so no need to update
+                                                moveShipsAndWindTo(currentReplayTime, true );
+                                              }
+                                              if (eventStatus != "" && route['features'] != null) buildRoute(move: false);  // ensures the edge around the routemarkers is changed
+                                              setState(() { });
+                                            }
+                                        )
+                                      ]
+                                  );
+                                }
+                            ),
+                            (selectedOverlayType == "") ? Container() : const Divider(color: Colors.black38),
                             Container(child: (eventStatus == 'pre-event' || eventStatus == '') ? null : Row(
                                 mainAxisAlignment: MainAxisAlignment.start,
                                 mainAxisSize:MainAxisSize.max,
@@ -1126,6 +1230,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                                       value: windMarkersOn,
                                       onChanged: (value) {
                                         windMarkersOn = !windMarkersOn;
+                                        prefs.setBool('windmarkers', windMarkersOn);
                                         showMapMenu = replayPause= false;
                                         (windMarkersOn) ? rotateWindTo(currentReplayTime) : windMarkerList = [];      // this turns off the windmarkers
                                         setState(() {  });
@@ -1153,6 +1258,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                                       value: showRoute,
                                       onChanged: (value) {
                                         showRoute = !showRoute;
+                                        prefs.setBool('showroute', showRoute);
                                         showMapMenu = replayPause= false;
                                         buildRoute(move: false);
                                         setState(() {  });
@@ -1179,6 +1285,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                                       value: showRouteLabels,
                                       onChanged: (value) {
                                         showRouteLabels = !showRouteLabels;
+                                        prefs.setBool('routelabels', showRouteLabels);
                                         if (route['features'] != null) buildRoute(move: false);
                                         if (eventStatus != 'pre-event') moveShipsAndWindTo(currentReplayTime, true);
                                         showMapMenu = replayPause= false;
@@ -1207,6 +1314,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                                       value: showShipLabels,
                                       onChanged: (value) {
                                         showShipLabels = !showShipLabels;
+                                        prefs.setBool('shiplabels', showShipLabels);
                                         if (route['features'] != null) buildRoute(move: false);
                                         if (eventStatus != 'pre-event') moveShipsAndWindTo(currentReplayTime, true);
                                         showMapMenu = replayPause= false;
@@ -1233,6 +1341,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                                       value: showShipSpeeds,
                                       onChanged: (value) {
                                         showShipSpeeds = !showShipSpeeds;
+                                        prefs.setBool('shipspeeds', showShipSpeeds);
                                         if (eventStatus != 'pre-event') moveShipsAndWindTo(currentReplayTime, true);
                                         showMapMenu = replayPause= false;
                                         setState(() {  });
@@ -1265,7 +1374,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   child: Container(
                       width: (screenWidth > 750) ? 700 : screenWidth - 50,
                       color: Colors.blueGrey[200],
-                      padding: const EdgeInsets.fromLTRB(20.0, 105.0, 20.0, 20.0),
+                      padding: EdgeInsets.fromLTRB(20.0, menuOffset + 10.0, 20.0, 20.0),
                       child: SingleChildScrollView(
                         child: Html(
                           data: infoTextHTML,
@@ -1298,7 +1407,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 color: Colors.blueGrey[600],
                 width: 350,
                 height: 500,
-                padding: const EdgeInsets.fromLTRB(10.0, 105.0, 10.0, 10.0),
+                padding: EdgeInsets.fromLTRB(10.0, menuOffset + 10.0, 10.0, 10.0),
                 child: SingleChildScrollView(child: Html(data: shipInfoHTML)),
               ),
             ),
@@ -1363,8 +1472,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     followCounter = 0;
     followAll = true;
     autoZoom = true;
-    showRoute = true;
-    windMarkersOn = true;
     shipList = [];
     shipColors= [];
     shipMarkerList = [];
