@@ -2,6 +2,10 @@
 // ©2021-2023 Stichting Zeilvaart Warmond
 // Flutter/Dart Track & Trace app for Android, iOS and web
 //
+// Version 3.0.3
+// Cookie Consent toegevoegd
+// Voor web: query ?event= toegevoegd (voor snelle link bijvoorbeeld via FB)
+//
 // Version 3.0.2
 // - Added more maps and map overlays
 // - saved some more mapmenu stuff in shared preferences
@@ -167,11 +171,13 @@ bool showRoute = true;
 bool showRouteLabels = false;
 bool showShipLabels = true;
 bool showShipSpeeds = false;
+bool cookieConsentGiven = false;
 //
 // define two markers for map locations
 late Icon locationMarkerIconBlack;
 late Icon locationMarkerIconWhite;
 late AppBar myAppBar;
+late SnackBar cookieSnackBar;
 //
 //------------------------------------------------------------------------------
 //
@@ -292,7 +298,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (response.statusCode == 200) {
       infoTextHTML = '${response.body}<br><br>Versie $version</body></html>';
     } else {
-      infoTextHTML = '';
+      infoTextHTML = '<html><body>Versie $version</body><html></html>';
     }
     //
     // get the complete list of map tile providers from the server
@@ -347,12 +353,19 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     a = prefs.getBool('shipspeeds');
     showShipSpeeds = (a == null) ? false : a;
     prefs.setBool('shipspeeds', showShipSpeeds);
+    a = prefs.getBool('cookieconsent');
+    cookieConsentGiven = (a == null) ? false : a;
+    prefs.setBool('cookieconsent', cookieConsentGiven);
     //
     // Get the event domain from a previous session
     //
     eventDomain = (prefs.getString('domain') == null) ? "" : prefs.getString('domain')!;
+    // see if it is overruled by an event as parameter in the url string
+    if (kIsWeb && Uri.base.queryParameters.containsKey('event')) {
+      eventDomain = Uri.base.queryParameters['event'].toString(); //get parameter with attribute "event"
+    }
     if (eventDomain != "") {
-      // we have info from a previous session: use it as if the user had selected an event using the UI
+      // we have info from a previous session or from the web url: use it as if the user had selected an event using the UI
       List substrings = eventDomain.split('/');
       eventName = substrings[0];
       dirList[eventName].forEach((k, v) => eventYearList.add(k));
@@ -479,7 +492,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   //
   @override
   Widget build(BuildContext context) {
-    myAppBar = AppBar(        // define the appbar here, so that we can use it's height when positioning the menu's
+    myAppBar = AppBar(        // define the appbar here as a seperate widget, so that we can use it's height when positioning the menu's
       backgroundColor: Colors.blueGrey[700]?.withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu) ? 1 : 0.3) ,
       elevation: 0,
       titleSpacing: 0.0,
@@ -587,7 +600,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           // separate methods, defined under this thingy
           //
           floatingActionButtonLocation: FloatingActionButtonLocation.endDocked,
-          floatingActionButton: (followCounter > 0 && !showShipMenu && !showInfoPage && !showMapMenu) ?
+          floatingActionButton: (followCounter > 0 && !showShipMenu && !showInfoPage && !showMapMenu && !cookieConsentGiven) ?
             Padding(
               padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),   // move the button up from the bottom of the screen
               // to make place for the time slider
@@ -613,7 +626,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   uiFlutterMap(),
                   uiMarkerInfoWindow(context),
                   uiSpeedSliderSizedBox(context),
-                  uiTimeSliderAreaColumn(context)
+                  uiTimeSliderAreaColumn(context),
                 ],
               ),      // inner stack with the map & sliders
               // these are the other elements of the outer stack:
@@ -622,6 +635,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
               uiMapMenuSizedBox(),
               uiInfoPageSizedBox(),
               uiShipInfoSizedBox(),
+              uiCookieConsent(),
             ],
           ),
         );
@@ -666,21 +680,21 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           popupBackgroundColor: Colors.white70,
           alignment: AttributionAlignment.bottomRight,
           showFlutterMapAttribution: false,
-          animationConfig: const ScaleRAWA(),
+         // animationConfig: const ScaleRAWA(),
           permanentHeight: 32,
           attributions: [
             TextSourceAttribution(
-              'Basiskaart ${mapTileProviderData[selectedMapType]['attrib']}',
+              'Basiskaart: ${mapTileProviderData[selectedMapType]['attrib']}',
               textStyle: const TextStyle(color: Colors.black87),
               onTap: () => launchUrl(Uri.parse(mapTileProviderData[selectedMapType]['attribLink']),
                   mode: LaunchMode.platformDefault)
             ),
             (mapOverlay && overlayTileProviderData.isNotEmpty) ? TextSourceAttribution(
-              'Kaartoverlay ${overlayTileProviderData[selectedOverlayType]['attrib']}',
+              'Kaartoverlay: ${overlayTileProviderData[selectedOverlayType]['attrib']}',
               textStyle: const TextStyle(color: Colors.black87),
               onTap: () => launchUrl(Uri.parse(overlayTileProviderData[selectedOverlayType]['attribLink']),
                 mode: LaunchMode.platformDefault)
-            ) : const TextSourceAttribution(""),
+            ) : const TextSourceAttribution(''),
             TextSourceAttribution('2011-${DateFormat('yyyy').format(DateTime.now())} Stichting Zeilvaart Warmond',
               textStyle: const TextStyle(color: Colors.black87),
               onTap: () => launchUrl(Uri.parse('https://www.zeilvaartwarmond.nl'))
@@ -1391,19 +1405,19 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
 
   SizedBox uiShipInfoSizedBox() {
-    return SizedBox(                                // shipInfo
-      child: (showShipInfo) ? Row(
+    return SizedBox( // shipInfo
+      child: (!showShipInfo) ? null : Row(
           children: [
-            const Expanded(                    // fill up the area from the left
+            const Expanded( // fill up the area from the left
               child: Text(''),
             ),
             GestureDetector(
               onTap: () {
                 if (!showShipMenu) replayPause = false; // continue the replay if the shipmenu is not open
-                showShipInfo = false;           // remove the info again from the screen on a tap
-                setState(() { });
+                showShipInfo = false; // remove the info again from the screen on a tap
+                setState(() {});
               },
-              child: Container(                 // the tappable fixed width ship info container with scrollable HTML text
+              child: Container( // the tappable fixed width ship info container with scrollable HTML text
                 color: Colors.blueGrey[600],
                 width: 350,
                 height: 500,
@@ -1411,12 +1425,51 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 child: SingleChildScrollView(child: Html(data: shipInfoHTML)),
               ),
             ),
-            const SizedBox(                 // 40 pixels from the right edge of the screen
+            const SizedBox( // 40 pixels from the right edge of the screen
               width: 40,
             ),
           ]
       )
-          : null,
+    );
+  }
+
+  SizedBox uiCookieConsent() {
+    return SizedBox(                                // shipInfo
+      child: (cookieConsentGiven) ? null : Column(
+          children: [
+            const Expanded(                    // fill up the area from the left
+              child: Text(''),
+            ),
+            Container(
+              color: Colors.blueGrey[700],
+              padding: const EdgeInsets.all(15),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text('Voor de goede werking van deze app wordt de nodige informatie opgeslagen op je '
+                      'telefoon/PC. Ook wordt statistische informatie over het gebruik van de app verzameld. Er worden geen '
+                      'persoonlijke gegevens verzameld. Ben je niet akkoord: wegwezen'),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.fromLTRB(15, 0, 0, 0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.start,
+                      children: [
+                        ElevatedButton(
+                        onPressed: () {
+                          cookieConsentGiven = true;
+                          prefs.setBool('cookieconsent', cookieConsentGiven);
+                          setState(() {});
+                        },
+                        child: const Text('Akkoord')
+                    ),]
+                  )
+                )
+              ]
+            ),
+          )
+        ]
+      )
     );
   }
   //
