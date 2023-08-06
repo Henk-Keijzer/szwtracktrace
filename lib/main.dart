@@ -600,7 +600,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           // separate methods, defined under this thingy
           //
           floatingActionButtonLocation: FloatingActionButtonLocation.endDocked,
-          floatingActionButton: (followCounter > 0 && !showShipMenu && !showInfoPage && !showMapMenu && !cookieConsentGiven) ?
+          floatingActionButton: (followCounter > 0 && !showShipMenu && !showInfoPage && !showMapMenu && cookieConsentGiven) ?
             Padding(
               padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),   // move the button up from the bottom of the screen
               // to make place for the time slider
