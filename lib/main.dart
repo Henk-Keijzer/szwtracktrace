@@ -1623,7 +1623,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       addTrailsToTracks(); // merge the latest track info with the replay info and save it
     } else {  // maxReplay > 0, fetch the trails of the last {maxReplay} hours
       eventStart = DateTime.now().millisecondsSinceEpoch - (maxReplay * 60 * 60 * 1000);
-      replayTracks = await fetchTrails((eventStart/1000).toInt());
+      replayTracks = await fetchTrails(eventStart~/1000);
     }
     buildShipAndWindInfo();      // prepare menu and track info
     if (route['features'] != null) buildRoute(move: false);
