@@ -75,6 +75,7 @@ flutter:
   #   - images/a_dot_ham.jpeg
   assets:
     - assets/images/whiteSZWicon.png
+    - assets/images/OlympiaIcon.png
     - assets/images/play.png
     - assets/images/pause.png
 
