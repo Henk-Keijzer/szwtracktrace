@@ -2,6 +2,12 @@
 // ©2021-2023 Stichting Zeilvaart Warmond
 // Flutter/Dart Track & Trace app for Android, iOS and web
 //
+// Version 3.0.4
+// externe constanten voor varianten van de app voor Olympia en mogelijk andere gebruikers, zoals sportvolgen
+// maxReplay als externe constante toegevoegd. Hiermee wordt de replay beperkt tot maxReplay uren.
+// Dit ten behoeve van Olympia Charters, die slechts 1 heeel lang evenement hebben, waarbij de replay de afgelopen 24 uur is
+// Verder wat bugfixes
+//
 // Version 3.0.3
 // Cookie Consent toegevoegd
 // Voor web: query ?event= toegevoegd (voor snelle link bijvoorbeeld via FB)
@@ -34,11 +40,9 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
 //
+import 'SZWconst.dart';
+//
 final isDeviceMobile = kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android);
-//
-// constant with the URL of the our server
-//
-const server = 'https://tt.zeilvaartwarmond.nl/';
 //
 // vars for getting physical device info and the phoneId
 late MediaQueryData queryData;    // needed for getting the screen width and height
@@ -498,7 +502,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       titleSpacing: 0.0,
       leading: IconButton(        // tappable SZW logo
           padding: const EdgeInsets.all(0),
-          icon: Image.asset('assets/images/whiteSZWicon.png'),
+          icon: Image.asset('assets/images/$appIcon.png'),
           onPressed: () {
             showShipMenu = showMapMenu = showInfoPage = showShipInfo = false;
             showEventMenu = replayPause= !showEventMenu;
@@ -547,7 +551,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
             showShipMenu = replayPause = !showShipMenu;
             setState(() {  });
           },
-          icon: const Icon(Icons.sailing),
+          icon: const Icon(boatIcon),
         ),
       ],
     );
@@ -680,7 +684,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           popupBackgroundColor: Colors.white70,
           alignment: AttributionAlignment.bottomRight,
           showFlutterMapAttribution: false,
-         // animationConfig: const ScaleRAWA(),
           permanentHeight: 32,
           attributions: [
             TextSourceAttribution(
@@ -1051,11 +1054,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                                 mainAxisSize: MainAxisSize.max,
                                 children: [
                                   Padding(
-                                    padding: const EdgeInsets.all(5),
+                                    padding: const EdgeInsets.all(0),
                                     child: Text(
-                                        (kIsWeb) ? '\u2588' : '\u2588\u258C',
+                                        '\u25FC',
                                         style: TextStyle(
-                                            color: Color(int.parse('FF${shipColors[index].toUpperCase().replaceAll("#", "")}', radix:16))
+                                          fontSize: 24,
+                                          color: Color(int.parse('FF${shipColors[index].toUpperCase().replaceAll("#", "")}', radix:16))
                                         )
                                     ),
                                   ),
@@ -1551,15 +1555,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         socialMediaUrl = 'https://www.facebook.com/${eventInfo['mediaframe'].split(':')[1]}';
       }
       break;
-      case 'twitter': {
-        socialMediaUrl = 'https://www.twitter.com/${eventInfo['mediaframe'].split(':')[1]}';
+      case ('twitter' || 'X'): {
+        socialMediaUrl = 'https://www.x.com/${eventInfo['mediaframe'].split(':')[1]}';
       }
       break;
-      case ('http'): {
-        socialMediaUrl = eventInfo['mediaframe'];
-      }
-      break;
-      case ('https'): {
+      case ('http' || 'https'): {
         socialMediaUrl = eventInfo['mediaframe'];
       }
       break;
@@ -1608,18 +1608,23 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // Three routines for handling a live event
   //
   void startLive() async {
-    // first see if we already have live tracks of this event in local storage
-    String? a = (kIsWeb) ? null: prefs.getString('live-$eventId');
-    if (a != null) {
-      replayTracks = jsonDecode(a);
-      // get additional data from the moment of our last collected data
-      liveTrails = await fetchTrails((replayTracks['endtime']/1000).toInt());
-    } else {      // no data yet, so get the replay (mx 5 minutes old)
-      replayTracks = await fetchReplayTracks();
-      // and the latest trails
-      liveTrails = await fetchTrails();
+    if (maxReplay == 0) {
+      // first see if we already have live tracks of this event in local storage
+      String? a = (kIsWeb) ? null : prefs.getString('live-$eventId');
+      if (a != null) {
+        replayTracks = jsonDecode(a);
+        // get additional data from the moment of our last collected data
+        liveTrails = await fetchTrails((replayTracks['endtime'] / 1000).toInt());
+      } else { // no data yet, so get the replay (mx 5 minutes old)
+        replayTracks = await fetchReplayTracks();
+        // and the latest trails
+        liveTrails = await fetchTrails();
+      }
+      addTrailsToTracks(); // merge the latest track info with the replay info and save it
+    } else {  // maxReplay > 0, fetch the trails of the last {maxReplay} hours
+      eventStart = DateTime.now().millisecondsSinceEpoch - (maxReplay * 60 * 60 * 1000);
+      replayTracks = await fetchTrails((eventStart/1000).toInt());
     }
-    addTrailsToTracks();      // merge the latest track info with the replay info and save it
     buildShipAndWindInfo();      // prepare menu and track info
     if (route['features'] != null) buildRoute(move: false);
     selectionMessage = '"Replay" en "live" tracks zijn geladen, klik op de kaart';
@@ -1648,8 +1653,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         liveTrails = await fetchTrails(); // fetch some new data
       }
       addTrailsToTracks();                      // add it to what we already had and store it
+      buildShipAndWindInfo();                   // prepare menu and track info
       if (currentReplayTime == replayEnd) {     // slider is at the end
-        buildShipAndWindInfo();                 // prepare menu and track info
         replayEnd = now;                        // make the slider 60 seconds longer,
         currentReplayTime = replayEnd;          // move the slider itself to the end
         moveShipsAndWindTo (currentReplayTime, false); // and move the ships and wind markers
