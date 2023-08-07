@@ -23,10 +23,11 @@
     </script>
     <!-- This script adds the flutter initialization JS code -->
     <script src="flutter.js" defer></script>
+    <base href="/">
   </head>
   <body>
     <script>
-      let useHtml = true;
+      let useHtml = false;
       window.addEventListener('load', function(ev) {
       _flutter.loader.loadEntrypoint({
         serviceWorker: {

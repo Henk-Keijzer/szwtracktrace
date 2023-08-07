@@ -39,8 +39,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
+import 'package:url_strategy/url_strategy.dart';
 //
-import 'SZWconst.dart';
+import 'SZWconst.dart';   // import the constant values for the right build variant
 //
 final isDeviceMobile = kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android);
 //
@@ -196,6 +197,8 @@ Future main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // get any saved preferences from local storage
   prefs = await SharedPreferences.getInstance();
+  // get rid of the # in the URL address in the addressbar on web
+  setPathUrlStrategy();
   // and run the app as a stateful widget
   runApp(const MyApp());
 }
@@ -773,7 +776,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           children: [
             InkWell(
                 onTap: decreaseReplaySpeed,
-                child: Text('|',             // - rotated, so we use a vertical bar in a smaller font
+                child: Text('| ',             // - rotated, so we use a vertical bar in a smaller font
+                                              // and a space to get a bigger tapping area
                     style: TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -1623,7 +1627,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       addTrailsToTracks(); // merge the latest track info with the replay info and save it
     } else {  // maxReplay > 0, fetch the trails of the last {maxReplay} hours
       eventStart = DateTime.now().millisecondsSinceEpoch - (maxReplay * 60 * 60 * 1000);
-      replayTracks = await fetchTrails((eventStart/1000).toInt());
+      replayTracks = await fetchTrails(eventStart~/1000);
     }
     buildShipAndWindInfo();      // prepare menu and track info
     if (route['features'] != null) buildRoute(move: false);
