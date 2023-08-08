@@ -39,7 +39,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
-import 'package:url_strategy/url_strategy.dart';
 //
 import 'SZWconst.dart';   // import the constant values for the right build variant
 //
@@ -197,8 +196,6 @@ Future main() async {
   WidgetsFlutterBinding.ensureInitialized();
   // get any saved preferences from local storage
   prefs = await SharedPreferences.getInstance();
-  // get rid of the # in the URL address in the addressbar on web
-  setPathUrlStrategy();
   // and run the app as a stateful widget
   runApp(const MyApp());
 }
