@@ -85,15 +85,18 @@ String eventStatus = '';  // pre-event, live or replay
 Map<String, dynamic> replayTracks = jsonDecode('{}'); // see get-replay.php on the server
 Map<String, dynamic> liveTrails = jsonDecode('{}');   // see get-trails.php on the server
 Map<String, dynamic> route = jsonDecode('{}');        // geoJSON structure with the route
-List shipList = [];
-List shipColors = [];
-List<Marker> shipMarkerList = [];
-List<Marker> shipLabelList = [];
-List<Polyline> shipTrailList = [];
+//
+List shipList = [];                 // list with ship names
+List shipColors = [];               // corresponding list of ship colors
+List<Marker> shipMarkerList = [];   // corresponding list with the ship markers
+List<Marker> shipLabelList = [];    // corresponding list with the ship labels
+List<Polyline> shipTrailList = [];  // corresppnding list with the ship trails (polylines)
+//
 List<Marker> windMarkerList = [];
 List<Marker> routeMarkerList = [];
 List<Polyline> routeLineList = [];
 List<Marker> routeLabelList = [];
+//
 String infoWindowId = '';
 String infoWindowText = '';
 String infoWindowLink = '';
@@ -1165,7 +1168,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                                         windMarkersOn = !windMarkersOn;
                                         prefs.setBool('windmarkers', windMarkersOn);
                                         showMapMenu = replayPause= false;
-                                        (windMarkersOn) ? rotateWindTo(currentReplayTime) : windMarkerList = [];      // this turns off the windmarkers
+                                        (windMarkersOn) ? rotateWindTo(currentReplayTime) : windMarkerList = [];
                                         setState(() {  });
                                       }
                                   ),
