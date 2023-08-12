@@ -267,6 +267,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // See if we already have a phone id, if not, create one
     // the phoneId is used to uniquely identify the device for statistics
     phoneId = prefs.getString('phoneid') ?? '';
+    // clear the phoneId if the stored phoneId begins with the old prefixes WEB, AND or IOS
+    if (phoneId != '' && (phoneId.substring(0,3) == "WEB" || phoneId.substring(0,3) == "AND" || phoneId.substring(0,3) == "IOS")) phoneId = "";
     if (phoneId == "") {
       var uuid = const Uuid();
       phoneId = uuid.v1(); // generate a new phoneID
