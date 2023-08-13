@@ -76,6 +76,7 @@ String eventDay = '';
 int eventStart = 0;
 int eventEnd = 0;
 int replayEnd = 0;
+int maxReplay = 0;
 int eventTrailLength = 30;
 int actualTrailLength = 30;
 String socialMediaUrl = '';
@@ -173,10 +174,12 @@ Map<String, dynamic> mapTileProviderData = {
     'attribLink': 'https://www.kadaster.nl'},
 };
 String selectedMapType = mapTileProviderData.keys.toList()[0];
+String markerBackgroundColor = mapTileProviderData[selectedMapType]['bgColor'];
 Map<String, dynamic> overlayTileProviderData = {};
 String selectedOverlayType = '';
 bool mapOverlay = false;
-String markerBackgroundColor = mapTileProviderData[selectedMapType]['bgColor'];
+//
+// defaultvalues for some booleans
 //
 bool windMarkersOn = true;
 bool showRoute = true;
@@ -259,134 +262,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         if (replayRunning) {replayTimer.cancel();}
         break;
     }
-  }
-  //
-  // called when the map is ready. Start up the rest of the initialization of our app
-  //
-  Future<void> onMapCreated() async {
-    // See if we already have a phone id, if not, create one
-    // the phoneId is used to uniquely identify the device for statistics
-    phoneId = prefs.getString('phoneid') ?? '';
-    // clear the phoneId if the stored phoneId begins with the old prefixes WEB, AND or IOS
-    if (phoneId != '' && (phoneId.substring(0,3) == "WEB" || phoneId.substring(0,3) == "AND" || phoneId.substring(0,3) == "IOS")) phoneId = "";
-    if (phoneId == "") {
-      var uuid = const Uuid();
-      phoneId = uuid.v1(); // generate a new phoneID
-      prefs.setString('phoneid', phoneId);   // and save it
-    }
-    // create a prefix for the phoneId consisting of a letter (F for Web, A, for Android, I for iOS and W for Windows),
-    // followed by the 3 digit version of the app and a dash
-    String prefix = "";
-    PackageInfo packageInfo = await PackageInfo.fromPlatform();
-    String version = packageInfo.buildNumber;
-    if (kIsWeb) { // Flutterweb
-      prefix = "F$version-";
-    } else {
-      if (defaultTargetPlatform == TargetPlatform.android) {
-        prefix = "A$version-";
-      } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-        prefix = "I$version-";
-      } else if (defaultTargetPlatform == TargetPlatform.windows) {
-        prefix = "W$version-";
-      }
-    }
-    phoneId = prefix + phoneId; // use the saved phoneId with a platform/buildnumber prefix
-    //
-    // Get the list of events ready for selection
-    //
-    dirList = await fetchDirList();
-    dirList.forEach((k, v) => eventList.add(k));
-    eventList.sort();
-    eventYearList = [];
-    eventDayList = [];
-    //
-    // get the info page contents
-    //
-    final response = await http.get(Uri.parse(
-        '${server}html/app-info-page.html'));
-    if (response.statusCode == 200) {
-      infoTextHTML = '${response.body}<br><br>Versie $version</body></html>';
-    } else {
-      infoTextHTML = '<html><body>Versie $version</body><html></html>';
-    }
-    //
-    // get the complete list of map tile providers from the server
-    //
-    final resp = await http.get(Uri.parse('${server}get/maptileproviders.json'));
-    if (resp.statusCode == 200) {
-      mapTileProviderData = jsonDecode(resp.body)['basemaps'];
-      overlayTileProviderData = jsonDecode(resp.body)['overlays'];
-    }
-    //
-    // Get the selectedmaptype from local storage (from a previous session)
-    //
-    String? type = prefs.getString('maptype');
-    type ??= mapTileProviderData.keys.toList()[0];     // set maptype to default if nothing in local storage
-    selectedMapType = type;       // and set it correctly for the RadioButton on the Map Menu
-    if (!mapTileProviderData.keys.toList().contains(selectedMapType)) {
-      //set maptype to first maptype if the stored maptype is no longer in the mapTileProviderData list
-      selectedMapType = mapTileProviderData.keys.toList()[0];
-      prefs.setString('maptype', selectedMapType);
-    }
-    markerBackgroundColor = mapTileProviderData[selectedMapType]['bgColor'];
-    //
-    // see if we had the overlay layer on during the previous session
-    //
-    mapOverlay = prefs.getBool('mapoverlay') ?? false;
-    prefs.setBool('mapoverlay', mapOverlay);
-    // and see if the user selected an overlay in the previous session
-    type = prefs.getString('overlaytype');
-    type ??= overlayTileProviderData.keys.toList()[0];
-    selectedOverlayType = type;
-    if (!overlayTileProviderData.keys.toList().contains(selectedOverlayType)) {
-      //set overlaytype to first overlaytype if the stored maptype is no longer in the overlayTileProviderData list
-      selectedOverlayType = overlayTileProviderData.keys.toList()[0];
-      prefs.setString('overlaytype', selectedOverlayType);
-    }
-    //
-    // get/set some other shared preference stuff (set default if value was not present in prefs)
-    //
-    windMarkersOn = prefs.getBool('windmarkers') ?? true;
-    prefs.setBool('windmarkers', windMarkersOn);
-    //
-    showRoute = prefs.getBool('showroute') ?? true;
-    prefs.setBool('showroute', showRoute);
-    //
-    showRouteLabels = prefs.getBool('routelabels') ?? false;
-    prefs.setBool('routelabels', showRouteLabels);
-    //
-    showShipLabels = prefs.getBool('shiplabels') ?? true;
-    prefs.setBool('shiplabels', showShipLabels);
-    //
-    showShipSpeeds = prefs.getBool('shipspeeds') ?? false;
-    prefs.setBool('shipspeeds', showShipSpeeds);
-    //
-    cookieConsentGiven = prefs.getBool('cookieconsent') ?? false;
-    prefs.setBool('cookieconsent', cookieConsentGiven);
-    //
-    // Get the event domain from a previous session, if not, set default to an ampty string
-    //
-    eventDomain = prefs.getString('domain') ?? "" ;
-    // see if it is to be overruled by an event as a query parameter in the url string
-    if (kIsWeb && Uri.base.queryParameters.containsKey('event')) {
-      eventDomain = Uri.base.queryParameters['event'].toString(); //get parameter with attribute "event"
-    }
-    if (eventDomain != "") {
-      // we have info from a previous session or from the web url: use it as if the user had selected an event using the UI
-      List subStrings = eventDomain.split('/');
-      eventName = subStrings[0];
-      dirList[eventName].forEach((k, v) => eventYearList.add(k));
-      eventYearList = eventYearList.reversed.toList();
-      eventYear = subStrings[1];
-      if (subStrings.length == 3) {
-        dirList[eventName][eventYear].forEach((k, v) => eventDayList.add(k));
-        eventDay = subStrings[2];
-      } else {
-        eventDay = "";
-      }
-      newEventSelected(eventDay);     // go and re-start the event from the previous session.
-    }
-    // if we have no eventDomain from local storage, the event selection menu will start things up
   }
   //----------------------------------------------------------------------------
   //
@@ -570,7 +445,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
           onTap: (_, __) {             // on tapping the map: close all popups and menu's
             infoWindowId = '';
-            showEventMenu = showMapMenu = showShipMenu = replayPause = showShipInfo = false;
+            showEventMenu = showMapMenu = showShipMenu = replayPause = showShipInfo =showInfoPage = false;
             setState(() {});
           },
           onLongPress: (_, latlng) {
@@ -1302,7 +1177,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
               ),
               GestureDetector(
                   onTap: () {
-                    showInfoPage = false;
+                    showInfoPage = replayPause = false;
                     setState(() { });
                   },
                   child: Container(
@@ -1392,7 +1267,132 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       )
     );
   }
+  //----------------------------------- end of ui widgets --------------------------------------------
   //
+  // This routine is called when the map is ready. Here we start up the rest of the initialization of our app
+  //
+  Future<void> onMapCreated() async {
+    // See if we already have a phone id, if not, create one
+    // the phoneId is used to uniquely identify the device for statistics
+    phoneId = prefs.getString('phoneid') ?? '';
+    // clear the phoneId if the stored phoneId begins with the old prefixes WEB, AND or IOS
+    if (phoneId != '' && (phoneId.substring(0,3) == "WEB" || phoneId.substring(0,3) == "AND" || phoneId.substring(0,3) == "IOS")) phoneId = "";
+    if (phoneId == "") {
+      var uuid = const Uuid();
+      phoneId = uuid.v1(); // generate a new phoneID
+      prefs.setString('phoneid', phoneId);   // and save it
+    }
+    // create a prefix for the phoneId consisting of a letter (F for Web, A, for Android, I for iOS and W for Windows),
+    // followed by the 3 digit version of the app and a dash
+    String prefix = "";
+    PackageInfo packageInfo = await PackageInfo.fromPlatform();
+    String version = packageInfo.buildNumber;
+    if (kIsWeb) { // Flutterweb
+      prefix = "F$version-";
+    } else {
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        prefix = "A$version-";
+      } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+        prefix = "I$version-";
+      } else if (defaultTargetPlatform == TargetPlatform.windows) {
+        prefix = "W$version-";
+      }
+    }
+    phoneId = prefix + phoneId; // use the saved phoneId with a platform/buildnumber prefix
+    //
+    // Get the list of events ready for selection
+    //
+    dirList = await fetchDirList();
+    dirList.forEach((k, v) => eventList.add(k));
+    eventList.sort();
+    eventYearList = [];
+    eventDayList = [];
+    //
+    // get the info page contents
+    //
+    final response = await http.get(Uri.parse('${server}html/app-info-page.html'));
+    infoTextHTML = (response.statusCode == 200) ?
+    '${response.body}<br><br>Versie $version</body></html>' : '<html><body>Versie $version</body><html></html>';
+    //
+    // get the complete list of map tile providers from the server
+    //
+    final resp = await http.get(Uri.parse('${server}get/?req=maptileproviders&dev=$phoneId'));
+    if (resp.statusCode == 200 && resp.body != '') {
+      mapTileProviderData = jsonDecode(resp.body)['basemaps'];
+      overlayTileProviderData = jsonDecode(resp.body)['overlays'];
+    }
+    //
+    // Get the selectedmaptype from local storage (from a previous session)
+    // or set the default to the first maptype if null
+    //
+    selectedMapType = prefs.getString('maptype') ?? mapTileProviderData.keys.toList()[0];
+    if (!mapTileProviderData.keys.toList().contains(selectedMapType)) {
+      //set maptype to first maptype if the stored maptype is no longer in the mapTileProviderData list
+      selectedMapType = mapTileProviderData.keys.toList()[0];
+    }
+    prefs.setString('maptype', selectedMapType);
+    markerBackgroundColor = mapTileProviderData[selectedMapType]['bgColor'];
+    //
+    // see if we had the overlay layer on during the previous session
+    // and if we have mapoverlays defined
+    //
+    mapOverlay = prefs.getBool('mapoverlay') ?? false;
+    mapOverlay = (overlayTileProviderData.isNotEmpty) ? mapOverlay : false;
+    prefs.setBool('mapoverlay', mapOverlay);
+    // now see if the user selected an overlaytype in the previous session, if not, set it to ''
+    selectedOverlayType = prefs.getString('overlaytype') ?? '';
+    if (overlayTileProviderData.isEmpty) {    // are there any overlayTileProviders defined?
+      selectedOverlayType = '';               // no
+    } else {                                  // does the list contain the overlaymaptype from the previous session
+      selectedOverlayType = (overlayTileProviderData.keys.toList().contains(selectedOverlayType)) ?
+      selectedOverlayType : overlayTileProviderData.keys.toList()[0]; // if not, use entry 0
+    }
+    prefs.setString('overlaytype', selectedOverlayType);
+    //
+    // get/set some other shared preference stuff (set default if value was not present in prefs)
+    //
+    windMarkersOn = prefs.getBool('windmarkers') ?? windMarkersOn;
+    prefs.setBool('windmarkers', windMarkersOn);
+    //
+    showRoute = prefs.getBool('showroute') ?? showRoute;
+    prefs.setBool('showroute', showRoute);
+    //
+    showRouteLabels = prefs.getBool('routelabels') ?? showRouteLabels;
+    prefs.setBool('routelabels', showRouteLabels);
+    //
+    showShipLabels = prefs.getBool('shiplabels') ?? showShipLabels;
+    prefs.setBool('shiplabels', showShipLabels);
+    //
+    showShipSpeeds = prefs.getBool('shipspeeds') ?? showShipSpeeds;
+    prefs.setBool('shipspeeds', showShipSpeeds);
+    //
+    cookieConsentGiven = prefs.getBool('cookieconsent') ?? cookieConsentGiven;
+    prefs.setBool('cookieconsent', cookieConsentGiven);
+    //
+    // Get the event domain from a previous session, if not, set default to an ampty string
+    //
+    eventDomain = prefs.getString('domain') ?? "" ;
+    // see if it is to be overruled by an event as a query parameter in the url string
+    if (kIsWeb && Uri.base.queryParameters.containsKey('event')) {
+      eventDomain = Uri.base.queryParameters['event'].toString(); //get parameter with attribute "event"
+    }
+    if (eventDomain != "") {
+      // we have info from a previous session or from the web url: use it as if the user had selected an event using the UI
+      List subStrings = eventDomain.split('/');
+      eventName = subStrings[0];
+      dirList[eventName].forEach((k, v) => eventYearList.add(k));
+      eventYearList = eventYearList.reversed.toList();
+      eventYear = subStrings[1];
+      if (subStrings.length == 3) {
+        dirList[eventName][eventYear].forEach((k, v) => eventDayList.add(k));
+        eventDay = subStrings[2];
+      } else {
+        eventDay = "";
+      }
+      newEventSelected(eventDay);     // go and re-start the event from the previous session.
+    }
+    // if we have no eventDomain from local storage or from the query string, the event selection menu will start things up
+  }
   //----------------------------------------------------------------------------
   //
   // Routines to handle the event selections from the event selection menu
@@ -1466,23 +1466,20 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     replayEnd = eventEnd; //  otherwise the slider crashes with max <= min when we redraw in setState
     eventTrailLength = (eventInfo['traillength'] == null) ? 30 : int.parse(eventInfo['traillength']);  // set to default if not available in eventInfo
     actualTrailLength = eventTrailLength;
+    maxReplay = (eventInfo['maxreplay'] != null) ? int.parse(eventInfo['maxreplay']) : 0;
     switch (eventInfo['mediaframe'].split(':')[0]) {
-      case 'facebook': {
+      case 'facebook':
         socialMediaUrl = 'https://www.facebook.com/${eventInfo['mediaframe'].split(':')[1]}';
-      }
-      break;
-      case ('twitter' || 'X'): {
+        break;
+      case ('twitter' || 'X'):
         socialMediaUrl = 'https://www.x.com/${eventInfo['mediaframe'].split(':')[1]}';
-      }
-      break;
-      case ('http' || 'https'): {
+        break;
+      case ('http' || 'https'):
         socialMediaUrl = eventInfo['mediaframe'];
-      }
-      break;
-      default: {
+        break;
+      default:
         socialMediaUrl = '';
-      }
-      break;
+        break;
     }
     // get the route.geojson from the server
     route = await fetchRoute();
@@ -1491,7 +1488,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (eventStart > now) { // pre-event
       eventStatus = 'pre-event';
       // clear any previous tracks (just in case the user presses the replay start button)
-      replayTracks = jsonDecode('{}');
+      replayTracks = {}; //jsonDecode('{}');
       // set the timeslider max to the eventstart
       replayEnd = eventStart;
       selectionMessage = 'Het evenement is nog niet begonnen.\n\nKies een ander evenement of wacht rustig af. '
@@ -1696,7 +1693,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // Handle a speedslider changes
   //
   void changeReplaySpeed (speed) {
-    replayPause = false;
     speedIndex = speed.toInt();
     setState(() { }); // redraw the UI
   }
@@ -1713,7 +1709,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   //
   void startStopRunning() {
     if (eventStatus != "pre-event") {
-      replayPause = false;
       replayRunning = !replayRunning;
       if (replayRunning && currentReplayTime ==
           replayEnd) { // if he want to run while at the end of the slider, move it to the beginning
@@ -2128,35 +2123,22 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // first the routine to get the list of events, see get-dirlist.php on the server
   //
   Future<Map<String, dynamic>> fetchDirList() async {
-    final tst = (testing) ? '&tst=true' : '';
-    final response = await http.get(Uri.parse('${server}get?req=dirlist&dev=$phoneId$tst'));
-    if (response.statusCode == 200) {
-      return (jsonDecode(response.body));
-    } else {
-      return {};
-    }
+    final response = await http.get(Uri.parse('${server}get?req=dirlist&dev=$phoneId${(testing) ? '&tst=true' : ''}'));
+    return (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : {};
   }
   //
   // get the event info
   //
   Future<Map<String, dynamic>> fetchEventInfo() async {
     final response = await http.get(Uri.parse('${server}get?req=eventinfo&dev=$phoneId&event=$eventDomain'));
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      return {};
-    }
+    return (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : {};
   }
   //
   // get the route geoJSON file
   //
   Future<Map<String, dynamic>> fetchRoute() async {
     final response = await http.get(Uri.parse('${server}get?req=route&dev=$phoneId&event=$eventDomain'));
-    if (response.statusCode == 200) {
-      return jsonDecode(response.body);
-    } else {
-      return {};
-    }
+    return (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : {};
   }
   //
   // routine for getting a replay json file (during the event max 5 minutes old)
@@ -2165,25 +2147,15 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   //
   Future<Map<String, dynamic>> fetchReplayTracks() async {
     final response = await http.get(Uri.parse('${server}get?req=replay&dev=$phoneId&event=$eventDomain'));
-    if (response.statusCode == 200) {
-      return convertTimes(jsonDecode(response.body));
-    } else {
-      return {};
-    }
+    return (response.statusCode == 200 && response.body != '') ? convertTimes(jsonDecode(response.body)) : {};
   }
   //
   // Same for the trails (during the event max 1 minute old)
   // the parameter is for getting trails longer then the eventTrailLength, and is a timestamp (in seconds!)
   //
   Future<Map<String, dynamic>> fetchTrails([fromTime = 0]) async {
-    String msg = (fromTime != 0) ? '&msg=$fromTime' : "";
-    final response = await http.get(Uri.parse(
-        '${server}get?req=trails&dev=$phoneId&event=$eventDomain$msg'));
-    if (response.statusCode == 200) {
-      return convertTimes(jsonDecode (response.body));
-    } else {
-      return {};
-    }
+    final response = await http.get(Uri.parse('${server}get?req=trails&dev=$phoneId&event=$eventDomain${(fromTime != 0) ? '&msg=$fromTime' : ""}'));
+    return (response.statusCode == 200 && response.body != '') ? convertTimes(jsonDecode (response.body)) : {};
   }
   //
   // the trails and replay files contain timestamps in seconds. We need milisecconds...
@@ -2207,13 +2179,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // and finally a routine to get shipInfo from the server
   //
   void loadShipInfo(ship) async {
-    final response = await http.get(Uri.parse(
-        '${server}get?req=shipinfo&dev=$phoneId&event=$eventDomain&ship=${shipList[ship]}'));
-    if (response.statusCode == 200) {
-      shipInfoHTML = response.body;
-    } else {
-      shipInfoHTML = 'Could not load ship info';
-    }
+    final response = await http.get(Uri.parse('${server}get?req=shipinfo&dev=$phoneId&event=$eventDomain&ship=${shipList[ship]}'));
+    shipInfoHTML = (response.statusCode == 200 && response.body != '') ? response.body : 'Could not load ship info';
     replayPause = true;
     showShipInfo = true;
     setState(() { });

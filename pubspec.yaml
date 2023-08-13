@@ -31,7 +31,6 @@ dependencies:
   flutter:
     sdk: flutter
 
-
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2
@@ -57,6 +56,16 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^2.0.0
+  msix: ^3.16.1
+
+msix_config:
+  display_name: SZW Track & Trace
+  logo_path: L:\Icon-App-1024x1024 Track & Trace.png
+  publisher_display_name: Stichting Zeilvaart Warmond
+  identity_name: 41114StichtingZeilvaartWa.SZWTrackTrace
+  publisher: CN=6B2EB45F-9B57-4924-BB9B-21C3749E6F4D
+  capabilities: internetClient
+  store: true
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
