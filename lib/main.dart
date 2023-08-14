@@ -64,7 +64,7 @@ const initialMapPosition = LatLng(52.2, 4.535);
 // vars for the selection of the event and the eventinfo
 late SharedPreferences prefs;           // local parameter storage
 late Map<String, dynamic> dirList;      // see get-dirlist.php on the server
-late Map<String, dynamic> eventInfo;    // see get-eventinfo.php on the server
+Map<String, dynamic> eventInfo = {};    // see get-eventinfo.php on the server
 List <String>eventList = [];
 List eventYearList = [];
 List eventDayList = [];
@@ -481,11 +481,24 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
               textStyle: const TextStyle(color: Colors.black87),
               onTap: () => launchUrl(Uri.parse(overlayTileProviderData[selectedOverlayType]['attribLink']),
                 mode: LaunchMode.platformDefault)
-            ) : const TextSourceAttribution(''),
-            TextSourceAttribution('2011-${DateFormat('yyyy').format(DateTime.now())} Stichting Zeilvaart Warmond',
+            ) : const TextSourceAttribution('', textStyle: TextStyle(fontSize:0)),
+            TextSourceAttribution('2010-${DateFormat('yyyy').format(DateTime.now())} Stichting Zeilvaart Warmond',
               textStyle: const TextStyle(color: Colors.black87),
-              onTap: () => launchUrl(Uri.parse('https://www.zeilvaartwarmond.nl'))
-            )
+              onTap: () => launchUrl(Uri.parse('https://www.zeilvaartwarmond.nl'),
+                mode: LaunchMode.platformDefault)
+            ),
+            (eventInfo.isNotEmpty && eventInfo['AISHub'] == 'true') ? TextSourceAttribution(
+              'AIS tracking door www.AISHub.net',
+                textStyle: const TextStyle(color: Colors.black87),
+                onTap: () => launchUrl(Uri.parse('https://www.aishub.net'),
+                    mode: LaunchMode.platformDefault)
+            ) : const TextSourceAttribution('', textStyle: TextStyle(fontSize:0)),
+            (eventInfo.isNotEmpty && eventInfo['MarineTraffic'] == 'true') ? TextSourceAttribution(
+                'AIS tracking door www.MarineTraffic.com',
+                textStyle: const TextStyle(color: Colors.black87),
+                onTap: () => launchUrl(Uri.parse('https://www.marinetraffic.com'),
+                    mode: LaunchMode.platformDefault)
+            ) : const TextSourceAttribution('', textStyle: TextStyle(fontSize:0))
           ],
         ),
       ],
