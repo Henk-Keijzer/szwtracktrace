@@ -1572,7 +1572,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
     if (currentReplayTime == replayEnd) {     // slider is at the end
       currentReplayTime = replayEnd = now;    // extend the slider and move the handle to the new end
-      moveShipsAndWindTo(currentReplayTime);  // and move the ships and wind markers
+      if (liveSecondsTimer == 60) moveShipsAndWindTo(currentReplayTime);  // and move the ships and wind markers
     } else {                                  // slider has been moved back in time by the user
       replayEnd = now;                        // just make the slider a second longer
     }
