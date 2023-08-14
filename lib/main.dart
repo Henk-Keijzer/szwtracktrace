@@ -2,9 +2,10 @@
 // ©2021-2023 Stichting Zeilvaart Warmond
 // Flutter/Dart Track & Trace app for Android, iOS and web
 //
-// Version 3.0.5
+// Version 3.0.5, 3.0.6, 3.0.7
 // minor cosmetic changes and efficiency improvements
 // bugfix that links in map attributions can be clicked, even as attribution window was closed
+// minor cosmetic chages, code optimizations and error handling improved
 //
 // Version 3.0.4
 // externe constanten voor varianten van de app voor Olympia en mogelijk andere gebruikers
