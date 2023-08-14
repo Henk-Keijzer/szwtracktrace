@@ -446,7 +446,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
           onTap: (_, __) {             // on tapping the map: close all popups and menu's
             infoWindowId = '';
-            showEventMenu = showMapMenu = showShipMenu = replayPause = showShipInfo =showInfoPage = false;
+            showEventMenu = showMapMenu = showShipMenu =  showShipInfo = showInfoPage = replayPause = false;
             setState(() {});
           },
           onLongPress: (_, latlng) {
@@ -1559,7 +1559,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     buildShipAndWindInfo();      // prepare menu and track info
     if (route['features'] != null) buildRoute();
     selectionMessage = '"Replay" en "live" tracks zijn geladen, klik op de kaart';
-    showEventMenu = false;                 // hide the eventselection menu
+    showEventMenu = replayPause = false;                 // hide the eventselection menu
     currentReplayTime = DateTime.now().millisecondsSinceEpoch;
     replayEnd = currentReplayTime;         // put the timeslider to 'now'
     moveShipsAndWindTo(currentReplayTime);
@@ -1666,7 +1666,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
     buildShipAndWindInfo();         // prepare menu and track info
     selectionMessage = '"Replay" tracks zijn geladen, klik op de kaart';
-    showEventMenu = false;
+    showEventMenu = replayPause = false;
     speedIndex = speedIndexInitialValue;
     replayRunning = false;
     currentReplayTime = eventStart;
