@@ -1402,6 +1402,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     selectionMessage = '';
     eventName = event;
     eventYearList = [];
+    // make a list of years for the event in revers order. The list is automatically shown in the UI
     dirList[event].forEach((k, v) => eventYearList.add(k));
     eventYearList = eventYearList.reversed.toList();
     eventYear = 'Kies een jaar';
@@ -1416,6 +1417,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     selectionMessage = '';
     eventYear = year;
     eventDayList = [];
+    // make a list of days for the event/year, but only if this event year has any days. Otherwise we have a complete event selected
     if (dirList[eventName][eventYear].length != 0) {
       dirList[eventName][eventYear].forEach((k, v) => eventDayList.add(k));
       eventDay = 'Kies een dag';
@@ -1426,8 +1428,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
   //
   // Routine to start up a new event after the user selected the day (or year, in case there are no days in the event)
-  // This routine is also called immediately after startup of the app,
-  // when we found an eventDomain in local storage from a previous session or in the URL Query
+  // This routine is also called immediately after startup of the app, when we found an eventDomain
+  // in local storage from a previous session or in the URL query
   //
   void newEventSelected(day) async {
     // first "kill" whatever was running
@@ -1440,7 +1442,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       replayTimer.cancel();
       replayRunning = false;
     }
-    // and reset some variables to their default values
+    // and reset some variables to their initial/default values
     following = {};
     followCounter = 0;
     followAll = true;
@@ -1451,22 +1453,22 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     shipLabelList = [];
     shipTrailList = [];
     windMarkerList = [];
-    // now handle the input
+    replayTracks = {};
+    // now handle the input and save the selected event in local storage for the next run
     eventDay = day;
     eventDomain = '$eventName/$eventYear';
     if (eventDay != '') eventDomain = '$eventDomain/$eventDay';
-    // save the selected event in local storage for the next run
     prefs.setString('domain', eventDomain);
-    // get the event info from the server end get event start and end stamps
+    // get the event info from the server and digest the event info
     eventInfo = await fetchEventInfo();
     eventTitle = eventInfo['eventtitle'];
     eventId = eventInfo['eventid'];
     eventStart = int.parse(eventInfo['eventstartstamp']) * 1000;
     eventEnd = int.parse(eventInfo['eventendstamp']) * 1000;
-    replayEnd = eventEnd; //  otherwise the slider crashes with max <= min when we redraw in setState
+    replayEnd = eventEnd; //  otherwise the slider crashes with max <= min when we redraw the ui in setState
     eventTrailLength = (eventInfo['traillength'] == null) ? 30 : int.parse(eventInfo['traillength']);  // set to default if not available in eventInfo
     actualTrailLength = eventTrailLength;
-    maxReplay = (eventInfo['maxreplay'] != null) ? int.parse(eventInfo['maxreplay']) : 0;
+    maxReplay = (eventInfo['maxreplay'] == null) ? 0 : int.parse(eventInfo['maxreplay']);
     switch (eventInfo['mediaframe'].split(':')[0]) {
       case 'facebook':
         socialMediaUrl = 'https://www.facebook.com/${eventInfo['mediaframe'].split(':')[1]}';
@@ -1487,9 +1489,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final now = DateTime.now().millisecondsSinceEpoch;
     if (eventStart > now) { // pre-event
       eventStatus = 'pre-event';
-      // clear any previous tracks (just in case the user presses the replay start button)
-      replayTracks = {}; //jsonDecode('{}');
-      // set the timeslider max to the eventstart
+      // set the timeslider max equal to the eventstart, i.e. min and max are both eventStart
       replayEnd = eventStart;
       selectionMessage = 'Het evenement is nog niet begonnen.\n\nKies een ander evenement of wacht rustig af. '
           'De Track & Trace begint op ${DateTime.fromMillisecondsSinceEpoch(eventStart).toString().substring(0,19)}';
@@ -1522,10 +1522,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // Three routines for handling a live event
   //
   void startLive() async {
-    if (maxReplay == 0) {         // maxReplay is set as an app variant constant and is either 0 for normal events
+    if (maxReplay == 0) {         // maxReplay is set as an event parameter and is either 0 for normal events
                                   // or x hours when we have one long event where we want to limit the replay starting x hours back
-      // first see if we already have live tracks of this event in local storage
-      String a = prefs.getString('live-$eventId') ?? '';   // get "old" live tracks from prefs (if not set default to ''
+      // first see if we already have live tracks of this event in local storage from a previous session
+      String a = prefs.getString('live-$eventId') ?? '';   // get "old" live tracks from prefs (if not set to default '')
       if (a != '') {
         replayTracks = jsonDecode(a);
         // get additional data from the moment of our last collected data
@@ -1553,47 +1553,37 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
   //
   // The live timer routine, runs every second, but "works" only once per minute
-  // the routine continues to be called when the time slider was moved backward in time
-  // (currentReplayTime != endReplay). In that case, just continue to get data but update of the
-  // ship and wind markers is done by the timeSliderUpdate and replayTimerRoutine
+  // the routine continues to be called, also when the time slider was moved backward in time
+  // (currentReplayTime != endReplay). In that case, just continue to get data but don't update the
+  // ship and wind markers, as this is done by the timeSliderUpdate and replayTimerRoutine
   //
   void liveTimerRoutine() async {
+    int now = DateTime.now().millisecondsSinceEpoch;  // have a look at the clock
     liveSecondsTimer--;
-    if (liveSecondsTimer <= 0) {  // we've waited 60 seconds, so, get new trails and add them to what we have
+    if (liveSecondsTimer <= 0) { // we've waited 60 seconds, so, get new trails and add them to what we have
       liveSecondsTimer = 60;
-      int now = DateTime.now().millisecondsSinceEpoch;
-      if ((now - replayTracks['endtime']) > (actualTrailLength * 60 * 1000)) {   // we must have been asleep for some time
-        liveTrails = await fetchTrails((replayTracks['endtime']/1000).toInt());  // fetch special
+      if ((now - replayTracks['endtime']) > (eventTrailLength * 60 * 1000)) { // we must have been asleep for some time
+        liveTrails = await fetchTrails((replayTracks['endtime'] / 1000).toInt()); // fetch special
       } else {
-        liveTrails = await fetchTrails(); // fetch some new data
+        liveTrails = await fetchTrails(); // fetch the latest (eventTrailLength) data
       }
-      addTrailsToTracks();                      // add it to what we already had and store it
-      buildShipAndWindInfo();                   // prepare menu and track info
-      if (currentReplayTime == replayEnd) {     // slider is at the end
-        replayEnd = now;                        // make the slider 60 seconds longer,
-        currentReplayTime = replayEnd;          // move the slider itself to the end
-        moveShipsAndWindTo(currentReplayTime);  // and move the ships and wind markers
-      } else {                                  // slider has been moved back in time by the user
-        replayEnd = now;                        // just make the slider 60 seconds longer
-      }
-      setState(() { }); // redraw the UI
-    } else {      // just one second later
-      int now = DateTime.now().millisecondsSinceEpoch;
-      if (currentReplayTime == replayEnd) {     // slider is at the end, so
-        replayEnd = now;                        // make the slider 1 second longer
-        currentReplayTime = replayEnd;          // and move the slider there
-      } else {                                  // slider has been moved back in time
-        replayEnd = now;                        // so just make the slider longer
-      }
-      if (!showShipInfo) setState(() { });      // If shipInfo is shown, don't update. It makes the info flash, for whatever reason
+      addTrailsToTracks(); // add it to what we already had and store it
+      buildShipAndWindInfo(); // prepare menu and track info
     }
+    if (currentReplayTime == replayEnd) {     // slider is at the end
+      currentReplayTime = replayEnd = now;    // extend the slider and move the handle to the new end
+      moveShipsAndWindTo(currentReplayTime);  // and move the ships and wind markers
+    } else {                                  // slider has been moved back in time by the user
+      replayEnd = now;                        // just make the slider a second longer
+    }
+    if (!showShipInfo) setState(() { });      // If shipInfo is shown, don't update. It makes the info flash, for whatever reason
   }
   //
-  // Routine to merge the latest trails that we got at the initialisation of the app or after 1 minute, to
-  // the info we already had, and store that info locally
+  // Routine to merge the latest live trails with saved replay trails into the replay trails
   // adding b (=liveTrails) to a (=replayTracks) both shiptracks and windtracks
   // Note that there may be more ships in liveTrails then in replayTracks, because a ship may have joined the race later
   // (tracker or AIS data only turned on after eventStart, or the admin added a ship)
+  // at the end of the routine the merged data is saved in pref
   //
   void addTrailsToTracks() {
     for (int bship = 0; bship < liveTrails['shiptracks'].length; bship++) {
