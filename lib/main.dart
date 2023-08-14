@@ -470,6 +470,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           animationConfig: const ScaleRAWA(),
           permanentHeight: 32,
           attributions: [
+            TextSourceAttribution('2010-${DateFormat('yyyy').format(DateTime.now())} Stichting Zeilvaart Warmond',
+                textStyle: const TextStyle(color: Colors.black87),
+                onTap: () => launchUrl(Uri.parse('https://www.zeilvaartwarmond.nl'),
+                    mode: LaunchMode.platformDefault)
+            ),
             TextSourceAttribution(
               'Basiskaart: ${mapTileProviderData[selectedMapType]['attrib']}',
               textStyle: const TextStyle(color: Colors.black87),
@@ -482,22 +487,19 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
               onTap: () => launchUrl(Uri.parse(overlayTileProviderData[selectedOverlayType]['attribLink']),
                 mode: LaunchMode.platformDefault)
             ) : const TextSourceAttribution('', textStyle: TextStyle(fontSize:0)),
-            TextSourceAttribution('2010-${DateFormat('yyyy').format(DateTime.now())} Stichting Zeilvaart Warmond',
-              textStyle: const TextStyle(color: Colors.black87),
-              onTap: () => launchUrl(Uri.parse('https://www.zeilvaartwarmond.nl'),
-                mode: LaunchMode.platformDefault)
-            ),
             (eventInfo.isNotEmpty && eventInfo['AISHub'] == 'true') ? TextSourceAttribution(
-              'AIS tracking door www.AISHub.net',
-                textStyle: const TextStyle(color: Colors.black87),
-                onTap: () => launchUrl(Uri.parse('https://www.aishub.net'),
-                    mode: LaunchMode.platformDefault)
+              '- AIS tracking door www.AISHub.net',
+              textStyle: const TextStyle(color: Colors.black87),
+              onTap: () => launchUrl(Uri.parse('https://www.aishub.net'),
+                mode: LaunchMode.platformDefault),
+              prependCopyright: false,
             ) : const TextSourceAttribution('', textStyle: TextStyle(fontSize:0)),
             (eventInfo.isNotEmpty && eventInfo['MarineTraffic'] == 'true') ? TextSourceAttribution(
-                'AIS tracking door www.MarineTraffic.com',
-                textStyle: const TextStyle(color: Colors.black87),
-                onTap: () => launchUrl(Uri.parse('https://www.marinetraffic.com'),
-                    mode: LaunchMode.platformDefault)
+              '- AIS tracking door www.MarineTraffic.com',
+              textStyle: const TextStyle(color: Colors.black87),
+              onTap: () => launchUrl(Uri.parse('https://www.marinetraffic.com'),
+                mode: LaunchMode.platformDefault),
+              prependCopyright: false,
             ) : const TextSourceAttribution('', textStyle: TextStyle(fontSize:0))
           ],
         ),
