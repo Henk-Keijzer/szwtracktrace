@@ -2,6 +2,12 @@
 // ©2021-2023 Stichting Zeilvaart Warmond
 // Flutter/Dart Track & Trace app for Android, iOS and web
 //
+// Version 3.1.0
+// Bugfix: transition from live to replay at end of event
+//
+// Version 3.0.9
+// replayLoop added
+//
 // Version 3.0.5, 3.0.6, 3.0.7, 3.0.8
 // minor cosmetic changes and efficiency improvements
 // bugfix that links in map attributions can be clicked, even as attribution window was closed
@@ -30,9 +36,9 @@
 // - new look and feel with semitransparent appbar
 // - working as web also
 //
-
 import 'dart:async';
 import 'dart:convert';
+//import 'dart:html'; // uncomment this line when building for web (see also in the code of the appbar
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart' show Html;
@@ -48,6 +54,8 @@ import 'package:intl/intl.dart';
 //
 import 'SZWconst.dart';   // import the constant values for the right build variant
 //
+String appIconUrl = '${server}assets/assets/images/defaultAppIcon.png';
+//
 final webOnMobile = kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android);
 // true if the user is running the web app on a mobile device. Give him the option to download the Android or iOS app.
 //
@@ -56,7 +64,6 @@ late MediaQueryData queryData;    // needed for getting the screen width and hei
 double menuOffset = 0;            // used to calculate the offset of the menutext from the top of the screen
 int screenWidth = 0;
 int screenHeight = 0;
-
 String phoneId = "";
 //
 // some variables for the flutter_map
@@ -142,6 +149,7 @@ int currentReplayTime = 0;
 bool replayRunning = false;
 bool replayPause = false;
 const replayRate = 50;      // milliseconds = 20 frames/second
+bool replayLoop = false;
 //
 // UI messages in the EventSelection menu
 //
@@ -153,6 +161,7 @@ bool showMapMenu = false;
 bool showShipMenu = false;
 bool showInfoPage = false;
 bool showShipInfo = false;
+bool fullScreen = false;
 String infoTextHTML = '';       // HTML text for the info page from {server}/html/app-info-page.html
 String shipInfoHTML = '';       // HTML from get-shipinfo.php
 //
@@ -263,6 +272,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         if (eventStatus == 'live') {liveTimer.cancel();}
         if (replayRunning) {replayTimer.cancel();}
         break;
+      default:
+        break;
     }
   }
   //----------------------------------------------------------------------------
@@ -280,9 +291,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       backgroundColor: Colors.blueGrey[700]?.withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu) ? 1 : 0.3) ,
       elevation: 0,
       titleSpacing: 0.0,
-      leading: IconButton(        // tappable SZW logo
+      leading: IconButton(        // tappable logo of the T&T organization
           padding: const EdgeInsets.all(0),
-          icon: Image.asset('assets/images/$appIcon.png'),
+          icon: Image.network(appIconUrl),
           onPressed: () {
             showShipMenu = showMapMenu = showInfoPage = showShipInfo = false;
             showEventMenu = replayPause= !showEventMenu;
@@ -306,8 +317,21 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         child: Text(eventTitle),
       ),
       actions: [
+ /* comment / uncomment this piece of code when compiling for the web. It generates the full screen button
+        if (kIsWeb) IconButton(
+          visualDensity: VisualDensity.compact,
+          tooltip: (fullScreen) ? 'exit fullscreen' : 'fullscreen',
+          onPressed: () {
+            fullScreen = !fullScreen;
+            (fullScreen) ? document.documentElement?.requestFullscreen() : document.exitFullscreen();
+            setState(() {});
+          },
+          icon: (fullScreen) ? const Icon(Icons.fullscreen_exit) : const Icon(Icons.fullscreen),
+        ),
+ ------------------------------------------------------------------------------------*/
         IconButton(           // button for the infoPage
           visualDensity: VisualDensity.compact,
+          tooltip: 'infopagina',
           onPressed: () {
             showEventMenu = showShipMenu = showMapMenu = showShipInfo = false;
             showInfoPage = replayPause = !showInfoPage;
@@ -317,15 +341,17 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         ),
         IconButton(           // button for the mapMenu
           visualDensity: VisualDensity.compact,
+          tooltip: 'kaartmenu',
           onPressed: () {
             showEventMenu = showShipMenu = showInfoPage = showShipInfo = false;
             showMapMenu = replayPause = !showMapMenu;
             setState(() {  });
           },
-          icon: const Icon(Icons.map),  //Image.asset('assets/images/mapicon.png'),
+          icon: const Icon(Icons.map),
         ),
         IconButton(           // button for the shipList
           visualDensity: VisualDensity.compact,
+          tooltip: 'deelnemers',
           onPressed: () {
             showEventMenu = showMapMenu = showInfoPage = showShipInfo = false;
             showShipMenu = replayPause = !showShipMenu;
@@ -1174,7 +1200,33 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                                       }
                                   ),
                                 ]
-                            )
+                            ),
+                            if (eventStatus == 'replay') const Divider(color: Colors.black38),
+                            if (eventStatus == 'replay')
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.start,
+                                mainAxisSize:MainAxisSize.max,
+                                children: [
+                                  const Expanded(
+                                    child: Padding(
+                                      padding: EdgeInsets.fromLTRB(5,0,5,5),
+                                      child: Text('Replay loop'),
+                                    ),
+                                  ),
+                                  Checkbox(
+                                    visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
+                                    activeColor: Colors.white70,
+                                    checkColor: Colors.black87,
+                                    side: const BorderSide(color: Colors.white70),
+                                    value: replayLoop,
+                                    onChanged: (value) {
+                                      replayLoop = !replayLoop;
+                                      showMapMenu = replayPause= false;
+                                      setState(() {  });
+                                    }
+                                  ),
+                                ]
+                              ),
                           ]
                       )
                   )
@@ -1471,6 +1523,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     shipTrailList = [];
     windMarkerList = [];
     replayTracks = {};
+    replayLoop = false;
     // now handle the input and save the selected event in local storage for the next run
     eventDay = day;
     eventDomain = '$eventName/$eventYear';
@@ -1500,6 +1553,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         socialMediaUrl = '';
         break;
     }
+    // get the appicon.png from the event or stick to the default icon
+    var response = await http.get(Uri.parse('${server}data/$eventDomain/appicon.png'));
+    appIconUrl = (response.statusCode == 200) ?
+      '${server}data/$eventDomain/appicon.png' : '${server}assets/assets/images/defaultAppIcon.png';
     // get the route.geojson from the server
     route = await fetchRoute();
     // set the event status based on the current time. Are we before, during or after the event
@@ -1575,25 +1632,31 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // ship and wind markers, as this is done by the timeSliderUpdate and replayTimerRoutine
   //
   void liveTimerRoutine() async {
-    int now = DateTime.now().millisecondsSinceEpoch;  // have a look at the clock
-    liveSecondsTimer--;
-    if (liveSecondsTimer <= 0) { // we've waited 60 seconds, so, get new trails and add them to what we have
-      liveSecondsTimer = 60;
-      if ((now - replayTracks['endtime']) > (eventTrailLength * 60 * 1000)) { // we must have been asleep for some time
-        liveTrails = await fetchTrails((replayTracks['endtime'] / 1000).toInt()); // fetch special
-      } else {
-        liveTrails = await fetchTrails(); // fetch the latest (eventTrailLength) data
+    int now = DateTime.now().millisecondsSinceEpoch; // have a look at the clock
+    if (now < eventEnd) {
+      liveSecondsTimer--;
+      if (liveSecondsTimer <= 0) { // we've waited 60 seconds, so, get new trails and add them to what we have
+        liveSecondsTimer = 60;
+        if ((now - replayTracks['endtime']) > (eventTrailLength * 60 * 1000)) { // we must have been asleep for some time
+          liveTrails = await fetchTrails((replayTracks['endtime'] / 1000).toInt()); // fetch special
+        } else {
+          liveTrails = await fetchTrails(); // fetch the latest (eventTrailLength) data
+        }
+        addTrailsToTracks(); // add it to what we already had and store it
+        buildShipAndWindInfo(); // prepare menu and track info
       }
-      addTrailsToTracks(); // add it to what we already had and store it
-      buildShipAndWindInfo(); // prepare menu and track info
+      if (currentReplayTime == replayEnd) { // slider is at the end
+        currentReplayTime = replayEnd = now; // extend the slider and move the handle to the new end
+        if (liveSecondsTimer == 60) moveShipsAndWindTo(currentReplayTime); // and move the ships and wind markers
+      } else { // slider has been moved back in time by the user
+        replayEnd = now; // just make the slider a second longer
+      }
+      if (!showShipInfo) setState(() {}); // If shipInfo is shown, don't update. It makes the info flash, for whatever reason
+    } else {        // the live event is over
+      liveTimer.cancel();
+      eventStatus = 'replay';
+      startReplay();
     }
-    if (currentReplayTime == replayEnd) {     // slider is at the end
-      currentReplayTime = replayEnd = now;    // extend the slider and move the handle to the new end
-      if (liveSecondsTimer == 60) moveShipsAndWindTo(currentReplayTime);  // and move the ships and wind markers
-    } else {                                  // slider has been moved back in time by the user
-      replayEnd = now;                        // just make the slider a second longer
-    }
-    if (!showShipInfo) setState(() { });      // If shipInfo is shown, don't update. It makes the info flash, for whatever reason
   }
   //
   // Routine to merge the latest live trails with saved replay trails into the replay trails
@@ -1742,16 +1805,22 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // Now we have different situations:
       //  - we moved beyond the end of the event and eventStatus is live: eventStatus becomes 'replay'
       //  - we moved beyond the last trails received from the server and the event is still live: just stop
+      //  - we moved beyond the last trails in replay and replayLoop is true, move to the beginning of the track ang go on
       //    If we were live, the liveTimerRoutine will take over. If we were in replay, wait for the user to move the timeslider
       //  - we are still in replay: just move the ships and windmarkers
       //
       if (currentReplayTime > eventEnd) {
         if (eventStatus == 'live') liveTimer.cancel();
         eventStatus = 'replay';
-        replayRunning = false;
-        replayTimer.cancel();
-        currentReplayTime = eventEnd;
-        moveShipsAndWindTo(eventEnd);
+        if (replayLoop) {
+          currentReplayTime = eventStart;
+          moveShipsAndWindTo(currentReplayTime);
+        } else {
+          replayRunning = false;
+          replayTimer.cancel();
+          currentReplayTime = eventEnd;
+          moveShipsAndWindTo(eventEnd);
+        }
         // Note that we continue to run using the 'live' tracks in memory
         // next session with this event we will start in the startReplay routine, where we delete the
         // locally stored live-xxxx.json file and replace is with the final replay-xxxx.json file
@@ -2043,7 +2112,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           if (showRouteLabels) {
             // NB text backgroundcolor is reversed to the markerbackgroundcolor
             var tbgc = (markerBackgroundColor == bgColorBlack) ? bgColorWhite : bgColorBlack;
-            var svgString = '<svg width="150" height="35">'
+            var svgString = '<svg width="300" height="35">'
                 '<text x="0" y="32" fill="$tbgc">${route['features'][k]['properties']['name']}</text>'
                 '<text x="2" y="32" fill="$tbgc">${route['features'][k]['properties']['name']}</text>'
                 '<text x="0" y="30" fill="$tbgc">${route['features'][k]['properties']['name']}</text>'
@@ -2052,7 +2121,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 '</svg>';
             routeLabelList.add(Marker(
                 point: routePointPosition,
-                width: 150,
+                width: 300,
                 height: 30,
                 anchorPos: AnchorPos.exactly(Anchor(133, 23)),
                 builder: (_) => SvgPicture.string(svgString)
