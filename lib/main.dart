@@ -1619,7 +1619,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // 2. the live timer routine, runse every second, but acts every 60 seconds
   // 3. a routine to add the latest trails to the track info we received since the beginning of the event
   //
-  void startLive() asyncz {
+  void startLive() async {
     if (maxReplay == 0) {         // maxReplay is set as an event parameter and is either 0 for normal events
                                   // or x hours when we have one long event where we want to limit the replay starting x hours back
       // first see if we already have live tracks of this event in local storage from a previous session
