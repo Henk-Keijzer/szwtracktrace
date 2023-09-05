@@ -2,6 +2,10 @@
 // ©2021-2023 Stichting Zeilvaart Warmond
 // Flutter/Dart Track & Trace app for Android, iOS and web
 //
+// Version 3.1.1
+// bugfix: position of routepoint labels corrected
+//
+//
 // Version 3.1.0
 // Bugfix: transition from live to replay at end of event
 //
@@ -135,10 +139,10 @@ bool autoZoom = true;
 //
 // vars for the movement of ships and wind markers in time
 //
-const speedIndexInitialValue = 4;
+const speedIndexInitialValue = 5;
 int speedIndex = speedIndexInitialValue;     // index in the following table en position of the speed slider, default = 3 min/sec
-List<int> speedTable = [0,         10,           30,           60,          180,         300,         900,          1800,         3600];
-List speedTextTable =  ["gestopt", "10 sec/sec", "30 sec/sec", "1 min/sec", "3 min/sec", "5 min/sec", "15 min/sec", "30 min/sec", "1 uur/sec"];
+List<int> speedTable = [0,         1,           10,           30,           60,          180,         300,         900,          1800,         3600];
+List speedTextTable =  ["gestopt", "1 sec/sec", "10 sec/sec", "30 sec/sec", "1 min/sec", "3 min/sec", "5 min/sec", "15 min/sec", "30 min/sec", "1 uur/sec"];
 List shipTimeIndex = [];  // for each ship the time position in the list of stamps
 List windTimeIndex = [];  // for each weather station the time position in the list of stamps
 late Timer replayTimer;
@@ -1338,15 +1342,16 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
   //----------------------------------- end of ui widgets --------------------------------------------
   //
-  // This routine is called when the map is ready. Here we start up the rest of the initialization of our app
+  // This routine is called when the map is ready.
+  // Here we start up the rest of the initialization of our app
   //
   Future<void> onMapCreated() async {
     // See if we already have a phone id, if not, create one
     // the phoneId is used to uniquely identify the device for statistics
     phoneId = prefs.getString('phoneid') ?? '';
     // clear the phoneId if the stored phoneId begins with the old prefixes WEB, AND or IOS
-    if (phoneId != '' && (phoneId.substring(0,3) == "WEB" || phoneId.substring(0,3) == "AND" || phoneId.substring(0,3) == "IOS")) phoneId = "";
-    if (phoneId == "") {
+    if (phoneId != '' && (phoneId.substring(0,3) == "WEB" || phoneId.substring(0,3) == "AND" || phoneId.substring(0,3) == "IOS")) phoneId = '';
+    if (phoneId == '') {
       var uuid = const Uuid();
       phoneId = uuid.v1(); // generate a new phoneID
       prefs.setString('phoneid', phoneId);   // and save it
@@ -1368,14 +1373,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
     }
     phoneId = prefix + phoneId; // use the saved phoneId with a platform/buildnumber prefix
-    //
-    // Get the list of events ready for selection
-    //
-    dirList = await fetchDirList();
-    dirList.forEach((k, v) => eventList.add(k));
-    eventList.sort();
-    eventYearList = [];
-    eventDayList = [];
     //
     // get the info page contents
     //
@@ -1438,7 +1435,15 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     cookieConsentGiven = prefs.getBool('cookieconsent') ?? cookieConsentGiven;
     prefs.setBool('cookieconsent', cookieConsentGiven);
     //
-    // Get the event domain from a previous session, if not, set default to an ampty string
+    // Get the list of events ready for selection
+    //
+    dirList = await fetchDirList();
+    dirList.forEach((k, v) => eventList.add(k));
+    eventList.sort();
+    eventYearList = [];
+    eventDayList = [];
+    //
+    // Get the event domain from a previous session or from the query string, if not, set default to an ampty string
     //
     eventDomain = prefs.getString('domain') ?? "" ;
     // see if it is to be overruled by an event as a query parameter in the url string
@@ -1449,7 +1454,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // we have info from a previous session or from the web url: use it as if the user had selected an event using the UI
       List subStrings = eventDomain.split('/');
       eventName = subStrings[0];
-      dirList[eventName].forEach((k, v) => eventYearList.add(k));
+      dirList[eventName].forEach((k, v) => eventYearList.add(k));   // note that this may cause an async suspension
+                                                                    // if the eventName/Year/Day from local storage or query string
+                                                                    // does not exist in the current dirlist. The UI will take over
+                                                                    // and the user can continue selecting from the dirlist data
       eventYearList = eventYearList.reversed.toList();
       eventYear = subStrings[1];
       if (subStrings.length == 3) {
@@ -1464,8 +1472,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
   //----------------------------------------------------------------------------
   //
-  // Routines to handle the event selections from the event selection menu
-  // First the routine to handle the selection of the event name
+  // Routines to handle the event selections from the UI event selection menu
+  // First the routine to handle the selection of the event name and prepare for getting a year
   //
   void selectEventYear(event) {
     selectionMessage = '';
@@ -1480,7 +1488,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     setState(() { }); // redraw the UI
   }
   //
-  // routine to handle the selection of an event year
+  // identical routine to handle the selection of an event year and prepare for getting a day
+  // unless this event does not have a day, in that case we go to newEventSelected immediately
   //
   void selectEventDay(year) {
     selectionMessage = '';
@@ -1501,7 +1510,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // in local storage from a previous session or in the URL query
   //
   void newEventSelected(day) async {
+    //
     // first "kill" whatever was running
+    //
     if (eventStatus == 'pre-event') {
       preEventTimer.cancel();
     } else if (eventStatus == 'live') {
@@ -1511,7 +1522,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       replayTimer.cancel();
       replayRunning = false;
     }
+    //
     // and reset some variables to their initial/default values
+    //
     following = {};
     followCounter = 0;
     followAll = true;
@@ -1524,12 +1537,16 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     windMarkerList = [];
     replayTracks = {};
     replayLoop = false;
+    //
     // now handle the input and save the selected event in local storage for the next run
+    //
     eventDay = day;
     eventDomain = '$eventName/$eventYear';
     if (eventDay != '') eventDomain = '$eventDomain/$eventDay';
-    prefs.setString('domain', eventDomain);
+    prefs.setString('domain', eventDomain);   // save the selected event in local storage
+    //
     // get the event info from the server and digest the event info
+    //
     eventInfo = await fetchEventInfo();
     eventTitle = eventInfo['eventtitle'];
     eventId = eventInfo['eventid'];
@@ -1553,11 +1570,15 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         socialMediaUrl = '';
         break;
     }
+    //
     // get the appicon.png from the event or stick to the default icon
+    //
     var response = await http.get(Uri.parse('${server}data/$eventDomain/appicon.png'));
     appIconUrl = (response.statusCode == 200) ?
       '${server}data/$eventDomain/appicon.png' : '${server}assets/assets/images/defaultAppIcon.png';
+    //
     // get the route.geojson from the server
+    //
     route = await fetchRoute();
     // set the event status based on the current time. Are we before, during or after the event
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -1594,8 +1615,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   //----------------------------------------------------------------------------
   //
   // Three routines for handling a live event
+  // 1. startup the live event
+  // 2. the live timer routine, runse every second, but acts every 60 seconds
+  // 3. a routine to add the latest trails to the track info we received since the beginning of the event
   //
-  void startLive() async {
+  void startLive() asyncz {
     if (maxReplay == 0) {         // maxReplay is set as an event parameter and is either 0 for normal events
                                   // or x hours when we have one long event where we want to limit the replay starting x hours back
       // first see if we already have live tracks of this event in local storage from a previous session
@@ -1620,7 +1644,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     showEventMenu = replayPause = false;                 // hide the eventselection menu
     currentReplayTime = DateTime.now().millisecondsSinceEpoch;
     replayEnd = currentReplayTime;         // put the timeslider to 'now'
-    moveShipsAndWindTo(currentReplayTime);
+    moveShipsAndWindTo(currentReplayTime - 60000);
     liveSecondsTimer = 60;
     liveTimer = Timer.periodic(const Duration(seconds:1), (liveTimer) {liveTimerRoutine();});
     setState(() { }); // redraw the UI
@@ -1647,7 +1671,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
       if (currentReplayTime == replayEnd) { // slider is at the end
         currentReplayTime = replayEnd = now; // extend the slider and move the handle to the new end
-        if (liveSecondsTimer == 60) moveShipsAndWindTo(currentReplayTime); // and move the ships and wind markers
+//        if (liveSecondsTimer == 60) moveShipsAndWindTo(currentReplayTime); // and move the ships and wind markers
+        moveShipsAndWindTo(currentReplayTime - (liveSecondsTimer * 1000));
       } else { // slider has been moved back in time by the user
         replayEnd = now; // just make the slider a second longer
       }
@@ -1858,20 +1883,20 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     shipMarkerList = [];
     shipLabelList = [];
     shipTrailList = [];
+    // loop through the ships in replayTracks
     for (int ship = 0; ship < replayTracks['shiptracks'].length; ship++) {
       dynamic track = replayTracks['shiptracks'][ship]; // copy ship part of the track to a new var, to keep things a bit simpler
-      int trackLength = track['stamp'].length;
       // see where we are in the time track of the ship
-      if (time < track['stamp'][0]) { // before the first timestamp
+      if (time < track['stamp'].first) { // before the first timestamp
         shipTimeIndex[ship] = 0;      // set the track index to the first entry
-        calculatedLat = track['lat'][0].toDouble();
-        calculatedLon = track['lon'][0].toDouble();
-        calculatedRotation = track['course'][0].toDouble();
-      } else if (time >= track['stamp'][trackLength - 1]) { // after the last timestamp
-        shipTimeIndex[ship] = trackLength - 1;              // set the track index to the last entry
-        calculatedLat = track['lat'][trackLength - 1].toDouble();
-        calculatedLon = track['lon'][trackLength - 1].toDouble();
-        calculatedRotation = track['course'][trackLength - 1].toDouble();
+        calculatedLat = track['lat'].first.toDouble();
+        calculatedLon = track['lon'].first.toDouble();
+        calculatedRotation = track['course'].first.toDouble();
+      } else if (time >= track['stamp'].last) { // after the last timestamp
+        shipTimeIndex[ship] = track['stamp'].length - 1;              // set the track index to the last entry
+        calculatedLat = track['lat'].last.toDouble();
+        calculatedLon = track['lon'].last.toDouble();
+        calculatedRotation = track['course'].last.toDouble();
       } else {                      // we are somewhere between two stamps
         // travel along the track back or forth to find out where we are
         if (time > track['stamp'][shipTimeIndex[ship]]) {   // move forward in the track
@@ -2102,8 +2127,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 return (InkWell(
                   child: SvgPicture.string(svgString),
                   onTap: () {
-                    showInfoWindow('rout$k', infoWindowText, routePointPosition, (null ==
-                        route['features'][k]['properties']['link']) ? '' : '${route['features'][k]['properties']['link']}');
+                    showInfoWindow('rout$k', infoWindowText, routePointPosition,
+                        route['features'][k]['properties']['link'] ?? '' );
                     setState(() {});
                   },
                 ));
@@ -2123,7 +2148,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 point: routePointPosition,
                 width: 300,
                 height: 30,
-                anchorPos: AnchorPos.exactly(Anchor(133, 23)),
+                anchorPos: AnchorPos.exactly(Anchor(265, 23)),
                 builder: (_) => SvgPicture.string(svgString)
             ));
           }
@@ -2147,7 +2172,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     }
   }
   //
-  // this routine creates an infoWindow for shipmarkers, windmarkers and routemarkers
+  // this routine creates the data needed to show an infoWindow for shipmarkers, windmarkers and routemarkers
+  // the data is used in the uiMarkerInfoWindow widget to show and position the infoEindow
+  // we have only one infowindow open at all times.
+  // The 'owner' is identified by the first 4 characters of the id (ship, rout or wind)
   //
   void showInfoWindow(String id, String txt, LatLng pos, String link) {
     infoWindowId = id;
@@ -2230,7 +2258,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // the parameter is for getting trails longer then the eventTrailLength, and is a timestamp (in seconds!)
   //
   Future<Map<String, dynamic>> fetchTrails([fromTime = 0]) async {
-    final response = await http.get(Uri.parse('${server}get?req=trails&dev=$phoneId&event=$eventDomain${(fromTime != 0) ? '&msg=$fromTime' : ""}'));
+    final response = await http.get(Uri.parse('${server}get?req=trails&dev=$phoneId&event=$eventDomain${(fromTime != 0) ? "&msg=$fromTime" : ""}'));
     return (response.statusCode == 200 && response.body != '') ? convertTimes(jsonDecode (response.body)) : {};
   }
   //
