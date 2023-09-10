@@ -4,19 +4,25 @@
 //
 // Version 3.1.1
 // bugfix: position of routepoint labels corrected
-//
+// feature: in live, show position 1 minute back and update position every second one second forward
+//    this makes the ships move continuously, provided that the trackers send positions frequently
+//    eventinfo parameter hfupdate
+// feature: eventinfo parameter maxreplay in hours for continuous events (_TTTest and Olympia-Charters)
+// feature: eventinfo parameter boaticon for sailing, rowing or motorboat
+// feature: APP-const.dart const mobileAppAvailable boolean. If true, shows link to Apple/Google play store
+//    when web app is shown on mobile
 //
 // Version 3.1.0
 // Bugfix: transition from live to replay at end of event
 //
 // Version 3.0.9
-// replayLoop added
+// new feature: replayLoop added
 //
 // Version 3.0.5, 3.0.6, 3.0.7, 3.0.8
 // minor cosmetic changes and efficiency improvements
 // bugfix that links in map attributions can be clicked, even as attribution window was closed
-// minor cosmetic chages, code optimizations and error handling improved
-// bugfix, start at replay
+// minor cosmetic changes, code optimizations and error handling improved
+// bugfix: start at replay
 //
 // Version 3.0.4
 // externe constanten voor varianten van de app voor Olympia en mogelijk andere gebruikers
@@ -42,7 +48,7 @@
 //
 import 'dart:async';
 import 'dart:convert';
-//import 'dart:html'; // uncomment this line when building for web (see also in the code of the appbar
+//import 'dart:html'; // uncomment this line when building for web (see also in the code for fullscreen in the appbar)
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart' show Html;
@@ -56,9 +62,11 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
 //
-import 'SZWconst.dart';   // import the constant values for the right build variant
+import 'SZW-const.dart';   // import the server constant values for the right build variant
 //
 String appIconUrl = '${server}assets/assets/images/defaultAppIcon.png';
+IconData boatIcon = Icons.sailing;  // set default icon for "deelnemrs", see eventinfo
+                                    // Icons.rowing or Icons.directions_boat or Icons.sailing
 //
 final webOnMobile = kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS || defaultTargetPlatform == TargetPlatform.android);
 // true if the user is running the web app on a mobile device. Give him the option to download the Android or iOS app.
@@ -89,7 +97,11 @@ String eventDay = '';
 int eventStart = 0;
 int eventEnd = 0;
 int replayEnd = 0;
-int maxReplay = 0;
+int maxReplay = 0;          // set in eventinfo 'maxreplay' in hours = set eventbegin xx hours befure current time
+                            // to limit the replay for continuous events (Olympia-charters)
+bool hfUpdate = false;      // set in eventinfo 'hfupdate'. If 'true', positions are updated every second during live
+                            // but with a one minute delay. Only useful when trackers send high frequency positions, such
+                            // as for sportvolgen.nl, every 5 seconds
 int eventTrailLength = 30;
 int actualTrailLength = 30;
 String socialMediaUrl = '';
@@ -321,7 +333,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         child: Text(eventTitle),
       ),
       actions: [
- /* comment / uncomment this piece of code when compiling for the web. It generates the full screen button
+/* comment / uncomment this piece of code when compiling for the web. It generates the full screen button
         if (kIsWeb) IconButton(
           visualDensity: VisualDensity.compact,
           tooltip: (fullScreen) ? 'exit fullscreen' : 'fullscreen',
@@ -332,7 +344,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           },
           icon: (fullScreen) ? const Icon(Icons.fullscreen_exit) : const Icon(Icons.fullscreen),
         ),
- ------------------------------------------------------------------------------------*/
+// ------------------------------------------------------------------------------------*/
         IconButton(           // button for the infoPage
           visualDensity: VisualDensity.compact,
           tooltip: 'infopagina',
@@ -361,7 +373,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
             showShipMenu = replayPause = !showShipMenu;
             setState(() {  });
           },
-          icon: const Icon(boatIcon),
+          icon: Icon(boatIcon),
         ),
       ],
     );
@@ -419,7 +431,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           // separate methods, defined under this thingy
           //
           floatingActionButtonLocation: FloatingActionButtonLocation.endDocked,
-          floatingActionButton: (followCounter > 0 && !showShipMenu && !showInfoPage && !showMapMenu && cookieConsentGiven) ?
+          floatingActionButton: (followCounter > 0 && /*!showShipMenu && !showInfoPage && !showMapMenu &&*/ cookieConsentGiven) ?
             Padding(
               padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),   // move the button up from the bottom of the screen
               // to make place for the time slider
@@ -825,7 +837,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 ),
                 Text((socialMediaUrl == '') ? '' : '\nKlik op het logo voor de laatste info over deze wedstrijd.\n'),
                 Container(
-                  child: (!webOnMobile) ? null : Column( children: [
+                  child: (!(webOnMobile && mobileAppAvailable)) ? null : Column( children: [
                     const Divider(color: Colors.white60),
                     InkWell (
                       child: const Text('\nMobiele Track & Trace App\n\nDe mobiele app werkt op uw '
@@ -1556,6 +1568,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     eventTrailLength = (eventInfo['traillength'] == null) ? 30 : int.parse(eventInfo['traillength']);  // set to default if not available in eventInfo
     actualTrailLength = eventTrailLength;
     maxReplay = (eventInfo['maxreplay'] == null) ? 0 : int.parse(eventInfo['maxreplay']);
+    hfUpdate = (eventInfo['hfupdate'] == null || (eventInfo['hfupdate'] == 'false')) ? false : true;
+    switch (eventInfo['boaticon']) {
+      case 'sailing': boatIcon = Icons.sailing; break;
+      case 'rowing': boatIcon = Icons.rowing; break;
+      case 'motorboat': boatIcon = Icons.directions_boat; break;
+      default: boatIcon = Icons.sailing; break;
+    }
     switch (eventInfo['mediaframe'].split(':')[0]) {
       case 'facebook':
         socialMediaUrl = 'https://www.facebook.com/${eventInfo['mediaframe'].split(':')[1]}';
@@ -1671,9 +1690,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
       if (currentReplayTime == replayEnd) { // slider is at the end
         currentReplayTime = replayEnd = now; // extend the slider and move the handle to the new end
-//        if (liveSecondsTimer == 60) moveShipsAndWindTo(currentReplayTime); // and move the ships and wind markers
-        moveShipsAndWindTo(currentReplayTime - (liveSecondsTimer * 1000));
-      } else { // slider has been moved back in time by the user
+        if (hfUpdate) {   // update positions every second, but with a one minute delay
+          moveShipsAndWindTo(currentReplayTime - ((liveSecondsTimer) * 1000));
+        } else {          // update positions only at a one minute interval
+          if (liveSecondsTimer == 60) moveShipsAndWindTo(currentReplayTime);
+        }
+      } else { // slider is not at the end, the slider has been moved back in time by the user
         replayEnd = now; // just make the slider a second longer
       }
       if (!showShipInfo) setState(() {}); // If shipInfo is shown, don't update. It makes the info flash, for whatever reason

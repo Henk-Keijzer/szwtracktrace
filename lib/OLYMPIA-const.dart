@@ -4,4 +4,4 @@
 import 'package:flutter/material.dart';
 
 const server = 'https://track.olympia-charters.nl/';
-const boatIcon = Icons.directions_boat;  // Icons.rowing or Icons.sailing
+const mobileAppAvailable = false;

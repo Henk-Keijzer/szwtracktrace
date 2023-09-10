@@ -4,4 +4,4 @@
 import 'package:flutter/material.dart';
 
 const server = 'https://tt.zeilvaartwarmond.nl/';
-const boatIcon = Icons.sailing;  // Icons.rowing or Icons.directions_boat or Icons.sailing
+const mobileAppAvailable = true;
