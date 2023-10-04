@@ -2,11 +2,17 @@
 // ©2021-2023 Stichting Zeilvaart Warmond
 // Flutter/Dart Track & Trace app for Android, iOS and web
 //
+// Version 3.1.2
+// bugfix: async exception in case the event in the URL query is not correct
+//    corrected handling of URL query (?event=Event/Year/Day)
+//    also if no eventDomain or a partial eventDomain is given, the eventmenu opens at startup, this guides the new user
+//    to select an event
+//
 // Version 3.1.1
 // bugfix: position of routepoint labels corrected
 // feature: in live, show position 1 minute back and update position every second one second forward
 //    this makes the ships move continuously, provided that the trackers send positions frequently
-//    eventinfo parameter hfupdate
+//    eventinfo parameter hfupdate (bool)
 // feature: eventinfo parameter maxreplay in hours for continuous events (_TTTest and Olympia-Charters)
 // feature: eventinfo parameter boaticon for sailing, rowing or motorboat
 // feature: APP-const.dart const mobileAppAvailable boolean. If true, shows link to Apple/Google play store
@@ -151,7 +157,7 @@ bool autoZoom = true;
 //
 // vars for the movement of ships and wind markers in time
 //
-const speedIndexInitialValue = 5;
+const speedIndexInitialValue = 4;
 int speedIndex = speedIndexInitialValue;     // index in the following table en position of the speed slider, default = 3 min/sec
 List<int> speedTable = [0,         1,           10,           30,           60,          180,         300,         900,          1800,         3600];
 List speedTextTable =  ["gestopt", "1 sec/sec", "10 sec/sec", "30 sec/sec", "1 min/sec", "3 min/sec", "5 min/sec", "15 min/sec", "30 min/sec", "1 uur/sec"];
@@ -333,7 +339,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         child: Text(eventTitle),
       ),
       actions: [
-/* comment / uncomment this piece of code when compiling for the web. It generates the full screen button
+ /* comment / uncomment this piece of code when compiling for the web. It generates the full screen button
         if (kIsWeb) IconButton(
           visualDensity: VisualDensity.compact,
           tooltip: (fullScreen) ? 'exit fullscreen' : 'fullscreen',
@@ -1462,25 +1468,42 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (kIsWeb && Uri.base.queryParameters.containsKey('event')) {
       eventDomain = Uri.base.queryParameters['event'].toString(); //get parameter with attribute "event"
     }
+    showEventMenu = true;
+    setState(() { }); // redraw the UI
     if (eventDomain != "") {
       // we have info from a previous session or from the web url: use it as if the user had selected an event using the UI
       List subStrings = eventDomain.split('/');
-      eventName = subStrings[0];
-      dirList[eventName].forEach((k, v) => eventYearList.add(k));   // note that this may cause an async suspension
-                                                                    // if the eventName/Year/Day from local storage or query string
-                                                                    // does not exist in the current dirlist. The UI will take over
-                                                                    // and the user can continue selecting from the dirlist data
-      eventYearList = eventYearList.reversed.toList();
-      eventYear = subStrings[1];
-      if (subStrings.length == 3) {
-        dirList[eventName][eventYear].forEach((k, v) => eventDayList.add(k));
-        eventDay = subStrings[2];
+      if (dirList.containsKey(subStrings[0])) {
+        eventName = subStrings[0];
+        dirList[eventName].forEach((k, v) => eventYearList.add(k));
+        eventYearList = eventYearList.reversed.toList();
+        if (eventYearList.contains(subStrings[1])) {
+          eventYear = subStrings[1];
+          if (dirList[eventName][eventYear].length == 0) {
+            newEventSelected('');
+          } else {
+            dirList[eventName][eventYear].forEach((k, v) => eventDayList.add(k));
+            if (eventDayList.contains(subStrings[2])) {
+              eventDay = subStrings[2];
+              newEventSelected(eventDay);
+            } else {
+              eventDay = 'Kies een dag/race';
+              selectEventDay(eventYear);
+            }
+          }
+        } else {
+          eventYear = 'Kies een jaar';
+          eventDay = '';
+          selectEventYear(eventName);
+        }
       } else {
-        eventDay = "";
+        eventName = 'Kies een evenement';
+        eventYear = '';
+        eventDay = '';
       }
-      newEventSelected(eventDay);     // go and re-start the event from the previous session.
     }
     // if we have no eventDomain from local storage or from the query string, the event selection menu will start things up
+    setState(() { }); // redraw the UI
   }
   //----------------------------------------------------------------------------
   //
@@ -1510,7 +1533,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // make a list of days for the event/year, but only if this event year has any days. Otherwise we have a complete event selected
     if (dirList[eventName][eventYear].length != 0) {
       dirList[eventName][eventYear].forEach((k, v) => eventDayList.add(k));
-      eventDay = 'Kies een dag';
+      eventDay = 'Kies een dag/race';
     } else {
       newEventSelected('');
     }
@@ -1773,7 +1796,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     } else {
       // send a get, just for statistics purposes, no need to wait for a response
       http.get(Uri.parse('${server}get?req=replay&dev=$phoneId&event=$eventDomain&nodata=true'));
-      replayTracks = jsonDecode(a);                                       // otherwise, just use the data in local storage
+      replayTracks = jsonDecode(a);                                       // and just use the data in local storage
     }
     buildShipAndWindInfo();         // prepare menu and track info
     selectionMessage = '"Replay" tracks zijn geladen, klik op de kaart';
