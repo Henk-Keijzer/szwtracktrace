@@ -7,6 +7,7 @@
 //    corrected handling of URL query (?event=Event/Year/Day)
 //    also if no eventDomain or a partial eventDomain is given, the eventmenu opens at startup, this guides the new user
 //    to select an event
+// bugfix: hide floating action button when menus are open
 //
 // Version 3.1.1
 // bugfix: position of routepoint labels corrected
@@ -54,7 +55,7 @@
 //
 import 'dart:async';
 import 'dart:convert';
-//import 'dart:html'; // uncomment this line when building for web (see also in the code for fullscreen in the appbar)
+import 'dart:html'; // uncomment this line when building for web (see also in the code for fullscreen in the appbar)
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart' show Html;
@@ -339,7 +340,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         child: Text(eventTitle),
       ),
       actions: [
- /* comment / uncomment this piece of code when compiling for the web. It generates the full screen button
+// /* comment / uncomment this piece of code when compiling for the web. It generates the full screen button
         if (kIsWeb) IconButton(
           visualDensity: VisualDensity.compact,
           tooltip: (fullScreen) ? 'exit fullscreen' : 'fullscreen',
@@ -437,7 +438,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           // separate methods, defined under this thingy
           //
           floatingActionButtonLocation: FloatingActionButtonLocation.endDocked,
-          floatingActionButton: (followCounter > 0 && /*!showShipMenu && !showInfoPage && !showMapMenu &&*/ cookieConsentGiven) ?
+          floatingActionButton: (followCounter > 0 && !showShipMenu && !showInfoPage && !showMapMenu && cookieConsentGiven) ?
             Padding(
               padding: const EdgeInsets.fromLTRB(0, 0, 0, 100),   // move the button up from the bottom of the screen
               // to make place for the time slider
