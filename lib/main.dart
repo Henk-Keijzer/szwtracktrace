@@ -2,13 +2,19 @@
 // ©2021-2023 Stichting Zeilvaart Warmond
 // Flutter/Dart Track & Trace app for Android, iOS and web
 //
+// Version 3.1.4
+// Bugfix: add particpants later during the race at the right position based on colorcode, not at the end
+// Feature: autoFollow false when starting a live event, true when starting an event in replay
+// Feature: position of autofollow and autozoom swapped
+// Bugfix: predicted position not during replay
+// Feature: don't close map menu when switching between overlays when overlay is off
+//
 // Version 3.1.3
 // Feature: andere layout infowindow van de schepen, met coördinaten en tijd van ontvangst evt met datum als de laatste
 //    ontvangst meer dan 24 uur geleden is (in plaats van xx minuten geleden)
-// Bugfix: scrollbar in het schepenmenu en kaartenmenu naar rechts geschoven, zodat het in de web en windows versie niet over de checkboxes valt
+// Bugfix: scrollbar in menus shifted to the right to free the check and radio boxes
 // Feature: floatingbutton voor auto volgen toegevoegd
-// Feature: in live update per seconde met voorspelde posoities sind laatst ontvangen positie
-// bugfix: toevoegen van schepen op de juiste plek in de replaytracks, op basis van kleurcode
+// Feature: in live update predicted position since last received position
 //
 // Version 3.1.2
 // bugfix: async exception in case the event in the URL query is not correct
@@ -64,7 +70,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
-//import 'dart:html'; // uncomment this line when building for web (see also in the code for fullscreen in the appbar)
+ /* comment this line when building for web
+import 'dart:html'; // uncomment this line when building for web (see also in the code for fullscreen in the appbar)
+//--------------------------------------------------------- */
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart' show Html;
@@ -78,7 +86,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 import 'package:intl/intl.dart';
 //
-import 'OLYMPIA-const.dart';   // import the server constant values for the right build variant
+import 'SZW-const.dart';   // import the server constant values for the right build variant
 //
 String appIconUrl = '${server}assets/assets/images/defaultAppIcon.png';
 IconData boatIcon = Icons.sailing;  // set default icon for "deelnemrs", see eventinfo
@@ -98,7 +106,7 @@ String phoneId = "";
 final mapController = MapController();
 const initialMapPosition = LatLng(52.2, 4.535);
 //
-// vars for the selection of the event and the eventinfo
+// vars for the selection of the event
 late SharedPreferences prefs;           // local parameter storage
 late Map<String, dynamic> dirList;      // see get-dirlist.php on the server
 Map<String, dynamic> eventInfo = {};    // see get-eventinfo.php on the server
@@ -110,18 +118,18 @@ String eventId = '';
 String eventName = 'Kies een evenement';
 String eventYear = '';
 String eventDay = '';
-int eventStart = 0;
-int eventEnd = 0;
+// eventinfo (related) variables
+int eventStart = 0;         // evenInfo['eventstartstamp']
+int eventEnd = 0;           // eventInfo['eventendstamp']
 int replayEnd = 0;
-int maxReplay = 0;          // set in eventinfo 'maxreplay' in hours = set eventbegin xx hours befure current time
-                            // to limit the replay for continuous events (Olympia-charters)
-bool hfUpdate = false;      // set in eventinfo 'hfupdate'. If 'true', positions are updated every second during live
-                            // but with a one minute delay. Only useful when trackers send high frequency positions, such
-                            // as for sportvolgen.nl, every 5 seconds
-int eventTrailLength = 30;
+int maxReplay = 0;          // eventInfo['maxreplay'] in hours = sets eventbegin xx hours before current time
+                            //  to limit the replay for continuous events (Olympia-charters)
+bool hfUpdate = false;      // eventInfo['hfupdate']. If 'true', positions are predicted every second during live
+int trailsUpdateInterval = 60;   // eventInfo['trailsupdateinterval'], in seconds between two subsequent get-trails requests from the db
+int eventTrailLength = 30;  // eventInfo['traillength']
 int actualTrailLength = 30;
-String socialMediaUrl = '';
-String eventStatus = '';  // pre-event, live or replay
+String socialMediaUrl = ''; // eventInfo['mediaframe']
+String eventStatus = '';    // 'pre-event' || 'live' || 'replay'
 //
 // vars for the tracks and the markers
 Map<String, dynamic> replayTracks = jsonDecode('{}'); // see get-replay.php on the server
@@ -350,7 +358,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         child: Text(eventTitle),
       ),
       actions: [
- /* comment / uncomment this piece of code when compiling for the web. It generates the full screen button
+ /* comment this line when compiling for the web. It generates the full screen button
         if (kIsWeb) IconButton(
           visualDensity: VisualDensity.compact,
           tooltip: (fullScreen) ? 'exit fullscreen' : 'fullscreen',
@@ -455,6 +463,18 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
               child: Column (
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  (!autoFollow) ? const SizedBox.shrink() : FloatingActionButton(
+                    elevation: 5,
+                    onPressed: () {
+                      autoZoom = !autoZoom;
+                      moveShipsAndWindTo(currentReplayTime);
+                      setState(() { });
+                    },
+                    foregroundColor: Colors.white70,
+                    backgroundColor: Colors.blueGrey[700]?.withOpacity(0.5),
+                    child: Text((autoZoom) ? ' auto\nzoom\n  uit' : ' auto\nzoom', style: const TextStyle(fontSize: 11)),
+                  ),
+                  if (autoFollow) const SizedBox(width:0, height:10),
                   FloatingActionButton(
                     elevation: 5,
                     onPressed: () {
@@ -467,18 +487,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                     backgroundColor: Colors.blueGrey[700]?.withOpacity(0.5),
                     child: Text((autoFollow) ? ' auto\nvolgen\n   uit' : ' auto\nvolgen', style: const TextStyle(fontSize: 11)),
                   ),
-                  if (autoFollow) const SizedBox(width:0, height:10),
-                  (!autoFollow) ? const SizedBox.shrink() : FloatingActionButton(
-                    elevation: 5,
-                    onPressed: () {
-                      autoZoom = !autoZoom;
-                      moveShipsAndWindTo(currentReplayTime);
-                      setState(() { });
-                    },
-                    foregroundColor: Colors.white70,
-                    backgroundColor: Colors.blueGrey[700]?.withOpacity(0.5),
-                    child: Text((autoZoom) ? ' auto\nzoom\n  uit' : ' auto\nzoom', style: const TextStyle(fontSize: 11)),
-                  )
 
                 ]
               )
@@ -528,6 +536,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
             showEventMenu = showMapMenu = showShipMenu =  showShipInfo = showInfoPage = replayPause = false;
             setState(() {});
           },
+// /*  add comment slashes when NOT building for web - temporarily removed because of gesture handling on web fails
           onLongPress: (_, latlng) {
             if (eventStatus == 'live' || eventStatus == 'pre-event') {
               String windyURL = 'https://embed.windy.com/embed2.html?lat=${latlng.latitude}&lon=${latlng.longitude}'
@@ -538,6 +547,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
               launchUrl(url, mode: LaunchMode.platformDefault);
             }
           },
+//---------------------------------------------------------------------------*/
           onPositionChanged: (_, __) {  // have te infowindow repainted at the correct spot on the screen
             if (infoWindowId != '') showInfoWindow(infoWindowId, infoWindowText, infoWindowLatLng, infoWindowLink);
           }
@@ -792,9 +802,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       child: (showEventMenu) ? Container(
         color: Colors.blueGrey[700],
         width: 275,
-        padding:  EdgeInsets.fromLTRB(10.0, menuOffset + 10.0, 10.0, 10.0),
+        padding:  EdgeInsets.fromLTRB(10.0, menuOffset + 10.0, 0.0, 10.0),
         child: ListView(
-          padding: EdgeInsets.zero,
+          padding: const EdgeInsets.fromLTRB(0.0, 0.0, 10.0, 0.0),
           children: [
             const Text("Evenement menu\n", style: TextStyle(fontSize: 20)),
             PopupMenuButton(      // dropdown evenement
@@ -956,14 +966,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                               child: Text(
                                 '\u25FC',
                                 style: TextStyle(
-                                  fontSize: 24,
+                                  fontSize: 20,
                                   color: Color(int.parse('FF${shipColors[index].toUpperCase().replaceAll("#", "")}', radix:16))
                                 )
                               ),
                             ),
                             Expanded(
                               child: Padding(
-                                padding: const EdgeInsets.all(5),
+                                padding: const EdgeInsets.fromLTRB(5,0,5,0),
                                 child: InkWell(
                                   child: Text(shipList[index]),
                                   onTap: () => loadShipInfo(index),
@@ -991,7 +1001,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                         child: Text('Het spoor achter de schepen is $actualTrailLength minuten'),
                         onTap: () {
                           if (actualTrailLength == eventTrailLength) {
-                            actualTrailLength = (eventEnd - eventStart) / 1000 ~/ 60;
+                            if (maxReplay == 0) {
+                              actualTrailLength = (eventEnd - eventStart) / 1000 ~/ 60;
+                            } else {
+                              actualTrailLength = maxReplay * 60;  // minuten
+                            }
                           } else {
                             actualTrailLength = eventTrailLength;
                           }
@@ -1113,7 +1127,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                             onChanged: (x) {
                               selectedOverlayType = x as String;
                               prefs.setString('overlaytype', selectedOverlayType);
-                              showMapMenu = replayPause= false;
+                              if (mapOverlay) showMapMenu = replayPause= false;
                               setState(() { });
                             }
                           )
@@ -1630,6 +1644,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     actualTrailLength = eventTrailLength;
     maxReplay = (eventInfo['maxreplay'] == null) ? 0 : int.parse(eventInfo['maxreplay']);
     hfUpdate = (eventInfo['hfupdate'] == null || (eventInfo['hfupdate'] == 'false')) ? false : true;
+    trailsUpdateInterval = (eventInfo['trailsupdateinterval'] == null) ? 60 : int.parse(eventInfo['trailsupdateinterval']);
     switch (eventInfo['boaticon']) {
       case 'sailing': boatIcon = Icons.sailing; break;
       case 'rowing': boatIcon = Icons.rowing; break;
@@ -1706,13 +1721,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       String a = prefs.getString('live-$eventId') ?? '';   // get "old" live tracks from prefs (if not set to default '')
       if (a != '') {
         replayTracks = jsonDecode(a);
-        // get additional data from the moment of our last collected data
-        liveTrails = await fetchTrails((replayTracks['endtime'] / 1000).toInt());
       } else { // no data yet, so get the replay (max 5 minutes old)
         replayTracks = await fetchReplayTracks();
-        // and the latest trails
-        liveTrails = await fetchTrails();
       }
+      liveTrails = await fetchTrails((replayTracks['endtime'] / 1000).toInt());
       addTrailsToTracks(); // merge the latest track info with the replay info and save it
     } else {    // maxReplay > 0, fetch the trails of the last {maxReplay} hours
       eventStart = DateTime.now().millisecondsSinceEpoch - (maxReplay * 60 * 60 * 1000);
@@ -1724,8 +1736,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     showEventMenu = replayPause = false;                 // hide the eventselection menu
     currentReplayTime = DateTime.now().millisecondsSinceEpoch;
     replayEnd = currentReplayTime;         // put the timeslider to 'now'
-    moveShipsAndWindTo(currentReplayTime - 60000);
-    liveSecondsTimer = 60;
+    moveShipsAndWindTo(currentReplayTime);
+    autoFollow = false;
+    liveSecondsTimer = trailsUpdateInterval;
     liveTimer = Timer.periodic(const Duration(seconds:1), (liveTimer) {liveTimerRoutine();});
     setState(() { }); // redraw the UI
   }
@@ -1739,22 +1752,25 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     int now = DateTime.now().millisecondsSinceEpoch; // have a look at the clock
     if (now < eventEnd) {
       liveSecondsTimer--;
-      if (liveSecondsTimer <= 0) { // we've waited 60 seconds, so, get new trails and add them to what we have
-        liveSecondsTimer = 60;
-        if ((now - replayTracks['endtime']) > (eventTrailLength * 60 * 1000)) { // we must have been asleep for some time
+      if (liveSecondsTimer <= 0) { // we've waited 'trailsUpdateInterval' seconds, so, get new trails and add them to what we have
+        liveSecondsTimer = trailsUpdateInterval;
+        if ((now - replayTracks['endtime']) > (trailsUpdateInterval * 3 * 1000)) {
+          // we must have been asleep for at least two trailsUpdatePeriods, get a complete uopdate since the last fetch
           liveTrails = await fetchTrails((replayTracks['endtime'] / 1000).toInt()); // fetch special
         } else {
-          liveTrails = await fetchTrails(); // fetch the latest (eventTrailLength) data
+          // we have relatively recent data, go get the latest. Note this fetch does noit access the database on the server
+          // but gets data stored in the trails.json file, wich is not older then the trailsUpdateInterval
+          liveTrails = await fetchTrails(); // fetch the latest data
         }
         addTrailsToTracks(); // add it to what we already had and store it
         buildShipAndWindInfo(); // prepare menu and track info
       }
       if (currentReplayTime == replayEnd) { // slider is at the end
         currentReplayTime = replayEnd = now; // extend the slider and move the handle to the new end
-        if (hfUpdate) {   // update positions every second, but with a one minute delay
+        if (hfUpdate) {   // update positions every second
           moveShipsAndWindTo(currentReplayTime);
         } else {          // update positions only at a one minute interval
-          if (liveSecondsTimer == 60) moveShipsAndWindTo(currentReplayTime);
+          if (liveSecondsTimer == trailsUpdateInterval) moveShipsAndWindTo(currentReplayTime);
         }
       } else { // slider is not at the end, the slider has been moved back in time by the user
         replayEnd = now; // just make the slider a second longer
@@ -1898,8 +1914,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void startStopRunning() {
     if (eventStatus != "pre-event") {
       replayRunning = !replayRunning;
-      if (replayRunning && currentReplayTime ==
-          replayEnd) { // if he want to run while at the end of the slider, move it to the beginning
+      if (replayRunning && currentReplayTime == replayEnd) { // if he wants to run while at the end of the slider, move it to the beginning
         currentReplayTime = eventStart;
       }
       if (replayRunning) {
@@ -1987,33 +2002,41 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     for (int ship = 0; ship < replayTracks['shiptracks'].length; ship++) {
       dynamic track = replayTracks['shiptracks'][ship]; // copy ship part of the track to a new var, to keep things a bit simpler
       // see where we are in the time track of the ship
+      var posText = 'Positie:';
       if (time < track['stamp'][0]) { // before the first timestamp
         shipTimeIndex[ship] = 0;      // set the track index to the first entry
         calculatedLat = track['lat'].first.toDouble();
         calculatedLon = track['lon'].first.toDouble();
         calculatedRotation = track['course'].first.toDouble();
         infoWindowTime = track['stamp'].first;
-      } else if ((time >= track['stamp'].last) && ((time-track['stamp'].last) < 180*1000)) { // within 3 minutes after the last timestamp
-        shipTimeIndex[ship] = track['stamp'].length - 1;              // set the track index to the last entry
-        rdist = ((track['speed'].last) / 36000) * (time - track['stamp'].last)/1000 / 6371; // angular distance in radians
-        rcourse = track['course'].last * pi / 180;
-        rlat1 = track['lat'].last * pi / 180;
-        rlon1 = track['lon'].last * pi / 180;
-        rlat2 = asin(sin(rlat1) * cos(rdist) + cos(rlat1) * sin(rdist) * cos(rcourse));
-        rlon2 = rlon1 + atan2(sin(rcourse) * sin(rdist) * cos(rlat1), cos(rdist) - sin(rlat1) * sin(rlat2));
-        rlon2 = ((rlon2 + (3 * pi)) % (2 * pi)) - pi;  // normalise to -180..+180º
-        calculatedLat = rlat2 * 180 /pi;
-        calculatedLon = rlon2 * 180 /pi;
-        calculatedRotation = track['course'].last.toDouble();
-        infoWindowTime = time;
-      } else if (time-track['stamp'].last > 180*1000)  {
-        shipTimeIndex[ship] = track['stamp'].length - 1;              // set the track index to the last entry
-        calculatedLat = track['lat'].last.toDouble();
-        calculatedLon = track['lon'].last.toDouble();
-        calculatedRotation = track['course'].last.toDouble();
-        infoWindowTime = track['stamp'].last;
-      } else {                      // we are somewhere between two stamps
-        // travel along the track back or forth to find out where we are
+      } else if (time >= track['stamp'].last) {   // we are beyond the last timestamp
+        if (time == replayEnd && hfUpdate && (time-track['stamp'].last) < 180*1000) {
+          // the last stamp is less then 3 minutes old and we are at the end of the slider (i.e. we are live and no replay running)
+          // in this situation we make a prediction where the ship could be
+          posText = 'Voorspelde positie:';
+          shipTimeIndex[ship] = track['stamp'].length - 1;     // set the track index to the last entry
+          // now, predict where the ship could be, based on last known location, distance (speed, time),and heading
+          rdist = ((track['speed'].last) / 36000) * (time - track['stamp'].last)/1000 / 6371; // angular distance in radians
+          rcourse = track['course'].last * pi / 180;            // course in radians
+          rlat1 = track['lat'].last * pi / 180;                 // last known position in radians
+          rlon1 = track['lon'].last * pi / 180;
+          rlat2 = asin(sin(rlat1) * cos(rdist) + cos(rlat1) * sin(rdist) * cos(rcourse));
+          rlon2 = rlon1 + atan2(sin(rcourse) * sin(rdist) * cos(rlat1), cos(rdist) - sin(rlat1) * sin(rlat2));
+          rlon2 = ((rlon2 + (3 * pi)) % (2 * pi)) - pi;  // normalise to -180..+180º
+          calculatedLat = rlat2 * 180 / pi;               // convert radians back to degrees
+          calculatedLon = rlon2 * 180 / pi;
+          calculatedRotation = track['course'].last.toDouble();
+          infoWindowTime = time;
+        } else {
+          posText = 'Laatst ontvangen positie:';
+          shipTimeIndex[ship] = track['stamp'].length - 1;              // set the track index to the last entry
+          calculatedLat = track['lat'].last.toDouble();
+          calculatedLon = track['lon'].last.toDouble();
+          calculatedRotation = track['course'].last.toDouble();
+          infoWindowTime = track['stamp'].last;
+        }
+      } else {      // we are somewhere between two stamps
+                    // travel along the track back or forth to find out where we are
         if (time > track['stamp'][shipTimeIndex[ship]]) {   // move forward in the track
           while (track['stamp'][shipTimeIndex[ship]] < time) {
             shipTimeIndex[ship]++;
@@ -2065,7 +2088,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       infoWindowText += ((currentReplayTime - track['stamp'][shipTimeIndex[ship]]) > 60*60*24*1000) ?
         DateTime.fromMillisecondsSinceEpoch(infoWindowTime).toString().substring(0, 19) :
         DateTime.fromMillisecondsSinceEpoch(infoWindowTime).toString().substring(11, 19);
-      infoWindowText += '\nLat: ${calculatedLat.toStringAsFixed(4)}, Lon: ${calculatedLon.toStringAsFixed(4)}';
+      infoWindowText += '\n$posText\nLat: ${calculatedLat.toStringAsFixed(4)}, Lon: ${calculatedLon.toStringAsFixed(4)}';
       // add the shipMarker
       var color = shipMarkerColorTable[int.parse(replayTracks['shiptracks'][ship]['colorcode'])%32];
       var svgString = '<svg width="22" height="22">'
