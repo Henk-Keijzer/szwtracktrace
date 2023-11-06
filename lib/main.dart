@@ -2,6 +2,12 @@
 // ©2021-2023 Stichting Zeilvaart Warmond
 // Flutter/Dart Track & Trace app for Android, iOS and web
 //
+// Version 3.1.5
+// Feature: upgraded to flutter_map V6.0.x
+// Feature: tiny quote added to shipname when in live position is older then 3 minutes.
+// Optimization: server definition based on web document.location.hostName
+// Maps: maptileproviders.json re-defined in service types WMS, WMTS (simple) and vector and tilelayers defined accordingly
+//
 // Version 3.1.4
 // Bugfix: add particpants later during the race at the right position based on colorcode, not at the end
 // Feature: autoFollow false when starting a live event, true when starting an event in replay
@@ -70,23 +76,25 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
- /* comment this line when building for web
-import 'dart:html'; // uncomment this line when building for web (see also in the code for fullscreen in the appbar)
-//--------------------------------------------------------- */
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_html/flutter_html.dart' show Html;
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:universal_html/html.dart' hide Text;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
-import 'package:intl/intl.dart';
+//import 'package:vector_map_tiles/vector_map_tiles.dart';
 //
-import 'SZW-const.dart';   // import the server constant values for the right build variant
+String server = 'https://tt.zeilvaartwarmond.nl/';
+bool mobileAppAvailable = true;
+late PackageInfo packageInfo;
 //
 String appIconUrl = '${server}assets/assets/images/defaultAppIcon.png';
 IconData boatIcon = Icons.sailing;  // set default icon for "deelnemrs", see eventinfo
@@ -173,6 +181,7 @@ int followCounter = 0;
 bool followAll = true;
 bool autoZoom = true;
 bool autoFollow = true;
+bool hideFloatingActionButtons = false;
 //
 // vars for the movement of ships and wind markers in time
 //
@@ -216,12 +225,13 @@ const String bgColorWhite = '#ffffff';
 //
 Map<String, dynamic> mapTileProviderData = {
   'Standaard': {
+    'service': 'WMTS',
     'URL': 'https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/standaard/EPSG:3857/{z}/{x}/{y}.png',
     'wmsbaseURL': '',
     'wmslayers': [],
-    'bgColor': '#000000',
     'subDomains': [],
     'maxZoom': 19.0,
+    'bgColor': '#000000',
     'attrib': 'Kadaster',
     'attribLink': 'https://www.kadaster.nl'},
 };
@@ -256,14 +266,15 @@ Future main() async {
   // get any saved preferences from local storage
   prefs = await SharedPreferences.getInstance();
   // and run the app as a stateful widget
+  packageInfo = await PackageInfo.fromPlatform();
   runApp(const MyApp());
 }
 //
 // a standard flutter intermediate class to start the actual app as a StatefulWidget class
 //
 class MyApp extends StatefulWidget {
-  const MyApp({Key? key}) : super(key: key);
-  @override
+  const MyApp({super.key});
+    @override
   State<MyApp> createState() => MyAppState();
 }
 //
@@ -358,7 +369,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         child: Text(eventTitle),
       ),
       actions: [
- /* comment this line when compiling for the web. It generates the full screen button
         if (kIsWeb) IconButton(
           visualDensity: VisualDensity.compact,
           tooltip: (fullScreen) ? 'exit fullscreen' : 'fullscreen',
@@ -369,7 +379,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           },
           icon: (fullScreen) ? const Icon(Icons.fullscreen_exit) : const Icon(Icons.fullscreen),
         ),
-// ------------------------------------------------------------------------------------*/
         IconButton(           // button for the infoPage
           visualDensity: VisualDensity.compact,
           tooltip: 'infopagina',
@@ -462,7 +471,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
               // to make place for the time slider
               child: Column (
                 mainAxisAlignment: MainAxisAlignment.end,
-                children: [
+                children: (hideFloatingActionButtons) ? [] : [
                   (!autoFollow) ? const SizedBox.shrink() : FloatingActionButton(
                     elevation: 5,
                     onPressed: () {
@@ -487,7 +496,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                     backgroundColor: Colors.blueGrey[700]?.withOpacity(0.5),
                     child: Text((autoFollow) ? ' auto\nvolgen\n   uit' : ' auto\nvolgen', style: const TextStyle(fontSize: 11)),
                   ),
-
                 ]
               )
             ) : null,
@@ -526,33 +534,92 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     return FlutterMap(                     // fills the complete body as bottom layer in the UI
       mapController: mapController,
       options: MapOptions(
-          onMapReady: onMapCreated,
-          center: initialMapPosition,
-          zoom: 12.0,
-          maxZoom: mapTileProviderData[selectedMapType]['maxZoom'],
-          interactiveFlags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-          onTap: (_, __) {             // on tapping the map: close all popups and menu's
-            infoWindowId = '';
-            showEventMenu = showMapMenu = showShipMenu =  showShipInfo = showInfoPage = replayPause = false;
-            setState(() {});
-          },
-// /*  add comment slashes when NOT building for web - temporarily removed because of gesture handling on web fails
-          onLongPress: (_, latlng) {
-            if (eventStatus == 'live' || eventStatus == 'pre-event') {
-              String windyURL = 'https://embed.windy.com/embed2.html?lat=${latlng.latitude}&lon=${latlng.longitude}'
-                  '&detailLat=${latlng.latitude}&detailLon=${latlng.longitude}'
-                  '&width=$screenWidth&height=$screenHeight&zoom=11&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker='
-                  '&calendar=now&pressure=&type=map&location=coordinates&detail=true&metricWind=bft&metricTemp=%C2%B0C&radarRange=-1';
-              final Uri url = Uri.parse(windyURL);
-              launchUrl(url, mode: LaunchMode.platformDefault);
-            }
-          },
-//---------------------------------------------------------------------------*/
-          onPositionChanged: (_, __) {  // have te infowindow repainted at the correct spot on the screen
-            if (infoWindowId != '') showInfoWindow(infoWindowId, infoWindowText, infoWindowLatLng, infoWindowLink);
+        onMapReady: onMapCreated,
+        initialCenter: initialMapPosition,
+        initialZoom: 12.0,
+        maxZoom: mapTileProviderData[selectedMapType]['maxZoom'],
+        backgroundColor: Colors.transparent,
+        interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+        onTap: (_, __) {             // on tapping the map: close all popups and menu's
+          infoWindowId = '';
+          showEventMenu = showMapMenu = showShipMenu =  showShipInfo = showInfoPage = replayPause = false;
+          setState(() {});
+        },
+// Longpress temporarily turned off for web because of a bug in the flutte_map library gesture handling. TODO
+        onLongPress: (kIsWeb) ? null : (_, latlng) {
+          if (eventStatus == 'live' || eventStatus == 'pre-event') {
+            String windyURL = 'https://embed.windy.com/embed2.html?lat=${latlng.latitude}&lon=${latlng.longitude}'
+                '&detailLat=${latlng.latitude}&detailLon=${latlng.longitude}'
+                '&width=$screenWidth&height=$screenHeight&zoom=11&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker='
+                '&calendar=now&pressure=&type=map&location=coordinates&detail=true&metricWind=bft&metricTemp=%C2%B0C&radarRange=-1';
+            final Uri url = Uri.parse(windyURL);
+            launchUrl(url, mode: LaunchMode.platformDefault);
           }
+        },
+        onPositionChanged: (_, __) {  // have te infowindow repainted at the correct spot on the screen
+          if (infoWindowId != '') showInfoWindow(infoWindowId, infoWindowText, infoWindowLatLng, infoWindowLink);
+        }
       ),
-      nonRotatedChildren: [
+      children: [
+        // the selected map with three options, WMS, WMTS or vector
+        if (mapTileProviderData[selectedMapType]['service'] == 'WMS')
+          TileLayer(
+            wmsOptions: WMSTileLayerOptions(
+              baseUrl: mapTileProviderData[selectedMapType]['wmsbaseURL'],
+              layers: mapTileProviderData[selectedMapType]['wmslayers'].cast<String>(),
+            ),
+            tileProvider: CancellableNetworkTileProvider(),
+            keepBuffer: 3, panBuffer: 1,
+            userAgentPackageName: packageInfo.packageName,
+          )
+        else if (mapTileProviderData[selectedMapType]['service'] == 'WMTS')
+          TileLayer(
+            urlTemplate: mapTileProviderData[selectedMapType]['URL'],
+            subdomains: List<String>.from(mapTileProviderData[selectedMapType]['subDomains']),
+            tileProvider: CancellableNetworkTileProvider(),
+            keepBuffer: 3, panBuffer: 1,
+            userAgentPackageName: packageInfo.packageName,
+          )
+        else if (mapTileProviderData[selectedMapType]['service'] == 'vector')
+          TileLayer(
+            urlTemplate: mapTileProviderData[selectedMapType]['URL'],
+            subdomains: List<String>.from(mapTileProviderData[selectedMapType]['subDomains']),
+            tileProvider: CancellableNetworkTileProvider(),
+            keepBuffer: 3, panBuffer: 1,
+            userAgentPackageName: packageInfo.packageName,
+          ),
+        // and the same for the overlays, showing waterways, etc
+        if (mapOverlay && overlayTileProviderData.isNotEmpty)
+          if (overlayTileProviderData[selectedOverlayType]['service'] == 'WMS')
+            TileLayer(
+              wmsOptions: WMSTileLayerOptions(
+                baseUrl: overlayTileProviderData[selectedOverlayType]['wmsbaseURL'],
+                layers: overlayTileProviderData[selectedOverlayType]['wmslayers'].cast<String>(),
+              ),
+              tileProvider: CancellableNetworkTileProvider(),
+              tileBounds: (mapOverlay) ? LatLngBounds(const LatLng(-90,0), const LatLng(90,180)) : LatLngBounds(const LatLng(0,0), const LatLng(0,0)),
+              keepBuffer: 3, panBuffer: 1,
+              userAgentPackageName: packageInfo.packageName,
+            )
+          else if (overlayTileProviderData[selectedOverlayType]['service'] == 'WMTS')
+            TileLayer(
+              urlTemplate: overlayTileProviderData[selectedOverlayType]['URL'],
+              subdomains: List<String>.from(overlayTileProviderData[selectedOverlayType]['subDomains']),
+              tileBounds: (mapOverlay) ? LatLngBounds(const LatLng(-90,0), const LatLng(90,180)) : LatLngBounds(const LatLng(0,0), const LatLng(0,0)),
+              tileProvider: CancellableNetworkTileProvider(),
+              keepBuffer: 3, panBuffer: 1,
+              userAgentPackageName: packageInfo.packageName,
+            )
+          else if (overlayTileProviderData[selectedOverlayType]['service'] == 'vector')
+            TileLayer(
+              urlTemplate: mapTileProviderData[selectedMapType]['URL'],
+              subdomains: List<String>.from(mapTileProviderData[selectedMapType]['subDomains']),
+              tileProvider: CancellableNetworkTileProvider(),
+              keepBuffer: 3, panBuffer: 1,
+              userAgentPackageName: packageInfo.packageName,
+            ),
+        PolylineLayer(polylines: routeLineList + shipTrailList),
+        MarkerLayer(markers: routeLabelList + routeMarkerList + windMarkerList + shipLabelList + shipMarkerList),
         RichAttributionWidget(
           popupBackgroundColor: Colors.white,
           alignment: AttributionAlignment.bottomRight,
@@ -560,64 +627,39 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           animationConfig: const ScaleRAWA(),
           permanentHeight: 32,
           attributions: [
-            TextSourceAttribution('2010-${DateFormat('yyyy').format(DateTime.now())} Stichting Zeilvaart Warmond',
+            TextSourceAttribution('2010-${DateFormat('yyyy').format(DateTime.now())} Stichting Zeilvaart Warmond                      ',
                 textStyle: const TextStyle(color: Colors.black87),
                 onTap: () => launchUrl(Uri.parse('https://www.zeilvaartwarmond.nl'),
                     mode: LaunchMode.platformDefault)
             ),
             TextSourceAttribution(
-              'Basiskaart: ${mapTileProviderData[selectedMapType]['attrib']}',
-              textStyle: const TextStyle(color: Colors.black87),
-              onTap: () => launchUrl(Uri.parse(mapTileProviderData[selectedMapType]['attribLink']),
-                  mode: LaunchMode.platformDefault)
+                '${mapTileProviderData[selectedMapType]['attrib']} (basiskaart)',
+                textStyle: const TextStyle(color: Colors.black87),
+                onTap: () => launchUrl(Uri.parse(mapTileProviderData[selectedMapType]['attribLink']),
+                    mode: LaunchMode.platformDefault)
             ),
             (mapOverlay && overlayTileProviderData.isNotEmpty) ? TextSourceAttribution(
-              'Kaartoverlay: ${overlayTileProviderData[selectedOverlayType]['attrib']}',
-              textStyle: const TextStyle(color: Colors.black87),
-              onTap: () => launchUrl(Uri.parse(overlayTileProviderData[selectedOverlayType]['attribLink']),
-                mode: LaunchMode.platformDefault)
+                '${overlayTileProviderData[selectedOverlayType]['attrib']} (kaartoverlay)',
+                textStyle: const TextStyle(color: Colors.black87),
+                onTap: () => launchUrl(Uri.parse(overlayTileProviderData[selectedOverlayType]['attribLink']),
+                    mode: LaunchMode.platformDefault)
             ) : const TextSourceAttribution('', textStyle: TextStyle(fontSize:0)),
             (eventInfo.isNotEmpty && eventInfo['AISHub'] == 'true') ? TextSourceAttribution(
               '- AIS tracking door www.AISHub.net',
               textStyle: const TextStyle(color: Colors.black87),
               onTap: () => launchUrl(Uri.parse('https://www.aishub.net'),
-                mode: LaunchMode.platformDefault),
+                  mode: LaunchMode.platformDefault),
               prependCopyright: false,
             ) : const TextSourceAttribution('', textStyle: TextStyle(fontSize:0)),
             (eventInfo.isNotEmpty && eventInfo['MarineTraffic'] == 'true') ? TextSourceAttribution(
               '- AIS tracking door www.MarineTraffic.com',
               textStyle: const TextStyle(color: Colors.black87),
               onTap: () => launchUrl(Uri.parse('https://www.marinetraffic.com'),
-                mode: LaunchMode.platformDefault),
+                  mode: LaunchMode.platformDefault),
               prependCopyright: false,
             ) : const TextSourceAttribution('', textStyle: TextStyle(fontSize:0))
           ],
         ),
-      ],
-      children: [
-        TileLayer(
-          wmsOptions: (mapTileProviderData[selectedMapType]['wmsbaseURL'] == '') ? null : WMSTileLayerOptions(
-            baseUrl: mapTileProviderData[selectedMapType]['wmsbaseURL'],
-            layers: mapTileProviderData[selectedMapType]['wmslayers'].cast<String>(),
-          ),
-          urlTemplate: mapTileProviderData[selectedMapType]['URL'],
-          subdomains: List<String>.from(mapTileProviderData[selectedMapType]['subDomains']),
-          maxZoom: mapTileProviderData[selectedMapType]['maxZoom'],
-          userAgentPackageName: 'nl.zeilvaartwarmond.szwtracktrace'
-        ),
-        (mapOverlay && overlayTileProviderData.isNotEmpty) ? TileLayer(
-          wmsOptions: (overlayTileProviderData[selectedOverlayType]['wmsbaseURL'] == '') ? null : WMSTileLayerOptions(
-            baseUrl: overlayTileProviderData[selectedOverlayType]['wmsbaseURL'],
-            layers: overlayTileProviderData[selectedOverlayType]['wmslayers'].cast<String>(),
-          ),
-          urlTemplate: overlayTileProviderData[selectedOverlayType]['URL'],
-          subdomains: List<String>.from(overlayTileProviderData[selectedOverlayType]['subDomains']),
-          tileBounds: (mapOverlay) ? LatLngBounds(const LatLng(-90,0), const LatLng(90,180)) : LatLngBounds(const LatLng(0,0), const LatLng(0,0)),
-          backgroundColor: Colors.transparent,
-          userAgentPackageName: 'nl.zeilvaartwarmond.szwtracktrace',
-        ) : Container(),
-        PolylineLayer(polylines: routeLineList + shipTrailList),
-        MarkerLayer(markers: routeLabelList + routeMarkerList + windMarkerList + shipLabelList + shipMarkerList),
       ],
     );
   }
@@ -1326,7 +1368,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
               color: Colors.blueGrey[200],
               padding: EdgeInsets.fromLTRB(20.0, menuOffset + 10.0, 20.0, 20.0),
               child: SingleChildScrollView(
-                child: Html(
+                child:
+                Html(
                   data: infoTextHTML,
                   onLinkTap: (link, _, __) async {
                     await launchUrl(Uri.parse(link!), mode: LaunchMode.externalApplication);
@@ -1416,6 +1459,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // Here we start up the rest of the initialization of our app
   //
   Future<void> onMapCreated() async {
+    // in case we are running as a web app, we need to get our servers name
+    server = ((kIsWeb) ? "https://${window.location.hostname}/" : 'https://tt.zeilvaartwarmond.nl/');
+    // and if the server name is not tt,zeilvaartwarmond.nl, we do not have an Android or iOS app available
+    mobileAppAvailable = (server == 'https://tt.zeilvaartwarmond.nl/');
     // See if we already have a phone id, if not, create one
     // the phoneId is used to uniquely identify the device for statistics
     phoneId = prefs.getString('phoneid') ?? '';
@@ -1429,17 +1476,15 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // create a prefix for the phoneId consisting of a letter (F for Web, A, for Android, I for iOS and W for Windows),
     // followed by the 3 digit version of the app and a dash
     String prefix = "";
-    PackageInfo packageInfo = await PackageInfo.fromPlatform();
-    String version = packageInfo.buildNumber;
     if (kIsWeb) { // Flutterweb
-      prefix = "F$version-";
+      prefix = "F${packageInfo.buildNumber}-";
     } else {
       if (defaultTargetPlatform == TargetPlatform.android) {
-        prefix = "A$version-";
+        prefix = "A${packageInfo.buildNumber}-";
       } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-        prefix = "I$version-";
+        prefix = "I${packageInfo.buildNumber}-";
       } else if (defaultTargetPlatform == TargetPlatform.windows) {
-        prefix = "W$version-";
+        prefix = "W${packageInfo.buildNumber}-";
       }
     }
     phoneId = prefix + phoneId; // use the saved phoneId with a platform/buildnumber prefix
@@ -1447,8 +1492,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // get the info page contents
     //
     final response = await http.get(Uri.parse('${server}html/app-info-page.html'));
-    infoTextHTML = (response.statusCode == 200) ?
-    '${response.body}<br><br>Versie $version</body></html>' : '<html><body>Versie $version</body><html></html>';
+    infoTextHTML = (response.statusCode == 200) ? '${response.body}<br><br>' : '<html><body>';
+    infoTextHTML += '''
+          ${packageInfo.appName}, Versie ${packageInfo.version}<br>
+          ${packageInfo.packageName},<br>$server</body><html></html>
+        ''';
     //
     // get the complete list of map tile providers from the server
     //
@@ -1685,6 +1733,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           'De Track & Trace begint op ${DateTime.fromMillisecondsSinceEpoch(eventStart).toString().substring(0,19)}';
       if (route['features'] != null) {
         selectionMessage += '\n\nBekijk intussen de route / havens / boeien op de kaart';
+        showRoute = true;
         showRouteLabels = true;
         buildRoute(move: true);       // and move the map to the bounds of the route
       }
@@ -1731,6 +1780,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       replayTracks = await fetchTrails(eventStart~/1000);
     }
     buildShipAndWindInfo();      // prepare menu and track info
+    showRoute = true;
     if (route['features'] != null) buildRoute();
     selectionMessage = '"Replay" en "live" tracks zijn geladen, klik op de kaart';
     showEventMenu = replayPause = false;                 // hide the eventselection menu
@@ -1869,6 +1919,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     replayRunning = false;
     currentReplayTime = eventStart;
     moveShipsAndWindTo(currentReplayTime, move: false);
+    showRoute = true;
     if (route['features'] != null) buildRoute(move: true);  // and move the map to the bounds of the route
     setState(() { }); // redraw the UI
     // Now that we plotted the markers on the map and initialized the sliders (by setting eventStart, endReplay and
@@ -2003,6 +2054,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       dynamic track = replayTracks['shiptracks'][ship]; // copy ship part of the track to a new var, to keep things a bit simpler
       // see where we are in the time track of the ship
       var posText = 'Positie:';
+      var clock = '';
       if (time < track['stamp'][0]) { // before the first timestamp
         shipTimeIndex[ship] = 0;      // set the track index to the first entry
         calculatedLat = track['lat'].first.toDouble();
@@ -2034,6 +2086,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           calculatedLon = track['lon'].last.toDouble();
           calculatedRotation = track['course'].last.toDouble();
           infoWindowTime = track['stamp'].last;
+          clock = '\u0027';
         }
       } else {      // we are somewhere between two stamps
                     // travel along the track back or forth to find out where we are
@@ -2098,19 +2151,16 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           '</svg>';
       LatLng currentPosition = LatLng(calculatedLat, calculatedLon);
       shipMarkerList.add(Marker(
-          key: Key(infoWindowText),       // we (ab)use the key to carry the popup info window text along with the marker
-          point: currentPosition,
-          width: 22, height: 22,
-          anchorPos: AnchorPos.exactly(Anchor(11, 11)),
-          builder: (_) {
-            return(InkWell(
-              child: SvgPicture.string(svgString) ,
-              onTap: () {
-                showInfoWindow('ship$ship', infoWindowText, currentPosition, '');
-                setState(() { });
-              },
-            ));
-          }),
+        point: currentPosition,
+        width: 22, height: 22,
+        child: InkWell(
+            child: SvgPicture.string(svgString) ,
+            onTap: () {
+              showInfoWindow('ship$ship', infoWindowText, currentPosition, '');
+              setState(() { });
+            },
+          ),
+        ),
       );
       // refresh the infowindow if it was open for this ship
       if (infoWindowId == 'ship$ship') showInfoWindow('ship$ship', infoWindowText, currentPosition, '');
@@ -2118,7 +2168,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       if (showShipLabels) {
         // NB text backgroundcolor is reversed to the markerbackgroundcolor
         var tbgc = (markerBackgroundColor == bgColorBlack) ? bgColorWhite : bgColorBlack;
-        var txt = track['name'] + ((showShipSpeeds) ? ', $speedString' : '');
+        var txt = track['name'] + clock + ((showShipSpeeds) ? ', $speedString' : '');
         var svgString = '<svg width="300" height="35">'
             '<text x="0" y="32" fill="$tbgc">$txt</text>'
             '<text x="2" y="32" fill="$tbgc">$txt</text>'
@@ -2130,8 +2180,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
             point: LatLng(calculatedLat, calculatedLon),
             width: 300,
             height: 30,
-            anchorPos: AnchorPos.exactly(Anchor(265, 25)),
-            builder: (_) => SvgPicture.string(svgString)
+            alignment: const Alignment(240/300, 20/30),
+            child: SvgPicture.string(svgString)
         ));
       }
       // build the shipTrail
@@ -2150,11 +2200,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     // move the camera to the ships
     if (followCounter == 0) autoZoom = false;   // no ships to follow: turn autozoom off
     if (followCounter > 0 && move && autoFollow) {            // are there any ships to follow AND are we allowed to move
-      mapController.move(followBounds.center, mapController.zoom);    // move the map to the center of the ships to follow
+      mapController.move(followBounds.center, mapController.camera.zoom);    // move the map to the center of the ships to follow
       // now see if we also need to zoom
       if (autoZoom) {
-        mapController.fitBounds(followBounds,
-            options: FitBoundsOptions(padding: EdgeInsets.only(left: 80.0, top: menuOffset + 40.0, right: 80.0, bottom: 110.0 )));
+        mapController.fitCamera(CameraFit.bounds(
+          bounds: followBounds,
+          padding: EdgeInsets.fromLTRB(80.0, menuOffset + 40.0, 80.0, 120.0 )
+        ));
       }
     }
   }
@@ -2199,16 +2251,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       windMarkerList.add(Marker(
           point: windStationPosition,
           width: 22, height: 22,
-          anchorPos: AnchorPos.exactly(Anchor(11, 11)),
-          builder: (_) {
-            return(InkWell(
+          child: InkWell(
               child: SvgPicture.string(svgString) ,
-              onTap: () {
-                showInfoWindow('wind$windStation', infoWindowText, windStationPosition, '');
-                setState(() { });
-              },
-            ));
-          }),
+            onTap: () {
+              showInfoWindow('wind$windStation', infoWindowText, windStationPosition, '');
+              setState(() { });
+            },
+          )
+        ),
       );
       // refresh the infowindow if it was open for this windstation
       if (infoWindowId == 'wind$windStation') showInfoWindow('wind$windStation', infoWindowText, windStationPosition, '');
@@ -2260,18 +2310,16 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           infoWindowText +=  (lnk == '')? '' : ((kIsWeb) ? ' (klik)' : ' (tap)');
           routeMarkerList.add(Marker(
               point: routePointPosition,
-              anchorPos: AnchorPos.exactly(Anchor(11, 11)),
-              builder: (_) {
-                return (InkWell(
-                  child: SvgPicture.string(svgString),
-                  onTap: () {
-                    showInfoWindow('rout$k', infoWindowText, routePointPosition,
-                        route['features'][k]['properties']['link'] ?? '' );
-                    setState(() {});
-                  },
-                ));
-              }
-          ));
+              child: InkWell(
+                child: SvgPicture.string(svgString),
+                onTap: () {
+                  showInfoWindow('rout$k', infoWindowText, routePointPosition,
+                      route['features'][k]['properties']['link'] ?? '' );
+                  setState(() {});
+                },
+              )
+            )
+          );
           if (showRouteLabels) {
             // NB text backgroundcolor is reversed to the markerbackgroundcolor
             var tbgc = (markerBackgroundColor == bgColorBlack) ? bgColorWhite : bgColorBlack;
@@ -2286,8 +2334,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 point: routePointPosition,
                 width: 300,
                 height: 30,
-                anchorPos: AnchorPos.exactly(Anchor(265, 23)),
-                builder: (_) => SvgPicture.string(svgString)
+                alignment: const Alignment(240/300, 20/30),
+                child: SvgPicture.string(svgString)
             ));
           }
           if (move) {
@@ -2301,11 +2349,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         }
       }
       if (move) { //move the map to the route
-        mapController.fitBounds(routeBounds,
-            options: const FitBoundsOptions(padding: EdgeInsets.only(left: 80.0, top: (kIsWeb)?100.0:120.0, right: 80.0, bottom: 110.0)));
+        mapController.fitCamera(CameraFit.bounds(
+          bounds: routeBounds,
+            padding: EdgeInsets.fromLTRB(80.0, menuOffset + 40.0, 80.0, 120.0 )
+        ));
       }
-      // dummy move the map a tiny bit to ensure all tiles are loaded (this seems to be a bug in flutter_map)
-      mapController.move(LatLng(mapController.center.latitude+0.0001,mapController.center.longitude), mapController.zoom);
       setState(() {}); // redraw the UI
     }
   }
@@ -2317,14 +2365,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   //
   void showInfoWindow(String id, String txt, LatLng pos, String link) {
     infoWindowId = id;
+    infoWindowText = txt;
+    infoWindowTextStyle = const TextStyle(fontSize: 13.0, color: Colors.black);
     infoWindowLatLng = pos;
-    CustomPoint<double> mapCenterPoint = const Epsg3857().latLngToPoint(mapController.center, mapController.zoom);
-    CustomPoint<double> windowPoint = const Epsg3857().latLngToPoint(pos, mapController.zoom);
-    CustomPoint<double> screenPoint = mapCenterPoint - windowPoint;
+    Point<double> mapCenterPoint = const Epsg3857().latLngToPoint(mapController.camera.center, mapController.camera.zoom);
+    Point<double> windowPoint = const Epsg3857().latLngToPoint(pos, mapController.camera.zoom);
+    Point<double> screenPoint = mapCenterPoint - windowPoint;
     infoWindowAnchorBottom = screenPoint.y + screenHeight/2 + 10.0;
     infoWindowAnchorRight = screenPoint.x + screenWidth/2 - 150.0;
-    infoWindowTextStyle = const TextStyle(fontSize: 13.0, color: Colors.black);
-    infoWindowText = txt;
     infoWindowLink = link;
     setState(() { });
   }
