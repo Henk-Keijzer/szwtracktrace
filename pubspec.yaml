@@ -34,21 +34,23 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.2
-#  flutter_html: ^2.2.1
+  #  flutter_html: ^2.2.1
   flutter_html: ^3.0.0-beta.1
   flutter_map: ^6.0.1
   shared_preferences: ^2.2.0
   url_launcher: ^6.1.12
   uuid: ^4.1.0
-  package_info_plus: ^4.0.2
+  package_info_plus: ^5.0.1
   flutter_svg: ^2.0.7
   latlong2: ^0.9.0
   http: ^1.0.0
   intl: ^0.18.1
   universal_html: ^2.2.3
   vector_math: ^2.1.4
-  flutter_map_cancellable_tile_provider: ^1.0.0
-#  vector_map_tiles: ^6.0.1
+  auto_size_text: ^3.0.0
+  desktop_window: ^0.4.0
+  iphone_has_notch: ^1.0.0
+#  vector_map_tiles: ^6.0.2
 
 dev_dependencies:
   flutter_test:
@@ -64,7 +66,7 @@ dev_dependencies:
 
 msix_config:
   display_name: SZW Track & Trace
-  logo_path: L:\Icon-App-1024x1024 Track & Trace.png
+  logo_path: C:\Users\hwkei\AndroidStudioProjects\Icon-App-1024x1024 Track & Trace.png
   publisher_display_name: Stichting Zeilvaart Warmond
   identity_name: 41114StichtingZeilvaartWa.SZWTrackTrace
   publisher: CN=6B2EB45F-9B57-4924-BB9B-21C3749E6F4D
