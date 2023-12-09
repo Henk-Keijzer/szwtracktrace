@@ -1,5 +1,5 @@
 name: szwtracktrace
-description: Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen
+description: Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen en roeisloepen
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 3.1.5+315
+version: 3.1.6+316
 
 environment:
   sdk: '>=3.0.6 <4.0.0'
@@ -43,13 +43,15 @@ dependencies:
   package_info_plus: ^5.0.1
   flutter_svg: ^2.0.7
   latlong2: ^0.9.0
-  http: ^1.0.0
-  intl: ^0.18.1
+  intl: ^0.19.0
   universal_html: ^2.2.3
   vector_math: ^2.1.4
   auto_size_text: ^3.0.0
-  desktop_window: ^0.4.0
-  iphone_has_notch: ^1.0.0
+  fullscreen_window: ^1.0.3
+  easy_draggable: ^0.0.2
+  flutter_animate: ^4.3.0
+  flutter_map_cancellable_tile_provider: ^2.0.0
+  http: ^1.1.2
 #  vector_map_tiles: ^6.0.2
 
 dev_dependencies:

@@ -35,7 +35,7 @@ android {
     namespace "nl.zeilvaartwarmond.szwtracktrace"
     compileSdk 34
     //flutter.compileSdkVersion
-    ndkVersion flutter.ndkVersion
+    ndkVersion "25.1.8937393"
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
