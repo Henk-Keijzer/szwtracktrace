@@ -26,8 +26,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_html/html.dart' hide Text;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
+import 'package:vector_map_tiles/vector_map_tiles.dart';
 
-//import 'package:vector_map_tiles/vector_map_tiles.dart';
 //
 String server = 'https://tt.zeilvaartwarmond.nl/';
 bool mobileAppAvailable = true;
@@ -80,7 +80,7 @@ String eventDay = '';
 // eventinfo (related) variables
 int eventStart = 0; // evenInfo['eventstartstamp']
 int eventEnd = 0; // eventInfo['eventendstamp']
-int replayEnd = 0;
+int sliderEnd = 0;
 int maxReplay = 0; // eventInfo['maxreplay'] in hours = sets eventbegin xx hours before current time
 //  to limit the replay for continuous events (Olympia-charters)
 bool hfUpdate = false; // eventInfo['hfupdate']. If 'true', positions are predicted every second during live
@@ -222,6 +222,8 @@ String markerBackgroundColor = mapTileProviderData[selectedMapType]['bgColor'];
 Map<String, dynamic> overlayTileProviderData = {};
 String selectedOverlayType = '';
 bool mapOverlay = false;
+Style? vectorMapStyle;
+Style? vectorOverlayMapStyle;
 //
 // defaultvalues for some booleans
 //
@@ -249,29 +251,32 @@ Offset? shipInfoPosition;
 Offset? shipInfoPositionAtDragStart;
 //
 String infoWindowId = '';
+//
+String queryPlayString = '';
+//
+final GlobalKey dropEventKey = GlobalKey();
+final GlobalKey dropYearKey = GlobalKey();
+final GlobalKey dropDayKey = GlobalKey();
 
 //------------------------------------------------------------------------------
 //
 // Here our app starts (more or less)
 //
 Future main() async {
-  //
   // first wait for something flutter want us to wait for...
   WidgetsFlutterBinding.ensureInitialized();
-  //
-  // get some info of the platform we are running on
-  packageInfo = await PackageInfo.fromPlatform();
-  //
-  // get access to local storage
-  prefs = await SharedPreferences.getInstance();
-  //
+  packageInfo = await PackageInfo.fromPlatform(); // get some info of the platform we are running on
+  prefs = await SharedPreferences.getInstance(); // get access to local storage
+
+  // ----- APP VERSION
   // See if we are running a new version and if so, clear local storage and save the new version number
   var oldAppVersion = prefs.getString('appversion') ?? '';
   if (oldAppVersion != packageInfo.buildNumber) {
     await prefs.clear(); // clear all data (and wait for it...)
     prefs.setString('appversion', packageInfo.buildNumber); // and set the appversion
   }
-  //
+
+  // ----- PHONE ID
   // See if we already have a phone id, if not, create one and save it in loval storage
   phoneId = prefs.getString('phoneid') ?? '';
   if (phoneId == '') {
@@ -295,13 +300,13 @@ Future main() async {
     };
   }
   phoneId = '$prefix${packageInfo.buildNumber}-$phoneId'; // use the saved phoneId with a platform/buildnumber prefix
-  //
-  // establish our servername
+
+  // ----- SERVER
   server = kIsWeb ? "https://${window.location.hostname}/" : 'https://tt.zeilvaartwarmond.nl/';
-  //
   // if the server name is not tt.zeilvaartwarmond.nl, we do not have an Android or iOS app available
   mobileAppAvailable = (server == 'https://tt.zeilvaartwarmond.nl/');
-  //
+
+  // ----- CONFIG
   // get the appconfig items from the flutter_config.json file on the server config folder
   // note that we get the config file through /get/index.php to record statistics on the number of times the app is started
   var response = await http.get(Uri.parse('${server}get/?req=config&dev=$phoneId'));
@@ -319,7 +324,8 @@ Future main() async {
     'motorboat' => Icons.directions_boat,
     _ => Icons.sailing
   };
-  //
+
+  // ----- INFOPAGE
   // get the info page contents
   response = await http.get(Uri.parse('${server}config/app-info-page.html'));
   infoPageHTML = (response.statusCode == 200) ? '${response.body}<br><br>' : '<html><body>';
@@ -327,7 +333,8 @@ Future main() async {
           ${packageInfo.appName}, Versie ${packageInfo.version}<br>
           ${packageInfo.packageName}<br>$server</body></html>
         ''';
-  //
+
+  // ----- BASE MAP
   // get the complete list of map tile providers from the server
   response = await http.get(Uri.parse('${server}get?req=maptileproviders'));
   Map<String, dynamic> mapdata = (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : {};
@@ -337,21 +344,28 @@ Future main() async {
   // Get the selectedmaptype from local storage (from a previous session)
   // or set the default to the first maptype if null
   selectedMapType = prefs.getString('maptype') ?? mapTileProviderData.keys.toList()[0];
-
+  // are we overruled by a query parameter?
+  if (kIsWeb && Uri.base.queryParameters.containsKey('map')) {
+    selectedMapType = Uri.base.queryParameters['map'].toString(); //get parameter with attribute "map"
+  }
+  // see if the map we want is in our list of maps, if not, set maptype to first maptype
   if (!mapTileProviderData.keys.toList().contains(selectedMapType)) {
-    //set maptype to first maptype if the stored maptype is no longer in the mapTileProviderData list
     selectedMapType = mapTileProviderData.keys.toList()[0];
   }
+  // save the base maptype for next time
   prefs.setString('maptype', selectedMapType);
   markerBackgroundColor = mapTileProviderData[selectedMapType]['bgColor'];
-  //
-  // see if we had the overlay layer on during the previous session
-  // and if we have mapoverlays defined
+
+  // ----- MAP OVERLAY
+  // now the same for the map overlay and the map overlaytype
   mapOverlay = prefs.getBool('mapoverlay') ?? false;
-  mapOverlay = overlayTileProviderData.isNotEmpty ? mapOverlay : false;
-  prefs.setBool('mapoverlay', mapOverlay);
-  // now see if the user selected an overlaytype in the previous session, if not, set it to ''
   selectedOverlayType = prefs.getString('overlaytype') ?? '';
+  if (kIsWeb && Uri.base.queryParameters.containsKey('overlay')) {
+    var a = Uri.base.queryParameters['overlay'].toString().split(':');
+    mapOverlay = (a[0] == 'true') ? true : false;
+    selectedOverlayType = a[1];
+  }
+  mapOverlay = overlayTileProviderData.isNotEmpty ? mapOverlay : false;
   if (overlayTileProviderData.isEmpty) {
     // are there any overlayTileProviders defined?
     selectedOverlayType = ''; // no
@@ -361,8 +375,21 @@ Future main() async {
         ? selectedOverlayType
         : overlayTileProviderData.keys.toList()[0]; // if not, use entry 0
   }
+  prefs.setBool('mapoverlay', mapOverlay);
   prefs.setString('overlaytype', selectedOverlayType);
+
+  // ----- EVENT DOMAIN
+  // Get the event domain from a previous session or from the query string, if not, set default to an ampty string
+  eventDomain = prefs.getString('domain') ?? "";
+  if (kIsWeb && Uri.base.queryParameters.containsKey('event')) {
+    eventDomain = Uri.base.queryParameters['event'].toString(); //get parameter with attribute "event"
+  }
   //
+  if (kIsWeb && Uri.base.queryParameters.containsKey('play')) {
+    queryPlayString = Uri.base.queryParameters['play'].toString(); //get parameter with attribute "event"
+  }
+
+  // ----- WINDMARKERS, ROUTE, ROUTELABELS, SHIPLABELS, SHIPSPEEDS and COOKIECONSENT
   // get/set some other shared preference stuff (set default if value was not present in prefs)
   windMarkersOn = prefs.getBool('windmarkers') ?? windMarkersOn;
   prefs.setBool('windmarkers', windMarkersOn);
@@ -381,7 +408,7 @@ Future main() async {
   //
   cookieConsentGiven = prefs.getBool('cookieconsent') ?? false;
   prefs.setBool('cookieconsent', cookieConsentGiven);
-  //
+
   // now run the app as a stateful widget
   runApp(const MyApp());
 }
@@ -516,7 +543,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 fullScreen = !fullScreen;
                 fullScreen ? document.documentElement?.requestFullscreen() : document.exitFullscreen();
               } else {
-                launchUrl(Uri.parse('https://${window.location.hostname}?event=$eventDomain'));
+                launchUrl(Uri.parse('https://${window.location.hostname}?event=$eventDomain&map=$selectedMapType'
+                    '&overlay=${mapOverlay ? 'true' : 'false'}:$selectedOverlayType'
+                    '&play=${replayRunning ? 'true' : 'false'}:${currentReplayTime == sliderEnd ? '0' : currentReplayTime.toString()}'));
               }
               setState(() {});
             },
@@ -703,14 +732,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 showShipMenu = showShipInfo = showInfoPage = replayPause = showAttribution = hideFloatingActionButtons = false;
             setState(() {});
           },
-//          onPositionChanged: (_, __) {
-//            // have the infowindow repainted at the correct spot on the screen
-//            if (infoWindowId != '') setState(() => infoWindow.move());
-//          },
-          onLongPress: (kIsWeb)
+          onLongPress: (kIsWeb) // TODO
               ? null
               : (_, latlng) {
-                  // TODO
                   if (eventStatus == 'live' || eventStatus == 'pre-event') {
                     launchUrl(Uri.parse('https://embed.windy.com/embed2.html?lat=${latlng.latitude}&lon=${latlng.longitude}'
                         '&detailLat=${latlng.latitude}&detailLon=${latlng.longitude}'
@@ -748,8 +772,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           )
         else if (mapTileProviderData[selectedMapType]['service'] == 'vector') //todo
           TileLayer(
-            urlTemplate: mapTileProviderData[selectedMapType]['URL'],
-            subdomains: List<String>.from(mapTileProviderData[selectedMapType]['subDomains']),
+            urlTemplate: overlayTileProviderData[selectedOverlayType]['URL'],
+            subdomains: List<String>.from(overlayTileProviderData[selectedOverlayType]['subDomains']),
             tileProvider: CancellableNetworkTileProvider(),
             keepBuffer: 1000,
             panBuffer: 3,
@@ -786,8 +810,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
             )
           else if (overlayTileProviderData[selectedOverlayType]['service'] == 'vector') // todo
             TileLayer(
-              urlTemplate: mapTileProviderData[selectedMapType]['URL'],
-              subdomains: List<String>.from(mapTileProviderData[selectedMapType]['subDomains']),
+              urlTemplate: overlayTileProviderData[selectedOverlayType]['URL'],
+              subdomains: List<String>.from(overlayTileProviderData[selectedOverlayType]['subDomains']),
               tileProvider: CancellableNetworkTileProvider(),
               keepBuffer: 1000,
               panBuffer: 3,
@@ -796,7 +820,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
               userAgentPackageName: packageInfo.packageName,
             ),
         //
-        // two more layers: the lines of the route and trails and the markers
+        // two more layers: the lines of the route and trails, and the markers
         PolylineLayer(polylines: routeLineList + shipTrailList),
         MarkerLayer(markers: routeLabelList + routeMarkerList + windMarkerList + shipLabelList + shipMarkerList + infoWindowMarkerList),
       ],
@@ -869,7 +893,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   Column uiTimeSlider() {
     return Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
-      if (eventStatus == 'replay' || currentReplayTime != replayEnd) uiSpeedSlider(),
+      if (eventStatus == 'replay' || currentReplayTime != sliderEnd) uiSpeedSlider(),
       Container(
         color: Colors.transparent,
         padding: const EdgeInsets.fromLTRB(0, 0, 15, 0),
@@ -891,22 +915,33 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   ),
                   child: Slider(
                     min: eventStart.toDouble(),
-                    max: replayEnd.toDouble(),
-                    value: (currentReplayTime < eventStart || currentReplayTime > replayEnd)
+                    max: sliderEnd.toDouble(),
+                    value: (currentReplayTime < eventStart || currentReplayTime > sliderEnd)
                         ? eventStart.toDouble()
                         : currentReplayTime.toDouble(),
                     onChangeStart: (x) => replayPause = true,
                     // pause the replay
                     onChanged: (time) => setState(() {
                       currentReplayTime = time.toInt();
+                      if (time == sliderEnd) {
+                        replayTimer.cancel();
+                        replayRunning = false;
+                      }
+
                       moveShipsAndWindTo(currentReplayTime);
                     }),
                     onChangeEnd: (time) => setState(() {
+                      // resume play, but stop at end
                       currentReplayTime = time.toInt();
                       replayPause = false;
-                      if (replayEnd - time < 60 * 1000) currentReplayTime = replayEnd;
+                      if (sliderEnd - time < 60 * 1000) {
+                        // within one minute of sliderEnd
+                        currentReplayTime = sliderEnd;
+                        replayTimer.cancel();
+                        replayRunning = false;
+                      }
                       moveShipsAndWindTo(currentReplayTime);
-                    }), // resume play, but stop at end
+                    }),
                   ))),
         ]),
       ),
@@ -917,7 +952,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
             mainAxisAlignment: MainAxisAlignment.start,
             mainAxisSize: MainAxisSize.max,
             children: [
-              Text((eventStatus == 'live' && currentReplayTime == replayEnd) ? '    1 sec/sec' : '    ${speedTextTable[speedIndex]}',
+              Text((eventStatus == 'live' && currentReplayTime == sliderEnd) ? '    1 sec/sec' : '    ${speedTextTable[speedIndex]}',
                   style: TextStyle(color: (markerBackgroundColor == bgColorBlack) ? Colors.black87 : Colors.white)),
               Expanded(
                 // live / replay time (filling up the leftover space either with a container or a column
@@ -927,7 +962,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           AutoSizeText(
-                            ((currentReplayTime == replayEnd) && (replayEnd != eventEnd) ? 'Live   ' : 'Replay   ') +
+                            ((currentReplayTime == sliderEnd) && (sliderEnd != eventEnd) ? 'Live   ' : 'Replay   ') +
                                 DateTime.fromMillisecondsSinceEpoch(currentReplayTime).toString().substring(0, 16),
                             style: TextStyle(color: (markerBackgroundColor == bgColorBlack) ? Colors.black87 : Colors.white),
                             maxLines: 1,
@@ -944,7 +979,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 child: SizedBox(
                     width: 70,
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      (currentReplayTime == replayEnd && eventStatus == 'live')
+                      (currentReplayTime == sliderEnd && eventStatus == 'live')
                           ? Text('$liveSecondsTimer    ',
                               style: TextStyle(color: (markerBackgroundColor == bgColorBlack) ? Colors.black87 : Colors.white))
                           : const Text(''),
@@ -968,8 +1003,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           const Text("Evenementmenu", style: TextStyle(fontSize: 20)),
           Container(height: 10),
           PopupMenuButton(
+            key: dropEventKey,
             // dropdown evenement
-            offset: const Offset(15, 20),
+            offset: const Offset(15, 35),
             itemBuilder: (BuildContext context) {
               return eventList.map((events) {
                 return PopupMenuItem(height: 30.0, value: events, child: Text(events, style: const TextStyle(fontSize: 15)));
@@ -981,8 +1017,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 children: [Text('   $eventName '), Icon(Icons.arrow_drop_down, size: 20, color: menuForegroundColor), const Text(' \n')]),
           ),
           PopupMenuButton(
+            key: dropYearKey,
             // dropdown year
-            offset: const Offset(15, 20),
+            offset: const Offset(15, 35),
             itemBuilder: (BuildContext context) {
               return eventYearList.map((years) {
                 return PopupMenuItem(
@@ -1003,8 +1040,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   ]),
           ),
           PopupMenuButton(
+            key: dropDayKey,
             // dropdown day/race
-            offset: const Offset(15, 20),
+            offset: const Offset(15, 35),
             itemBuilder: (BuildContext context) {
               return eventDayList.map((days) {
                 return PopupMenuItem(
@@ -1022,23 +1060,22 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                     children: [Text('   $eventDay'), Icon(Icons.arrow_drop_down, size: 20, color: menuForegroundColor), const Text(' \n')]),
           ),
           if (selectionMessage != '')
-            Wrap(
-              children: [
-                Divider(color: menuForegroundColor),
-                Text('\n$selectionMessage\n'),
-                Divider(color: menuForegroundColor),
-                Container(
-                    margin: const EdgeInsets.fromLTRB(0, 10, 0, 10),
-                    child: (eventDomain == '')
-                        ? null
-                        : InkWell(
-                            onTap: () =>
-                                {if (socialMediaUrl != '') launchUrl(Uri.parse(socialMediaUrl), mode: LaunchMode.externalApplication)},
-                            child: Image.network('${server}data/$eventDomain/logo.png'),
-                          )),
-                Text((socialMediaUrl == '') ? '' : '\nKlik op het logo voor de laatste info over deze wedstrijd.\n')
-              ],
-            ),
+            Wrap(children: [
+              Divider(color: menuForegroundColor),
+              Text('\n$selectionMessage\n'),
+              Divider(color: menuForegroundColor),
+              Container(
+                  alignment: Alignment.center,
+                  margin: const EdgeInsets.fromLTRB(0, 10, 0, 10),
+                  child: (eventDomain == '')
+                      ? null
+                      : InkWell(
+                          onTap: () =>
+                              {if (socialMediaUrl != '') launchUrl(Uri.parse(socialMediaUrl), mode: LaunchMode.externalApplication)},
+                          child: Image.network('${server}data/$eventDomain/logo.png'),
+                        )),
+              Text((socialMediaUrl == '') ? '' : '\nKlik op het logo voor de laatste info over deze wedstrijd.\n')
+            ]),
           if ((webOnMobile && mobileAppAvailable))
             Wrap(
               children: [
@@ -1058,10 +1095,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                     })
               ],
             ),
+//          Text(queryPlayString),  //just for testing
         ]));
   }
 
-  //
   Row uiShipMenu() {
     return Row(children: [
       const Spacer(),
@@ -1151,7 +1188,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     ]);
   }
 
-  //
   Row uiMapMenu() {
     return Row(children: [
       const Spacer(),
@@ -1397,7 +1433,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     ]);
   }
 
-  //
   Row uiInfoPage() {
     return Row(children: [
       const Spacer(),
@@ -1514,7 +1549,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     ]);
   }
 
-  //
   Column uiCookieConsent() {
     return Column(children: [
       const Spacer(),
@@ -1566,14 +1600,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     eventYearList = [];
     eventDayList = [];
     //
-    // Get the event domain from a previous session or from the query string, if not, set default to an ampty string
-    eventDomain = prefs.getString('domain') ?? "";
-    //
-    // see if it is to be overruled by an event as a query parameter in the url string
-    if (kIsWeb && Uri.base.queryParameters.containsKey('event')) {
-      eventDomain = Uri.base.queryParameters['event'].toString(); //get parameter with attribute "event"
-    }
-    //
     showEventMenu = true; // open the event menu
     if (eventDomain != "") {
       // we have info from a previous session or from the web url: use it as if the user had selected an event using the UI
@@ -1605,6 +1631,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       }
     }
     // if we have no eventDomain from local storage or from the query string, the event selection menu will start things up
+    dynamic state = dropEventKey.currentState;
+    state.showButtonMenu();
     setState(() {}); // redraw the UI
   }
 
@@ -1623,6 +1651,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     eventYear = 'Kies een jaar';
     eventDay = '';
     eventDayList = [];
+    dynamic state = dropYearKey.currentState;
+    state.showButtonMenu();
     setState(() {}); // redraw the UI
   }
 
@@ -1638,6 +1668,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (dirList[eventName][eventYear].length != 0) {
       dirList[eventName][eventYear].forEach((k, v) => eventDayList.add(k));
       eventDay = 'Kies een dag/race';
+      dynamic state = dropDayKey.currentState;
+      state.showButtonMenu();
     } else {
       newEventSelected('');
     }
@@ -1650,8 +1682,15 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   // in local storage from a previous session or in the URL query
   //
   void newEventSelected(day) async {
-    //
-    // first "kill" whatever was running
+    // set the new eventDomain and save it in local storage
+    eventDay = day;
+    eventDomain = '$eventName/$eventYear';
+    if (eventDay != '') eventDomain = '$eventDomain/$eventDay';
+    prefs.setString('domain', eventDomain); // save the selected event in local storage
+    // put the direct link to this event in the addressbar
+    if (kIsWeb) window.history.pushState({}, '', '?event=$eventDomain');
+
+    // then "kill" whatever was running
     if (eventStatus == 'pre-event') {
       preEventTimer.cancel();
     } else if (eventStatus == 'live') {
@@ -1661,7 +1700,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       replayTimer.cancel();
       replayRunning = false;
     }
-    //
+
     // new event selected, show progressindicator and reset some variables to their initial/default values
     setState(() => showProgress = true);
     following = {};
@@ -1680,38 +1719,24 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     infoWindowId = '';
     infoWindowMarkerList = [];
     //
-    // now handle the input and save the selected eventDomain string in local storage for the next run
-    //
-    eventDay = day;
-    eventDomain = '$eventName/$eventYear';
-    if (eventDay != '') eventDomain = '$eventDomain/$eventDay';
-    prefs.setString('domain', eventDomain); // save the selected event in local storage
-    //
-    // put the direct link to this event in the addressbar
-    if (kIsWeb) window.history.pushState({}, '', '?event=$eventDomain');
-    //
     // get the event info from the server and unpack it into several vars
     // note that some values may be missing. If so, we set the vars to default values
     eventInfo = await fetchEventInfo(eventDomain);
-    eventTitle = eventInfo['eventtitle'];
-    eventId = eventInfo['eventid'];
-    eventStart = int.parse(eventInfo['eventstartstamp']) * 1000;
-    eventEnd = int.parse(eventInfo['eventendstamp']) * 1000;
-    replayEnd = eventEnd; //  otherwise the slider crashes with max <= min when we redraw the ui in setState
-    eventTrailLength = (eventInfo['traillength'] == null) ? 30 : int.parse(eventInfo['traillength']);
-    actualTrailLength = eventTrailLength;
-    maxReplay = (eventInfo['maxreplay'] == null) ? 0 : int.parse(eventInfo['maxreplay']);
-    hfUpdate = (eventInfo['hfupdate'] == null || (eventInfo['hfupdate'] == 'false')) ? false : true;
-    trailsUpdateInterval = (eventInfo['trailsupdateinterval'] == null)
-        ? 60
-        : (int.parse(eventInfo['trailsupdateinterval']) < 5)
-            ? 60
-            : int.parse(eventInfo['trailsupdateinterval']);
-    //
+    eventTitle = eventInfo['eventtitle'] ?? '--';
+    eventId = eventInfo['eventid'] ?? '--';
+    eventStart = int.parse(eventInfo['eventstartstamp'] ?? '0') * 1000;
+    eventEnd = int.parse(eventInfo['eventendstamp'] ?? '0') * 1000;
+    sliderEnd = eventEnd; //  otherwise the slider crashes with max <= min when we redraw the ui in setState
+    eventTrailLength = actualTrailLength = int.parse(eventInfo['traillength'] ?? '30');
+    maxReplay = int.parse(eventInfo['maxreplay'] ?? '0');
+    hfUpdate = bool.parse(eventInfo['hfupdate'] ?? 'false');
+    trailsUpdateInterval = int.parse(eventInfo['trailsupdateinterval'] ?? '60');
+    trailsUpdateInterval = trailsUpdateInterval < 5 ? 60 : trailsUpdateInterval;
+    eventInfo['mediaframe'] ?? '';
     socialMediaUrl = switch (eventInfo['mediaframe'].split(':')[0]) {
       'facebook' => 'https://www.facebook.com/${eventInfo['mediaframe'].split(':')[1]}',
-      ('twitter' || 'X') => 'https://www.x.com/${eventInfo['mediaframe'].split(':')[1]}',
-      ('http' || 'https') => eventInfo['mediaframe'],
+      'twitter' || 'X' => 'https://www.x.com/${eventInfo['mediaframe'].split(':')[1]}',
+      'http' || 'https' => eventInfo['mediaframe'],
       _ => ''
     };
     //
@@ -1728,7 +1753,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (eventStart > now) {
       eventStatus = 'pre-event';
       // set the timeslider max equal to the eventstart, i.e. min and max are both eventStart
-      replayEnd = eventStart;
+      sliderEnd = eventStart;
       selectionMessage = 'Het evenement is nog niet begonnen.\n\nKies een ander evenement of wacht rustig af. '
           'De Track & Trace begint op ${DateTime.fromMillisecondsSinceEpoch(eventStart).toString().substring(0, 19)}';
       if (route['features'] != null) {
@@ -1788,14 +1813,17 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (route['features'] != null) buildRoute();
     selectionMessage = 'De tracks zijn geladen en worden elke $trailsUpdateInterval seconden bijgewerkt';
     replayPause = false; // allow replay to run
-    currentReplayTime = DateTime.now().millisecondsSinceEpoch;
-    replayEnd = currentReplayTime; // put the timeslider to 'now'
+    sliderEnd = currentReplayTime = DateTime.now().millisecondsSinceEpoch; // put the timeslider to 'now'
+    if (queryPlayString != '') {
+      var a = queryPlayString.split(':');
+      queryPlayString = '';
+      if (a[1] != '0') currentReplayTime = int.parse(a[1]);
+      if (a[0] == 'true') startStopRunning();
+    }
     moveShipsAndWindTo(currentReplayTime);
     autoFollow = false; // in 'live' we start with autofollow off
     liveSecondsTimer = trailsUpdateInterval;
-    liveTimer = Timer.periodic(const Duration(seconds: 1), (liveTimer) {
-      liveTimerRoutine(); // the live timer takes over from here
-    });
+    liveTimer = Timer.periodic(const Duration(seconds: 1), (liveTimer) => liveTimerRoutine());
     setState(() {}); // redraw the UI
     // hide the event menu after two seconds
     Timer(
@@ -1830,19 +1858,19 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         addTrailsToTracks(); // add it to what we already had and store it
         buildShipAndWindInfo(); // prepare menu and track info
       }
-      if (currentReplayTime == replayEnd) {
+      if (currentReplayTime == sliderEnd) {
         // slider is at the end
-        currentReplayTime = replayEnd = now; // extend the slider and move the handle to the new end
+        currentReplayTime = sliderEnd = now; // extend the slider and move the handle to the new end
         if (hfUpdate) {
           // update positions every second
           moveShipsAndWindTo(currentReplayTime);
         } else {
-          // update positions only at a one minute interval
+          // update positions only at trailsUpdatInterval
           if (liveSecondsTimer == trailsUpdateInterval) moveShipsAndWindTo(currentReplayTime);
         }
       } else {
         // slider is not at the end, the slider has been moved back in time by the user
-        replayEnd = now; // just make the slider a second longer
+        sliderEnd = now; // just make the slider a second longer
       }
       if (!showShipInfo) setState(() {}); // If shipInfo is shown, don't update. It makes the info flash, for whatever reason
     } else {
@@ -1876,6 +1904,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     replayRunning = false;
     currentReplayTime = eventStart;
     speedIndex = speedIndexInitialValue;
+    if (queryPlayString != '') {
+      var a = queryPlayString.split(':');
+      queryPlayString = '';
+      if (a[1] != '0') currentReplayTime = int.parse(a[1]);
+      if (a[0] == 'true') startStopRunning();
+    }
     moveShipsAndWindTo(currentReplayTime, move: false);
     showRoute = true;
     if (route['features'] != null) buildRoute(move: true); // and move the map to the bounds of the route
@@ -1922,10 +1956,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         // next session with this event we will start in the startReplay routine, where we delete the
         // locally stored live-xxxx.json file and replace is with the final replay-xxxx.json file
         // where xxxx is the eventId from the eventinfo.json file
-      } else if (currentReplayTime > replayEnd) {
+      } else if (currentReplayTime > sliderEnd) {
         replayRunning = false;
         replayTimer.cancel();
-        currentReplayTime = replayEnd;
+        currentReplayTime = sliderEnd;
       } else {
         moveShipsAndWindTo(currentReplayTime);
       }
@@ -1940,7 +1974,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (eventStatus != "pre-event") {
       showEventMenu = showInfoPage = showMapMenu = showShipMenu = showShipInfo = replayPause = false;
       replayRunning = !replayRunning;
-      if (replayRunning && currentReplayTime == replayEnd) {
+      if (replayRunning && currentReplayTime == sliderEnd) {
         // if he wants to run while at the end of the slider, move it to the beginning
         currentReplayTime = eventStart;
       }
@@ -1991,19 +2025,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         // we are beyond the last timestamp
         timeIndex = track['stamp'].length - 1; // set the track index to the last entry
         calculatedRotation = track['course'].last;
-        if (time == replayEnd && hfUpdate && (time - track['stamp'].last) < 180 * 1000) {
+        if (time == sliderEnd && hfUpdate && (time - track['stamp'].last) < 180 * 1000) {
           // the last stamp is less then 3 minutes old and we are at the end of the slider (i.e. we are live and no replay running)
-          // in this situation we make a prediction where the ship could be
-          // now, predict where the ship could be, based on last known location, distance (speed, time),and heading
-          rdist = ((track['speed'].last) / 36000) * (time - track['stamp'].last) / 1000 / 6371; // angular distance in radians
-          rcourse = track['course'].last * pi / 180; // course in radians
-          rlat1 = track['lat'].last * pi / 180; // last known position in radians
-          rlon1 = track['lon'].last * pi / 180;
-          rlat2 = asin(sin(rlat1) * cos(rdist) + cos(rlat1) * sin(rdist) * cos(rcourse));
-          rlon2 = rlon1 + atan2(sin(rcourse) * sin(rdist) * cos(rlat1), cos(rdist) - sin(rlat1) * sin(rlat2));
-          rlon2 = ((rlon2 + (3 * pi)) % (2 * pi)) - pi; // normalise to -180..+180º
-          calculatedLat = rlat2 * 180 / pi; // convert radians back to degrees
-          calculatedLon = rlon2 * 180 / pi;
+          // in this situation we make a prediction where the ship could be,
+          // based on last known location, distance (speed, time),and heading
+          var predictedPosition = predictPosition(
+              LatLng(track['lat'].last, track['lon'].last), track['speed'].last / 10, time - track['stamp'].last, calculatedRotation);
+          calculatedLat = predictedPosition.latitude;
+          calculatedLon = predictedPosition.longitude;
         } else {
           // we are beyond the last timestamp and beyond the 3 minute lostSignal time
           calculatedLat = track['lat'].last;
@@ -2011,8 +2040,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         }
       } else {
         // we are somewhere between two stamps
-        // travel along the track forth and back to find out where we are, using a loca var to speed things up
-        timeIndex = shipTimeIndex[ship]; // get the timeindex from a previous run
+        // travel along the track forth and back to find out where we are, using a local var to speed things up
+        timeIndex = shipTimeIndex[ship]; // get the timeindex of this ship from a previous run
         if (time > track['stamp'][timeIndex]) {
           // move forward in the track
           while (track['stamp'][timeIndex] < time) {
@@ -2062,6 +2091,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       String lostSignalIndicator = ((time - track['stamp'][timeIndex]) > 180000) ? '\u0027' : '';
       String iwTitle = '${track['name']}$lostSignalIndicator';
       String iwText = 'Snelheid: $speedString';
+      iwText += (lostSignalIndicator != '' && eventStatus == 'live')
+          ? '\nPositie op ${DateTime.fromMillisecondsSinceEpoch(track['stamp'][timeIndex]).toString().substring(0, 16)}'
+          : '';
       // create / replace the ship marker
       var svgString = '<svg width="22" height="22">'
           '<polygon points="10,1 11,1 14,4 14,18 13,19 8,19 7,18 7,4" '
@@ -2092,6 +2124,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // build the shipLabel
       if (showShipLabels) {
         // NB text backgroundcolor is reversed to the markerbackgroundcolor
+        // sounds strange, but it gives the best readability
         var tbgc = (markerBackgroundColor == bgColorBlack) ? bgColorWhite : bgColorBlack;
         var txt = '${track['name']}$lostSignalIndicator${((showShipSpeeds) ? ', $speedString' : '')}';
         var svgString = '<svg width="300" height="35">'
@@ -2459,17 +2492,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
 
   // the trails and replay files contain timestamps in seconds. We need milisecconds...
   Map<String, dynamic> convertTimes(a) {
-    a['starttime'] = a['starttime'] * 1000;
-    a['endtime'] = a['endtime'] * 1000;
+    a['starttime'] *= 1000;
+    a['endtime'] *= 1000;
     for (int i = 0; i < a['shiptracks'].length; i++) {
-      for (int j = 0; j < a['shiptracks'][i]['stamp'].length; j++) {
-        a['shiptracks'][i]['stamp'][j] = a['shiptracks'][i]['stamp'][j] * 1000;
-      }
+      a['shiptracks'][i]['stamp'] = a['shiptracks'][i]['stamp'].map((val) => val * 1000).toList();
     }
     for (int i = 0; i < a['windtracks'].length; i++) {
-      for (int j = 0; j < a['windtracks'][i]['stamp'].length; j++) {
-        a['windtracks'][i]['stamp'][j] = a['windtracks'][i]['stamp'][j] * 1000;
-      }
+      a['windtracks'][i]['stamp'] = a['windtracks'][i]['stamp'].map((val) => val * 1000).toList();
     }
     return a;
   }
@@ -2510,4 +2539,20 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     ];
     return windColorTable[knotsToBft(speedInKnots)];
   }
+
+  //
+  // predict new location based on initial location,
+  // speed in km/h, time in milliseconds, course in degrees
+  LatLng predictPosition(LatLng initialPosition, double speed, int time, int course) {
+    var rdist = (speed / 3600) * time / 1000 / 6371; // angular distance in radians
+    var rcourse = course * pi / 180; // course in radians
+    var rlat1 = initialPosition.latitudeInRad; // last known position in radians
+    var rlon1 = initialPosition.longitudeInRad;
+    var rlat2 = asin(sin(rlat1) * cos(rdist) + cos(rlat1) * sin(rdist) * cos(rcourse));
+    var rlon2 = rlon1 + atan2(sin(rcourse) * sin(rdist) * cos(rlat1), cos(rdist) - sin(rlat1) * sin(rlat2));
+    rlon2 = ((rlon2 + (3 * pi)) % (2 * pi)) - pi; // normalise to -180..+180º
+    return LatLng(rlat2 * 180 / pi, rlon2 * 180 / pi);
+  }
+
+  Future<Style> readStyle(uri) => StyleReader(uri: uri).read();
 }

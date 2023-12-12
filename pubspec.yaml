@@ -52,7 +52,7 @@ dependencies:
   flutter_animate: ^4.3.0
   flutter_map_cancellable_tile_provider: ^2.0.0
   http: ^1.1.2
-#  vector_map_tiles: ^6.0.2
+  vector_map_tiles: ^7.0.0
 
 dev_dependencies:
   flutter_test:
