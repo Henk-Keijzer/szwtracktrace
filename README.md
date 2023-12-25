@@ -3,7 +3,23 @@
 Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen
 
 /*
-Version 3.1.6
+Version 3.1.7
+Feature: ook speed toegevoegd aan web transfer info
+Feature: appicon wordt nu van de server gehaald via een fetch (/get?req=appicon&event=<event>,
+waarbij de event parameter optioneel mag zijn) in plaats van rechtstreeks (resulteerde in een 404
+als het bestand vooe een event niet bestond). Als de file onder het event niet bestaat wordt de url
+de default uit de folder config gebruikt
+Feature: de favicon voor de web app wordt uit de config folder gehaald (en niet uit root folder,
+waar het bestand wordt overscheven bij een nieuwe release)
+Feature: De dropdownmenu's in het evenementenmenu worden proactief geopend, zodat de gebruiker
+alleen nog maar een selectie hoeft te klikken
+
+Version 3.1.6 released op 12 december 2023
+Feature: web transfer van maptypes en playtime info vanuit embedded page naar new tab page
+(fullscreen knop)
+Feature: flutter_config.json op server toegevoegd voor basic app info: text, colors en icons
+Optimization: infowindow als marker toegevoegd aan de lijst met markers, waardoor flutter-map het
+window verplaatst en we dat niet zelf hoeven te doen
 
 Version 3.1.5 - released on November 23, 2023
 Feature: upgraded to flutter_map V6.0.x
@@ -23,8 +39,7 @@ Feature: don't close map menu when switching between overlays when overlay is of
 
 Version 3.1.3
 Feature: andere layout infowindow van de schepen, met coördinaten en tijd van ontvangst evt met
-datum als de laatste
-ontvangst meer dan 24 uur geleden is (in plaats van xx minuten geleden)
+datum als de laatste ontvangst meer dan 24 uur geleden is (in plaats van xx minuten geleden)
 Bugfix: scrollbar in menus shifted to the right to free the check and radio boxes
 Feature: floatingbutton voor auto volgen toegevoegd
 Feature: in live update predicted position since last received position
