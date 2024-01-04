@@ -1,0 +1,13 @@
+{
+  "name": "SZW Track & Trace",
+  "short_name": "SZW Track & Trace",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0175C2",
+  "theme_color": "#0175C2",
+  "description": "Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false,
+  "icons": [
+  ]
+}

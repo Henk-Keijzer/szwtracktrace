@@ -1,0 +1,13 @@
+{
+  "name": "Olympia Charters TT",
+  "short_name": "Olympia Charters TT",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#0175C2",
+  "theme_color": "#0175C2",
+  "description": "Track & Trace app voor de huurboten van Olympia Charters Warmond",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false,
+  "icons": [
+  ]
+}
