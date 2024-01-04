@@ -3,11 +3,18 @@
 Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen
 
 /*
-Version 3.1.7
+
+Version 3.1.8
+bugfix: af en toe range error bij replay tijdens een live wedstrijd
+feature: cancel button op eventmenu
+mod: stop replay van embedded bij overgang naar open in new tab
+mod: variants for szw en sv
+
+Version 3.1.7 - released on December 26, 2023
 Feature: ook speed toegevoegd aan web transfer info
-Feature: appicon wordt nu van de server gehaald via een fetch (/get?req=appicon&event=<event>,
+Feature: appicon wordt nu van de server gehaald via een fetch (/get?req=appiconurl&event=<event>,
 waarbij de event parameter optioneel mag zijn) in plaats van rechtstreeks (resulteerde in een 404
-als het bestand vooe een event niet bestond). Als de file onder het event niet bestaat wordt de url
+als het bestand voor een event niet bestond). Als de file onder het event niet bestaat wordt de url
 de default uit de folder config gebruikt
 Feature: de favicon voor de web app wordt uit de config folder gehaald (en niet uit root folder,
 waar het bestand wordt overscheven bij een nieuwe release)
