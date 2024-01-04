@@ -1053,7 +1053,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                     })
               ],
             ),
-//          Text('true'), //just for testing
         ]));
   }
 
