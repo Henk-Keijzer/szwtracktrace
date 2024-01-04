@@ -9,6 +9,11 @@ bugfix: af en toe range error bij replay tijdens een live wedstrijd
 feature: cancel button op eventmenu
 mod: stop replay van embedded bij overgang naar open in new tab
 mod: variants for szw en sv
+mod: Verticale buttonbar maakt meer ruimte voor de titel van het evenement
+mod: ActionButtons voor autozoom en volgen vervangen door Switches
+mod: autoZoom wordt uitgeschakels als de kiaart met de hand wordt bewogen
+mod: maximale zoom level bij autoZoom op 17 ingesteld
+mod: close knoppen in de menu's, menu's iets meer gecomprimeerd
 
 Version 3.1.7 - released on December 26, 2023
 Feature: ook speed toegevoegd aan web transfer info

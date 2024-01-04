@@ -1,5 +1,5 @@
 import 'main_common.dart';
 
 void main() {
-  mainCommon('https://tt.zeilvaartwarmond.nl/');
+  mainCommon('https://sv.zeilvaartwarmond.nl/');
 }
