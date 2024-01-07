@@ -952,258 +952,265 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         SizedBox(height: menuOffset),
         Container(
             color: menuBackgroundColor?.withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu) ? 1 : 0.5),
-            child: Column(verticalDirection: VerticalDirection.up, children: uiMenuButtons())),
+            child: Column(children: [
+              IconButton(
+                // button for the shipList
+                tooltip: '', //showShipMenu ? 'sluit menu' : 'deelnemers',
+                onPressed: () {
+                  if (eventStatus != 'pre-event' && shipList.isNotEmpty) {
+                    setState(() {
+                      showEventMenu = showMapMenu = showInfoPage = showShipInfo = showAttribution = false;
+                      showShipMenu = replayPause = !showShipMenu;
+                    });
+                  }
+                },
+                icon: Icon(boatIcon, color: menuForegroundColor),
+              ),
+              IconButton(
+                // button for the mapMenu
+                tooltip: '', //showMapMenu ? 'sluit menu' : 'kaartmenu',
+                onPressed: () => setState(() {
+                  showEventMenu = showShipMenu = showInfoPage = showShipInfo = showAttribution = false;
+                  showMapMenu = replayPause = !showMapMenu;
+                }),
+                icon: Icon(Icons.map, color: menuForegroundColor),
+              ),
+              IconButton(
+                // button for the infoPage
+                tooltip: '', //showInfoPage ? 'sluit infopagina' : 'infopagina',
+                onPressed: () => setState(() {
+                  showEventMenu = showShipMenu = showMapMenu = showShipInfo = showAttribution = false;
+                  showInfoPage = replayPause = !showInfoPage;
+                }),
+                icon: Icon(Icons.info, color: menuForegroundColor),
+              ),
+              optionWindy && (eventStatus == 'live' || eventStatus == 'pre-event')
+                  ? IconButton(
+                      onPressed: () {
+                        if (eventStatus == 'live' || eventStatus == 'pre-event') {
+                          var latlng = mapController.camera.center;
+                          var zoom = mapController.camera.zoom;
+                          launchUrl(Uri.parse('https://embed.windy.com/embed2.html?lat=${latlng.latitude}&lon=${latlng.longitude}'
+                              '&detailLat=${latlng.latitude}&detailLon=${latlng.longitude}'
+                              '&width=$screenWidth&height=$screenHeight&zoom=$zoom&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker='
+                              '&calendar=now&pressure=&type=map&location=coordinates&detail=true&metricWind=bft&metricTemp=%C2%B0C&radarRange=-1'));
+                        }
+                      },
+                      icon: Tooltip(
+                          message: 'open windy.com', child: Image.asset('assets/images/windy-logo-full.png', width: 25, height: 25)))
+                  : const SizedBox(),
+            ])),
       ])
     ]);
   }
 
-  List<Widget> uiMenuButtons() {
-    return [
-      optionWindy && (eventStatus == 'live' || eventStatus == 'pre-event')
-          ? IconButton(
-              onPressed: () {
-                if (eventStatus == 'live' || eventStatus == 'pre-event') {
-                  var latlng = mapController.camera.center;
-                  var zoom = mapController.camera.zoom;
-                  launchUrl(Uri.parse('https://embed.windy.com/embed2.html?lat=${latlng.latitude}&lon=${latlng.longitude}'
-                      '&detailLat=${latlng.latitude}&detailLon=${latlng.longitude}'
-                      '&width=$screenWidth&height=$screenHeight&zoom=$zoom&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker='
-                      '&calendar=now&pressure=&type=map&location=coordinates&detail=true&metricWind=bft&metricTemp=%C2%B0C&radarRange=-1'));
-                }
-              },
-              icon: Tooltip(message: 'open windy.com', child: Image.asset('assets/images/windy-logo-full.png', width: 25, height: 25)))
-          : const SizedBox(),
-      IconButton(
-        // button for the infoPage
-        tooltip: '', //showInfoPage ? 'sluit infopagina' : 'infopagina',
-        onPressed: () => setState(() {
-          showEventMenu = showShipMenu = showMapMenu = showShipInfo = showAttribution = false;
-          showInfoPage = replayPause = !showInfoPage;
-        }),
-        icon: Icon(Icons.info, color: menuForegroundColor),
-      ),
-      IconButton(
-        // button for the mapMenu
-        tooltip: '', //showMapMenu ? 'sluit menu' : 'kaartmenu',
-        onPressed: () => setState(() {
-          showEventMenu = showShipMenu = showInfoPage = showShipInfo = showAttribution = false;
-          showMapMenu = replayPause = !showMapMenu;
-        }),
-        icon: Icon(Icons.map, color: menuForegroundColor),
-      ),
-      IconButton(
-        // button for the shipList
-        tooltip: '', //showShipMenu ? 'sluit menu' : 'deelnemers',
-        onPressed: () {
-          if (eventStatus != 'pre-event' && shipList.isNotEmpty) {
-            setState(() {
-              showEventMenu = showMapMenu = showInfoPage = showShipInfo = showAttribution = false;
-              showShipMenu = replayPause = !showShipMenu;
-            });
-          }
-        },
-        icon: Icon(boatIcon, color: menuForegroundColor),
-      ),
-    ];
-  }
-
   // the menus: event menu, shipmenu, mapmenu and infopage
-  Container uiEventMenu() {
-    return Container(
-        color: menuBackgroundColor,
-        width: 275,
-        padding: EdgeInsets.fromLTRB(10.0, menuOffset + 10.0, 0.0, 10.0),
-        child: ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(0.0, 0.0, 10.0, 0.0), children: [
-          Row(children: [
-            const Text("Evenementmenu", style: TextStyle(fontSize: 20)),
-            const Spacer(),
-            IconButton(
-                onPressed: () => setState(() => showEventMenu = replayPause = false),
-                icon: Icon(Icons.cancel_outlined, color: menuForegroundColor)),
-          ]),
-          Container(height: 10),
-          PopupMenuButton(
-            key: dropEventKey,
-            offset: const Offset(15, 35),
-            itemBuilder: (BuildContext context) {
-              return eventList.map((events) {
-                return PopupMenuItem(height: 30.0, value: events, child: Text(events, style: const TextStyle(fontSize: 15)));
-              }).toList();
-            },
-            onSelected: selectEventYear,
-            tooltip: '',
-            child: Row(
-                children: [Text('   $eventName '), Icon(Icons.arrow_drop_down, size: 20, color: menuForegroundColor), const Text(' \n')]),
-          ),
-          PopupMenuButton(
-            key: dropYearKey,
-            offset: const Offset(15, 35),
-            itemBuilder: (BuildContext context) {
-              return eventYearList.map((years) {
-                return PopupMenuItem(
-                  height: 30.0,
-                  value: years,
-                  child: Text(years, style: const TextStyle(fontSize: 15)),
-                );
-              }).toList();
-            },
-            onSelected: selectEventDay,
-            tooltip: '',
-            child: (eventYear == '')
-                ? const Text('')
-                : Row(children: [
-                    Text('   $eventYear '),
+  SingleChildScrollView uiEventMenu() {
+    return SingleChildScrollView(
+        child: Container(
+            color: menuBackgroundColor,
+            width: 275,
+            padding: EdgeInsets.fromLTRB(10.0, menuOffset + 5, 0.0, 10.0),
+            child: Column(children: [
+              Row(children: [
+                const Text("Evenementmenu"),
+                const Spacer(),
+                IconButton(
+                    onPressed: () => setState(() => showEventMenu = replayPause = false),
+                    icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor)),
+              ]),
+              ListView(shrinkWrap: true, padding: const EdgeInsets.fromLTRB(0.0, 0, 10.0, 0.0), children: [
+                Divider(color: menuForegroundColor, height: 10),
+                PopupMenuButton(
+                  key: dropEventKey,
+                  offset: const Offset(15, 35),
+                  itemBuilder: (BuildContext context) {
+                    return eventList.map((events) {
+                      return PopupMenuItem(height: 30.0, value: events, child: Text(events, style: const TextStyle(fontSize: 15)));
+                    }).toList();
+                  },
+                  onSelected: selectEventYear,
+                  tooltip: '',
+                  child: Row(children: [
+                    Text('   $eventName '),
                     Icon(Icons.arrow_drop_down, size: 20, color: menuForegroundColor),
                     const Text(' \n')
                   ]),
-          ),
-          PopupMenuButton(
-            key: dropDayKey,
-            // dropdown day/race
-            offset: const Offset(15, 35),
-            itemBuilder: (BuildContext context) {
-              return eventDayList.map((days) {
-                return PopupMenuItem(
-                  height: 30.0,
-                  value: days,
-                  child: Text(days, style: const TextStyle(fontSize: 15)),
-                );
-              }).toList();
-            },
-            onSelected: newEventSelected,
-            tooltip: '',
-            child: (eventDay == '')
-                ? const Text('')
-                : Row(
-                    children: [Text('   $eventDay'), Icon(Icons.arrow_drop_down, size: 20, color: menuForegroundColor), const Text(' \n')]),
-          ),
-          if (selectionMessage != '')
-            Wrap(children: [
-              Divider(color: menuForegroundColor),
-              Text('\n$selectionMessage\n'),
-              Divider(color: menuForegroundColor),
-              if (eventDomain != '')
-                Container(
-                    alignment: Alignment.center,
-                    margin: const EdgeInsets.fromLTRB(0, 10, 0, 10),
-                    child: InkWell(
-                      onTap: () => {if (socialMediaUrl != '') launchUrl(Uri.parse(socialMediaUrl), mode: LaunchMode.externalApplication)},
-                      child: Image.network('${server}data/$eventDomain/logo.png'),
-                    )),
-              Text((socialMediaUrl == '') ? '' : '\nKlik op het logo voor de laatste info over deze wedstrijd.\n')
-            ]),
-          if ((webOnMobile && mobileAppAvailable))
-            Wrap(
-              children: [
-                Divider(color: menuForegroundColor),
-                InkWell(
-                    child: const Text('\nMobiele Track & Trace App\n\nDe mobiele app werkt op uw '
-                        'telefoon sneller dan de web-versie en verbruikt minder data. '
-                        'Klik hier om de gratis app op uw telefoon installeren.'),
-                    onTap: () {
-                      if (defaultTargetPlatform == TargetPlatform.android) {
-                        launchUrl(Uri.parse('https://play.google.com/store/apps/details?id=nl.zeilvaartwarmond.szwtracktrace'),
-                            mode: LaunchMode.externalApplication);
-                      } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-                        launchUrl(Uri.parse('https://apps.apple.com/us/app/zeilvaart-warmond-track-trace/id1607502880'),
-                            mode: LaunchMode.externalApplication);
-                      }
-                    })
-              ],
-            ),
-        ]));
+                ),
+                PopupMenuButton(
+                  key: dropYearKey,
+                  offset: const Offset(15, 35),
+                  itemBuilder: (BuildContext context) {
+                    return eventYearList.map((years) {
+                      return PopupMenuItem(
+                        height: 30.0,
+                        value: years,
+                        child: Text(years, style: const TextStyle(fontSize: 15)),
+                      );
+                    }).toList();
+                  },
+                  onSelected: selectEventDay,
+                  tooltip: '',
+                  child: (eventYear == '')
+                      ? const Text('')
+                      : Row(children: [
+                          Text('   $eventYear '),
+                          Icon(Icons.arrow_drop_down, size: 20, color: menuForegroundColor),
+                          const Text(' \n')
+                        ]),
+                ),
+                PopupMenuButton(
+                  key: dropDayKey,
+                  // dropdown day/race
+                  offset: const Offset(15, 35),
+                  itemBuilder: (BuildContext context) {
+                    return eventDayList.map((days) {
+                      return PopupMenuItem(
+                        height: 30.0,
+                        value: days,
+                        child: Text(days, style: const TextStyle(fontSize: 15)),
+                      );
+                    }).toList();
+                  },
+                  onSelected: newEventSelected,
+                  tooltip: '',
+                  child: (eventDay == '')
+                      ? const Text('')
+                      : Row(children: [
+                          Text('   $eventDay'),
+                          Icon(Icons.arrow_drop_down, size: 20, color: menuForegroundColor),
+                          const Text(' \n')
+                        ]),
+                ),
+                if (selectionMessage != '')
+                  Wrap(children: [
+                    Divider(color: menuForegroundColor, height: 30),
+                    Text(selectionMessage),
+                    Divider(color: menuForegroundColor, height: 30),
+                    if (eventDomain != '')
+                      Container(
+                          alignment: Alignment.center,
+                          margin: const EdgeInsets.fromLTRB(0, 10, 0, 10),
+                          child: InkWell(
+                            onTap: () =>
+                                {if (socialMediaUrl != '') launchUrl(Uri.parse(socialMediaUrl), mode: LaunchMode.externalApplication)},
+                            child: Image.network('${server}data/$eventDomain/logo.png'),
+                          )),
+                    Text((socialMediaUrl == '') ? '' : 'Klik op het logo voor de laatste info over deze wedstrijd.')
+                  ]),
+                if ((webOnMobile && mobileAppAvailable))
+                  Wrap(
+                    children: [
+                      Divider(color: menuForegroundColor),
+                      InkWell(
+                          child: const Text('\nMobiele Track & Trace App\n\nDe mobiele app werkt op uw '
+                              'telefoon sneller dan de web-versie en verbruikt minder data. '
+                              'Klik hier om de gratis app op uw telefoon installeren.'),
+                          onTap: () {
+                            if (defaultTargetPlatform == TargetPlatform.android) {
+                              launchUrl(Uri.parse('https://play.google.com/store/apps/details?id=nl.zeilvaartwarmond.szwtracktrace'),
+                                  mode: LaunchMode.externalApplication);
+                            } else if (defaultTargetPlatform == TargetPlatform.iOS) {
+                              launchUrl(Uri.parse('https://apps.apple.com/us/app/zeilvaart-warmond-track-trace/id1607502880'),
+                                  mode: LaunchMode.externalApplication);
+                            }
+                          })
+                    ],
+                  ),
+              ])
+            ])));
   }
 
   Row uiShipMenu() {
     return Row(children: [
       const Spacer(),
-      Container(
-        width: 275,
-        color: menuBackgroundColor,
-        padding: EdgeInsets.fromLTRB(10.0, menuOffset, 0.0, 10.0),
-        child: SingleChildScrollView(
+      SingleChildScrollView(
+        child: Container(
+            width: 275,
+            color: menuBackgroundColor,
+            padding: EdgeInsets.fromLTRB(10.0, menuOffset, 0.0, 10.0),
             child: Column(
-          children: [
-            Row(children: [
-              const Text('Deelnemersmenu'),
-              const Spacer(),
-              IconButton(
-                  onPressed: () => setState(() => showShipMenu = replayPause = false),
-                  icon: Icon(Icons.cancel_outlined, color: menuForegroundColor)),
-              const SizedBox(width: 3)
-            ]),
-            SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
-                child: Column(children: [
-                  Divider(color: menuForegroundColor),
-                  Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(5, 5, 5, 12),
-                        child: Text('Alle $participants volgen aan/uit'),
-                      ),
-                    ),
-                    Checkbox(
-                        visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
-                        activeColor: menuForegroundColor,
-                        checkColor: menuBackgroundColor,
-                        side: BorderSide(color: menuForegroundColor),
-                        value: followAll,
-                        onChanged: (value) => setState(() {
-                              following.forEach((k, v) {
-                                following[k] = value!;
-                              });
-                              followAll = value!;
-                              moveShipsAndWindTo(currentReplayTime);
-                            })),
-                  ]),
-                  ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    padding: const EdgeInsets.all(0),
-                    itemCount: shipList.length,
-                    itemBuilder: (BuildContext context, index) {
-                      return Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                        Icon(Icons.square, color: Color(shipColors[index]), size: 20),
+              children: [
+                Row(children: [
+                  const Text('Deelnemersmenu'),
+                  const Spacer(),
+                  IconButton(
+                      onPressed: () => setState(() => showShipMenu = replayPause = false),
+                      icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor)),
+                  const SizedBox(width: 3)
+                ]),
+                Container(
+                    padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
+                    child: Column(children: [
+                      Divider(color: menuForegroundColor),
+                      Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
                         Expanded(
                           child: Padding(
-                              padding: const EdgeInsets.fromLTRB(5, 0, 5, 0),
-                              child: InkWell(
-                                child: Text(shipList[index]),
-                                onTap: () => loadShipInfo(index),
-                              )),
+                            padding: const EdgeInsets.fromLTRB(5, 5, 5, 12),
+                            child: Text('Alle $participants volgen aan/uit'),
+                          ),
                         ),
                         Checkbox(
                             visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
                             activeColor: menuForegroundColor,
                             checkColor: menuBackgroundColor,
                             side: BorderSide(color: menuForegroundColor),
-                            value: (following[shipList[index]] == null) ? false : following[shipList[index]],
+                            value: followAll,
                             onChanged: (value) => setState(() {
-                                  following[shipList[index]] = value!;
+                                  following.forEach((k, v) {
+                                    following[k] = value!;
+                                  });
+                                  followAll = value!;
                                   moveShipsAndWindTo(currentReplayTime);
                                 })),
-                      ]);
-                    },
-                  ),
-                  Divider(color: menuForegroundColor),
-                  InkWell(
-                      child: Text('Het spoor achter de $participants is $actualTrailLength minuten'),
-                      onTap: () => setState(() {
-                            if (actualTrailLength == eventTrailLength) {
-                              if (maxReplay == 0) {
-                                actualTrailLength = (eventEnd - eventStart) / 1000 ~/ 60;
-                              } else {
-                                actualTrailLength = maxReplay * 60; // minuten
-                              }
-                            } else {
-                              actualTrailLength = eventTrailLength;
-                            }
-                            moveShipsAndWindTo(currentReplayTime);
-                          })),
-                ]))
-          ],
-        )),
+                      ]),
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(0),
+                        itemCount: shipList.length,
+                        itemBuilder: (BuildContext context, index) {
+                          return Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                            Icon(Icons.square, color: Color(shipColors[index]), size: 20),
+                            Expanded(
+                              child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(5, 0, 5, 0),
+                                  child: InkWell(
+                                    child: Text(shipList[index]),
+                                    onTap: () => loadShipInfo(index),
+                                  )),
+                            ),
+                            Checkbox(
+                                visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
+                                activeColor: menuForegroundColor,
+                                checkColor: menuBackgroundColor,
+                                side: BorderSide(color: menuForegroundColor),
+                                value: (following[shipList[index]] == null) ? false : following[shipList[index]],
+                                onChanged: (value) => setState(() {
+                                      following[shipList[index]] = value!;
+                                      moveShipsAndWindTo(currentReplayTime);
+                                    })),
+                          ]);
+                        },
+                      ),
+                      Divider(color: menuForegroundColor),
+                      InkWell(
+                          child: Text('Het spoor achter de $participants is $actualTrailLength minuten'),
+                          onTap: () => setState(() {
+                                if (actualTrailLength == eventTrailLength) {
+                                  if (maxReplay == 0) {
+                                    actualTrailLength = (eventEnd - eventStart) / 1000 ~/ 60;
+                                  } else {
+                                    actualTrailLength = maxReplay * 60; // minuten
+                                  }
+                                } else {
+                                  actualTrailLength = eventTrailLength;
+                                }
+                                moveShipsAndWindTo(currentReplayTime);
+                              })),
+                    ]))
+              ],
+            )),
       ),
       const SizedBox(width: 45),
     ]);
@@ -1212,255 +1219,256 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Row uiMapMenu() {
     return Row(children: [
       const Spacer(),
-      Container(
-          width: 275,
-          color: menuBackgroundColor,
-          padding: EdgeInsets.fromLTRB(10.0, menuOffset, 0.0, 10.0),
-          child: SingleChildScrollView(
+      SingleChildScrollView(
+          child: Container(
+              width: 275,
+              color: menuBackgroundColor,
+              padding: EdgeInsets.fromLTRB(10.0, menuOffset, 0.0, 10.0),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Row(children: [
-              const Text('Kaartmenu'),
-              const Spacer(),
-              IconButton(
-                  onPressed: () => setState(() => showMapMenu = replayPause = false),
-                  icon: Icon(Icons.cancel_outlined, color: menuForegroundColor)),
-              const SizedBox(width: 3)
-            ]),
-            SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(0.0, 0.0, 10.0, 0.0),
-                child: Column(children: [
-                  Divider(color: menuForegroundColor),
-                  const Row(children: [SizedBox(width: 4), Text('Basiskaarten:'), Spacer()]),
-                  ListView.builder(
-                      // radiobuttons for maptype
-                      physics: const NeverScrollableScrollPhysics(),
-                      padding: EdgeInsets.zero,
-                      shrinkWrap: true,
-                      itemCount: mapTileProviderData.keys.toList().length,
-                      itemBuilder: (BuildContext context, index) {
-                        return Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                          Expanded(
-                            child: Padding(
-                              padding: const EdgeInsets.fromLTRB(20, 0, 5, 0),
-                              child: Text(mapTileProviderData.keys.toList()[index]),
-                            ),
-                          ),
-                          Theme(
-                              data: ThemeData.dark(),
-                              child: Radio(
-                                  activeColor: menuForegroundColor,
-                                  visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
-                                  value: mapTileProviderData.keys.toList()[index],
-                                  groupValue: selectedMapType,
-                                  onChanged: (value) async {
-                                    selectedMapType = value!;
-                                    prefs.setString('maptype', selectedMapType);
-                                    if (mapTileProviderData[selectedMapType]['labels'] != '' &&
-                                        labelTileProviderData[mapTileProviderData[selectedMapType]['labels']]['service'] == 'vector') {
-                                      //set labelMapStyle
-                                    }
-                                    markerBackgroundColor = mapTileProviderData[selectedMapType]['bgColor'];
-                                    labelBackgroundColor = markerBackgroundColor == hexBlack ? hexWhite : hexBlack;
-                                    if (mapTileProviderData[selectedMapType]['service'] == 'vector') {
-                                      baseMapStyle = await StyleReader(uri: mapTileProviderData[selectedMapType]['URL'], apiKey: '').read();
-                                    }
-                                    if (eventStatus != "" && eventStatus != 'pre-event') {
-                                      // we need the eventStatus to be non-blank, otherwise the markers of the ships,
-                                      // labels and wind will be moved when the markers are not initialized yet.
-                                      // And we just want to change the colors, not move or zoom
-                                      moveShipsAndWindTo(currentReplayTime, move: false);
-                                    }
-                                    showMapMenu = replayPause = false;
-                                    if (eventStatus != "" && route['features'] != null) buildRoute();
-                                    setState(() {});
-                                  }))
-                        ]);
-                      }),
-                  if (selectedOverlayType != "") // map overly on/off and radiobuttons
-                    Wrap(children: [
+                Row(children: [
+                  const Text('Kaartmenu'),
+                  const Spacer(),
+                  IconButton(
+                      onPressed: () => setState(() => showMapMenu = replayPause = false),
+                      icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor)),
+                  const SizedBox(width: 3)
+                ]),
+                SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(0.0, 0.0, 10.0, 0.0),
+                    child: Column(children: [
                       Divider(color: menuForegroundColor),
-                      Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                        const Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(5, 0, 5, 0),
-                            child: Text('Kaart overlay'),
-                          ),
-                        ),
-                        Checkbox(
-                            visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
-                            activeColor: menuForegroundColor,
-                            checkColor: menuBackgroundColor,
-                            side: BorderSide(color: menuForegroundColor),
-                            value: mapOverlay,
-                            onChanged: (value) => setState(() {
-                                  mapOverlay = value!;
-                                  prefs.setBool('mapoverlay', mapOverlay);
-                                  showMapMenu = replayPause = false;
-                                })),
-                      ]),
+                      const Row(children: [SizedBox(width: 4), Text('Basiskaarten:'), Spacer()]),
                       ListView.builder(
+                          // radiobuttons for maptype
+                          physics: const NeverScrollableScrollPhysics(),
                           padding: EdgeInsets.zero,
                           shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          itemCount: overlayTileProviderData.keys.toList().length,
+                          itemCount: mapTileProviderData.keys.toList().length,
                           itemBuilder: (BuildContext context, index) {
                             return Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
                               Expanded(
                                 child: Padding(
-                                    padding: const EdgeInsets.fromLTRB(20, 0, 5, 0),
-                                    child: Text(overlayTileProviderData.keys.toList()[index])),
+                                  padding: const EdgeInsets.fromLTRB(20, 0, 5, 0),
+                                  child: Text(mapTileProviderData.keys.toList()[index]),
+                                ),
                               ),
                               Theme(
                                   data: ThemeData.dark(),
                                   child: Radio(
                                       activeColor: menuForegroundColor,
                                       visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
-                                      value: overlayTileProviderData.keys.toList()[index],
-                                      groupValue: selectedOverlayType,
-                                      onChanged: (value) => setState(() {
-                                            selectedOverlayType = value!;
-                                            prefs.setString('overlaytype', selectedOverlayType);
-                                            if (mapOverlay) showMapMenu = replayPause = false;
-                                          })))
+                                      value: mapTileProviderData.keys.toList()[index],
+                                      groupValue: selectedMapType,
+                                      onChanged: (value) async {
+                                        selectedMapType = value!;
+                                        prefs.setString('maptype', selectedMapType);
+                                        if (mapTileProviderData[selectedMapType]['labels'] != '' &&
+                                            labelTileProviderData[mapTileProviderData[selectedMapType]['labels']]['service'] == 'vector') {
+                                          //set labelMapStyle
+                                        }
+                                        markerBackgroundColor = mapTileProviderData[selectedMapType]['bgColor'];
+                                        labelBackgroundColor = markerBackgroundColor == hexBlack ? hexWhite : hexBlack;
+                                        if (mapTileProviderData[selectedMapType]['service'] == 'vector') {
+                                          baseMapStyle =
+                                              await StyleReader(uri: mapTileProviderData[selectedMapType]['URL'], apiKey: '').read();
+                                        }
+                                        if (eventStatus != "" && eventStatus != 'pre-event') {
+                                          // we need the eventStatus to be non-blank, otherwise the markers of the ships,
+                                          // labels and wind will be moved when the markers are not initialized yet.
+                                          // And we just want to change the colors, not move or zoom
+                                          moveShipsAndWindTo(currentReplayTime, move: false);
+                                        }
+                                        showMapMenu = replayPause = false;
+                                        if (eventStatus != "" && route['features'] != null) buildRoute();
+                                        setState(() {});
+                                      }))
                             ]);
-                          })
-                    ]),
-                  if (replayTracks['windtracks'] != null && replayTracks['windtracks'].length > 0)
-                    Wrap(children: [
-                      Divider(color: menuForegroundColor),
-                      Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                        const Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(5, 0, 5, 0),
-                            child: Text('Windpijlen'),
-                          ),
-                        ),
-                        Checkbox(
-                            visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
-                            activeColor: menuForegroundColor,
-                            checkColor: menuBackgroundColor,
-                            side: BorderSide(color: menuForegroundColor),
-                            value: windMarkersOn,
-                            onChanged: (value) => setState(() {
-                                  windMarkersOn = !windMarkersOn;
-                                  prefs.setBool('windmarkers', windMarkersOn);
-                                  showMapMenu = replayPause = false;
-                                  windMarkersOn ? rotateWindTo(currentReplayTime) : windMarkerList = [];
-                                }))
-                      ])
-                    ]),
-                  if (route['features'] != null) // route and routelabels
-                    Wrap(children: [
-                      Divider(color: menuForegroundColor),
-                      Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                        const Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(5, 0, 5, 0),
-                            child: Text('Route, havens, boeien'),
-                          ),
-                        ),
-                        Checkbox(
-                            visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
-                            activeColor: menuForegroundColor,
-                            checkColor: menuBackgroundColor,
-                            side: BorderSide(color: menuForegroundColor),
-                            value: showRoute,
-                            onChanged: (value) => setState(() {
-                                  showRoute = !showRoute;
-                                  prefs.setBool('showroute', showRoute);
-                                  showMapMenu = replayPause = false;
-                                  buildRoute();
-                                }))
-                      ]),
-                      Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                        const Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(20, 0, 5, 0),
-                            child: Text('met namen'),
-                          ),
-                        ),
-                        Checkbox(
-                            visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
-                            activeColor: menuForegroundColor,
-                            checkColor: showRoute ? menuBackgroundColor : menuBackgroundColor?.withOpacity(0.5),
-                            side: BorderSide(color: menuForegroundColor),
-                            value: showRouteLabels,
-                            onChanged: (value) => setState(() {
-                                  showRouteLabels = !showRouteLabels;
-                                  prefs.setBool('routelabels', showRouteLabels);
-                                  if (route['features'] != null) buildRoute();
-                                  if (showRoute) showMapMenu = replayPause = false;
-                                }))
-                      ])
-                    ]),
-                  if (replayTracks['shiptracks'] != null) // shipnames and speeds
-                    Wrap(children: [
-                      Divider(color: menuForegroundColor),
-                      Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(5, 0, 5, 0),
-                            child: Text(shipNames),
-                          ),
-                        ),
-                        Checkbox(
-                            visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
-                            activeColor: menuForegroundColor,
-                            checkColor: menuBackgroundColor,
-                            side: BorderSide(color: menuForegroundColor),
-                            value: showShipLabels,
-                            onChanged: (value) => setState(() {
-                                  showShipLabels = !showShipLabels;
-                                  prefs.setBool('shiplabels', showShipLabels);
-                                  if (eventStatus != 'pre-event') moveShipsAndWindTo(currentReplayTime, move: false);
-                                  showMapMenu = replayPause = false;
-                                }))
-                      ]),
-                      Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                        const Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(20, 0, 5, 0),
-                            child: Text('met snelheden'),
-                          ),
-                        ),
-                        Checkbox(
-                            visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
-                            activeColor: menuForegroundColor,
-                            checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor?.withOpacity(0.5),
-                            side: BorderSide(color: menuForegroundColor),
-                            value: showShipSpeeds,
-                            onChanged: (value) => setState(() {
-                                  showShipSpeeds = !showShipSpeeds;
-                                  prefs.setBool('shipspeeds', showShipSpeeds);
-                                  if (eventStatus != 'pre-event') moveShipsAndWindTo(currentReplayTime, move: false);
-                                  if (showShipLabels) showMapMenu = replayPause = false;
-                                }))
-                      ])
-                    ]),
-                  if (eventStatus == 'replay') // replay loop checkbox
-                    Wrap(children: [
-                      Divider(color: menuForegroundColor),
-                      Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                        const Expanded(
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(5, 0, 5, 0),
-                            child: Text('Replay loop'),
-                          ),
-                        ),
-                        Checkbox(
-                            visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
-                            activeColor: menuForegroundColor,
-                            checkColor: menuBackgroundColor,
-                            side: BorderSide(color: menuForegroundColor),
-                            value: replayLoop,
-                            onChanged: (value) => setState(() {
-                                  replayLoop = !replayLoop;
-                                  showMapMenu = replayPause = false;
-                                }))
-                      ])
-                    ]),
-                ]))
-          ]))),
+                          }),
+                      if (selectedOverlayType != "") // map overly on/off and radiobuttons
+                        Wrap(children: [
+                          Divider(color: menuForegroundColor),
+                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                            const Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(5, 0, 5, 0),
+                                child: Text('Kaart overlay'),
+                              ),
+                            ),
+                            Checkbox(
+                                visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
+                                activeColor: menuForegroundColor,
+                                checkColor: menuBackgroundColor,
+                                side: BorderSide(color: menuForegroundColor),
+                                value: mapOverlay,
+                                onChanged: (value) => setState(() {
+                                      mapOverlay = value!;
+                                      prefs.setBool('mapoverlay', mapOverlay);
+                                      showMapMenu = replayPause = false;
+                                    })),
+                          ]),
+                          ListView.builder(
+                              padding: EdgeInsets.zero,
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: overlayTileProviderData.keys.toList().length,
+                              itemBuilder: (BuildContext context, index) {
+                                return Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                                  Expanded(
+                                    child: Padding(
+                                        padding: const EdgeInsets.fromLTRB(20, 0, 5, 0),
+                                        child: Text(overlayTileProviderData.keys.toList()[index])),
+                                  ),
+                                  Theme(
+                                      data: ThemeData.dark(),
+                                      child: Radio(
+                                          activeColor: menuForegroundColor,
+                                          visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
+                                          value: overlayTileProviderData.keys.toList()[index],
+                                          groupValue: selectedOverlayType,
+                                          onChanged: (value) => setState(() {
+                                                selectedOverlayType = value!;
+                                                prefs.setString('overlaytype', selectedOverlayType);
+                                                if (mapOverlay) showMapMenu = replayPause = false;
+                                              })))
+                                ]);
+                              })
+                        ]),
+                      if (replayTracks['windtracks'] != null && replayTracks['windtracks'].length > 0)
+                        Wrap(children: [
+                          Divider(color: menuForegroundColor),
+                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                            const Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(5, 0, 5, 0),
+                                child: Text('Windpijlen'),
+                              ),
+                            ),
+                            Checkbox(
+                                visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
+                                activeColor: menuForegroundColor,
+                                checkColor: menuBackgroundColor,
+                                side: BorderSide(color: menuForegroundColor),
+                                value: windMarkersOn,
+                                onChanged: (value) => setState(() {
+                                      windMarkersOn = !windMarkersOn;
+                                      prefs.setBool('windmarkers', windMarkersOn);
+                                      showMapMenu = replayPause = false;
+                                      windMarkersOn ? rotateWindTo(currentReplayTime) : windMarkerList = [];
+                                    }))
+                          ])
+                        ]),
+                      if (route['features'] != null) // route and routelabels
+                        Wrap(children: [
+                          Divider(color: menuForegroundColor),
+                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                            const Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(5, 0, 5, 0),
+                                child: Text('Route, havens, boeien'),
+                              ),
+                            ),
+                            Checkbox(
+                                visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
+                                activeColor: menuForegroundColor,
+                                checkColor: menuBackgroundColor,
+                                side: BorderSide(color: menuForegroundColor),
+                                value: showRoute,
+                                onChanged: (value) => setState(() {
+                                      showRoute = !showRoute;
+                                      prefs.setBool('showroute', showRoute);
+                                      showMapMenu = replayPause = false;
+                                      buildRoute();
+                                    }))
+                          ]),
+                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                            const Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(20, 0, 5, 0),
+                                child: Text('met namen'),
+                              ),
+                            ),
+                            Checkbox(
+                                visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
+                                activeColor: menuForegroundColor,
+                                checkColor: showRoute ? menuBackgroundColor : menuBackgroundColor?.withOpacity(0.5),
+                                side: BorderSide(color: menuForegroundColor),
+                                value: showRouteLabels,
+                                onChanged: (value) => setState(() {
+                                      showRouteLabels = !showRouteLabels;
+                                      prefs.setBool('routelabels', showRouteLabels);
+                                      if (route['features'] != null) buildRoute();
+                                      if (showRoute) showMapMenu = replayPause = false;
+                                    }))
+                          ])
+                        ]),
+                      if (replayTracks['shiptracks'] != null) // shipnames and speeds
+                        Wrap(children: [
+                          Divider(color: menuForegroundColor),
+                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(5, 0, 5, 0),
+                                child: Text(shipNames),
+                              ),
+                            ),
+                            Checkbox(
+                                visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
+                                activeColor: menuForegroundColor,
+                                checkColor: menuBackgroundColor,
+                                side: BorderSide(color: menuForegroundColor),
+                                value: showShipLabels,
+                                onChanged: (value) => setState(() {
+                                      showShipLabels = !showShipLabels;
+                                      prefs.setBool('shiplabels', showShipLabels);
+                                      if (eventStatus != 'pre-event') moveShipsAndWindTo(currentReplayTime, move: false);
+                                      showMapMenu = replayPause = false;
+                                    }))
+                          ]),
+                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                            const Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(20, 0, 5, 0),
+                                child: Text('met snelheden'),
+                              ),
+                            ),
+                            Checkbox(
+                                visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
+                                activeColor: menuForegroundColor,
+                                checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor?.withOpacity(0.5),
+                                side: BorderSide(color: menuForegroundColor),
+                                value: showShipSpeeds,
+                                onChanged: (value) => setState(() {
+                                      showShipSpeeds = !showShipSpeeds;
+                                      prefs.setBool('shipspeeds', showShipSpeeds);
+                                      if (eventStatus != 'pre-event') moveShipsAndWindTo(currentReplayTime, move: false);
+                                      if (showShipLabels) showMapMenu = replayPause = false;
+                                    }))
+                          ])
+                        ]),
+                      if (eventStatus == 'replay') // replay loop checkbox
+                        Wrap(children: [
+                          Divider(color: menuForegroundColor),
+                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                            const Expanded(
+                              child: Padding(
+                                padding: EdgeInsets.fromLTRB(5, 0, 5, 0),
+                                child: Text('Replay loop'),
+                              ),
+                            ),
+                            Checkbox(
+                                visualDensity: const VisualDensity(horizontal: -4.0, vertical: -4.0),
+                                activeColor: menuForegroundColor,
+                                checkColor: menuBackgroundColor,
+                                side: BorderSide(color: menuForegroundColor),
+                                value: replayLoop,
+                                onChanged: (value) => setState(() {
+                                      replayLoop = !replayLoop;
+                                      showMapMenu = replayPause = false;
+                                    }))
+                          ])
+                        ]),
+                    ]))
+              ]))),
       const SizedBox(width: 45)
     ]);
   }
@@ -1468,29 +1476,31 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Row uiInfoPage() {
     return Row(children: [
       const Spacer(),
-      GestureDetector(
-          onTap: () => setState(() => showInfoPage = replayPause = false),
-          child: Container(
-              width: (screenWidth > 750) ? 750 - 45 : screenWidth - 45,
-              color: infoPageColor,
-              padding: EdgeInsets.fromLTRB(20.0, menuOffset, 0.0, 20.0),
-              child: SingleChildScrollView(
-                  child: Column(children: [
-                Row(
-                  children: [
-                    Spacer(),
-                    IconButton(onPressed: () => setState(() => showInfoPage = replayPause = false), icon: Icon(Icons.cancel_outlined))
-                  ],
-                ),
-                SingleChildScrollView(
+      SingleChildScrollView(
+        child: GestureDetector(
+            onTap: () => setState(() => showInfoPage = replayPause = false),
+            child: Container(
+                width: (screenWidth > 750) ? 750 - 45 : screenWidth - 45,
+                color: infoPageColor,
+                padding: EdgeInsets.fromLTRB(20.0, menuOffset, 0.0, 20.0),
+                child: Column(children: [
+                  Row(
+                    children: [
+                      const Spacer(),
+                      IconButton(
+                          onPressed: () => setState(() => showInfoPage = replayPause = false),
+                          icon: const Icon(Icons.cancel_outlined, size: 20)),
+                    ],
+                  ),
+                  Container(
                     padding: const EdgeInsets.fromLTRB(0.0, 0.0, 20.0, 0.0),
-                    child: Column(children: [
-                      Html(
-                        data: infoPageHTML,
-                        onLinkTap: (link, _, __) async => await launchUrl(Uri.parse(link!), mode: LaunchMode.externalApplication),
-                      ),
-                    ]))
-              ])))),
+                    child: Html(
+                      data: infoPageHTML,
+                      onLinkTap: (link, _, __) async => await launchUrl(Uri.parse(link!), mode: LaunchMode.externalApplication),
+                    ),
+                  )
+                ]))),
+      ),
       const SizedBox(width: 45),
     ]);
   }
