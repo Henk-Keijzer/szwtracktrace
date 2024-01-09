@@ -2,7 +2,7 @@
 
 Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen
 
-/*
+----------------------------------------------------------------------------------------------------
 
 Version 3.1.8
 bugfix: af en toe range error bij replay tijdens een live wedstrijd
@@ -15,7 +15,7 @@ mod: autoZoom wordt uitgeschakels als de kiaart met de hand wordt bewogen
 mod: maximale zoom level bij autoZoom op 17 ingesteld
 mod: close knoppen in de menu's, menu's iets meer gecomprimeerd
 
-Version 3.1.7 - released on December 26, 2023
+Version 3.1.7 - released on December 25, 2023
 Feature: ook speed toegevoegd aan web transfer info
 Feature: appicon wordt nu van de server gehaald via een fetch (/get?req=appiconurl&event=<event>,
 waarbij de event parameter optioneel mag zijn) in plaats van rechtstreeks (resulteerde in een 404
@@ -112,6 +112,3 @@ Version 3.0.0
 - using the flutter_maps package instead of google maps
 - new look and feel with semitransparent appbar
 - working as web also
-  */
-
-

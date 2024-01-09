@@ -10,6 +10,8 @@
 .svn/
 migrate_working_dir/
 release/
+variants/
+build-variant.ps1
 
 # IntelliJ related
 *.iml
