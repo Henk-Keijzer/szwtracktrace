@@ -4,7 +4,14 @@ Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen
 
 ----------------------------------------------------------------------------------------------------
 
-Version 3.1.8
+Version 3.1.9
+feature: Added allowshowspeed option on a per event basis (event.json), default is true. If false,
+it hides the checkbox in the mapmenu and does not show speeds next to the ships on the map (label,
+tooltip and infowindow)
+modification: Als kIsWeb server is '/' ipv volledige url. Heeft als mogelijkheid om de site vanuit
+een andere URL door te linken, zonder CORS issues
+
+Version 3.1.8 released on January 13, 2024
 bugfix: af en toe range error bij replay tijdens een live wedstrijd
 feature: cancel button op eventmenu
 mod: stop replay van embedded bij overgang naar open in new tab

@@ -22,6 +22,18 @@ if ($variant -eq 'szw') {
 } elseif ($variant -eq 'sv') {
     $appname = 'Sportvolgen TT'
     $appbundle = 'nl.sportvolgen.svtracktrace'
+} elseif ($variant -eq 'sr') {
+    $appname = 'Sportvolgen Sloeproeien'
+    $appbundle = 'nl.sportvolgen.srtracktrace'
+} elseif ($variant -eq 'cr') {
+    $appname = 'Sportvolgen coastal roeien'
+    $appbundle = 'nl.sportvolgen.crtracktrace'
+} elseif ($variant -eq 'mr') {
+    $appname = 'Sportvolgen marathon roeien'
+    $appbundle = 'nl.sportvolgen.mrtracktrace'
+} elseif ($variant -eq 'pgr') {
+    $appname = 'Sportvolgen pilot gig roeien'
+    $appbundle = 'nl.sportvolgen.pgrtracktrace'
 } elseif ($variant -eq 'oly') {
     $appname = 'Olympia Charters TT'
     $appbundle = 'nl.olympiacharters.olytracktrace'
