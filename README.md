@@ -8,12 +8,15 @@ Version 3.1.9
 feature: Added allowshowspeed option on a per event basis (event.json), default is true. If false,
 it hides the checkbox in the mapmenu and does not show speeds next to the ships on the map (label,
 tooltip and infowindow)
-modification: Als kIsWeb server is '/' ipv volledige url. Heeft als mogelijkheid om de site vanuit
+mod: Als kIsWeb server is '/' ipv volledige url. Heeft als mogelijkheid om de site vanuit
 een andere URL door te linken, zonder CORS issues
+feature: zoom+/- knoppen op de verticale buttonbar toegeoegd
+mod: defaultconfig en defaulmaptileprovider opgenomen in aparte dart biles (in lib)
+mod: display update bij live hfupdte van 1 sec naar 200 ms
 
 Version 3.1.8 released on January 13, 2024
 bugfix: af en toe range error bij replay tijdens een live wedstrijd
-feature: cancel button op eventmenu
+feature: cancel buttons op alle menus
 mod: stop replay van embedded bij overgang naar open in new tab
 mod: variants for szw en sv
 mod: Verticale buttonbar maakt meer ruimte voor de titel van het evenement

@@ -11,7 +11,7 @@ const RESOURCES = {"assets/AssetManifest.bin": "012109a7b7871831a83f50eba98cacd7
 "assets/assets/images/googleplaystoreicon.png": "adeb7cf1a78261334cecd645e53c901f",
 "assets/assets/images/windy-logo-full.png": "fb21d8404e81e1726592a915b879e2d9",
 "assets/FontManifest.json": "dc3d03800ccca4601324923c0b1d6d57",
-"assets/fonts/MaterialIcons-Regular.otf": "d94de8340b69d6b891a2c5e3d4bacfca",
+"assets/fonts/MaterialIcons-Regular.otf": "d29805114e1bc67dee7aff850102d435",
 "assets/NOTICES": "c34bd01e891539eda30a195741c7af49",
 "assets/packages/cupertino_icons/assets/CupertinoIcons.ttf": "89ed8f4e49bcdfc0b5bfc9b24591e347",
 "assets/packages/flutter_map/lib/assets/flutter_map_logo.png": "208d63cc917af9713fc9572bd5c09362",
@@ -29,9 +29,9 @@ const RESOURCES = {"assets/AssetManifest.bin": "012109a7b7871831a83f50eba98cacd7
 "icons/Icon-512.png": "7f9701bca0ff5971f9abbcde7b8905bf",
 "icons/Icon-maskable-192.png": "6d35da39f571b963705cf26965c5dfc5",
 "icons/Icon-maskable-512.png": "7f9701bca0ff5971f9abbcde7b8905bf",
-"index.html": "d080adac883519041a6b9ac824432ad5",
-"/": "d080adac883519041a6b9ac824432ad5",
-"main.dart.js": "fe6e7c6d86b545068cec5eab91be3c39",
+"index.html": "6fcfd01caafdaad667827106160ad4a7",
+"/": "6fcfd01caafdaad667827106160ad4a7",
+"main.dart.js": "07627b99e56130f0b645718f93c27473",
 "manifest.json": "19d0cb884fd126298a9eeaf1fdaf08f1",
 "version.json": "710f483017cb76c5cefe8ec8a74b72f0"};
 // The application shell files that are downloaded before a service worker can
