@@ -23,7 +23,7 @@ if ($variant -eq 'szw') {
     $appname = 'Sportvolgen TT'
     $appbundle = 'nl.sportvolgen.svtracktrace'
 } elseif ($variant -eq 'sr') {
-    $appname = 'Sportvolgen Sloeproeien'
+    $appname = 'Sportvolgen sloeproeien'
     $appbundle = 'nl.sportvolgen.srtracktrace'
 } elseif ($variant -eq 'cr') {
     $appname = 'Sportvolgen coastal roeien'
@@ -34,7 +34,7 @@ if ($variant -eq 'szw') {
 } elseif ($variant -eq 'pgr') {
     $appname = 'Sportvolgen pilot gig roeien'
     $appbundle = 'nl.sportvolgen.pgrtracktrace'
-} elseif ($variant -eq 'oly') {
+} elseif ($variant -eq 'olympia') {
     $appname = 'Olympia Charters TT'
     $appbundle = 'nl.olympiacharters.olytracktrace'
 } else {
@@ -92,5 +92,5 @@ Write-Host "|"
 Write-Host "| For building variant $variant for iOS and macOS:"
 Write-Host "| 0. (do not re-run this script for another variant...)"
 Write-Host "| 1. commit the Project as it is now to GitHub, branch master"
-Write-Host "| 2. goto www.CodeMagic.io and build the iOS app and macOS package for $variant"
+Write-Host "| 2. goto https://www.CodeMagic.io and build the iOS app and macOS package for $variant"
 Write-Host "+-------------------------------------------------------------------------------------------------------------------"

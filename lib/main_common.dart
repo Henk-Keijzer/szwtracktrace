@@ -21,7 +21,6 @@ import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_ti
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fullscreen_window/fullscreen_window.dart';
 import 'package:http/http.dart' as http;
-
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:latlong2/latlong.dart';
