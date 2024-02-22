@@ -4,14 +4,19 @@ Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen
 
 ----------------------------------------------------------------------------------------------------
 
-Version 3.1.9
+Version 3.2.0
+feature: Added a windarrow at the top-left of the screen, representing the weighted wind speed
+and wind direction of the <nrStations> nearest Buienradar windstations at the center of the screen.
+feature: Added the lostsignalindicator to the shipnames in the menu and added some explanation.
+
+Version 3.1.9 released on February 14, 2024
 feature: Added allowshowspeed option on a per event basis (event.json), default is true. If false,
 it hides the checkbox in the mapmenu and does not show speeds next to the ships on the map (label,
 tooltip and infowindow)
 mod: Als kIsWeb server is '/' ipv volledige url. Heeft als mogelijkheid om de site vanuit
 een andere URL door te linken, zonder CORS issues
 feature: zoom+/- knoppen op de verticale buttonbar toegeoegd
-mod: defaultconfig en defaulmaptileprovider opgenomen in aparte dart biles (in lib)
+mod: defaultconfig en defaulmaptileprovider opgenomen in aparte dart files (in lib)
 mod: display update bij live hfupdte van 1 sec naar 200 ms
 
 Version 3.1.8 released on January 13, 2024

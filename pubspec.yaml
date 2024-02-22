@@ -56,6 +56,8 @@ dependencies:
   crypto: ^3.0.3
   flutter_launcher_icons: ^0.13.1
   pointycastle: ^3.7.4
+  collection: ^1.18.0
+  desktop_window: ^0.4.0
 
 dev_dependencies:
   flutter_test:

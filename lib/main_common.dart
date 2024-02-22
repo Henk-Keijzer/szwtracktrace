@@ -12,6 +12,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:auto_size_text/auto_size_text.dart';
+import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -21,8 +22,8 @@ import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_ti
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fullscreen_window/fullscreen_window.dart';
 import 'package:http/http.dart' as http;
-import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -50,77 +51,13 @@ final kIsWebOnAndroid = kIsWeb && (defaultTargetPlatform == TargetPlatform.andro
 //
 String phoneId = "";
 //
-// (default) Colors (are overruled by colors in config/flutter_config.json
-Color? menuBackgroundColor = Colors.red[700];
-Color menuForegroundColor = Colors.white70;
+// Colors (menu colors are overruled by colors in config/flutter_config.json
+Color menuBackgroundColor =
+    const Color(0xffd32f2f); // Colors.red[700]   setting it as a hex value means we don't need a null check in the code
+Color menuForegroundColor = const Color(0xb3ffffff); // Colors.white70;
 //
-const String hexBlack = '#000000';
+const String hexBlack = '#000000'; // marker and label outline colors depending on background black or white
 const String hexWhite = '#ffffff';
-//
-// vars for getting physical device info and the phoneId
-late MediaQueryData queryData; // needed for getting the screen width and height
-double menuOffset = 0; // used to calculate the offset of the menutext from the top of the screen
-int screenWidth = 0;
-int screenHeight = 0;
-//
-// variables for the flutter_map
-final mapController = MapController();
-const initialMapPosition = LatLng(52.5, 5.0);
-const double initialMapZoom = 9;
-//
-// vars for the selection of the event
-late SharedPreferences prefs; // local data storage
-Map<String, dynamic> dirList = {}; // see get-dirlist.php on the server
-Map<String, dynamic> eventInfo = {}; // see get-eventinfo.php on the server
-List<String> eventList = [];
-List<String> eventYearList = [];
-List<String> eventDayList = [];
-String eventDomain = '';
-String eventId = '';
-String eventName = 'Kies een evenement';
-String eventYear = '';
-String eventDay = '';
-//
-// eventinfo (related) variables
-int eventStart = 0; // evenInfo['eventstartstamp']
-int eventEnd = 0; // eventInfo['eventendstamp']
-int sliderEnd = 0;
-int maxReplay = 0; // eventInfo['maxreplay'] in hours
-// = sets eventbegin xx hours before current time to limit the replay for continuous events (Olympia-charters)
-bool allowShowSpeed = true; // eventInfo['allowshowspeed']
-bool hfUpdate = false; // eventInfo['hfupdate']. If 'true', positions are predicted every second during live
-bool allowShowWind = true; // eventInfo['buienradar'] If false, never show wind
-int trailsUpdateInterval = 60; // eventInfo['trailsupdateinterval'], in seconds between two subsequent get-trails requests from the db
-int eventTrailLength = 30; // eventInfo['traillength']
-int actualTrailLength = 30;
-String socialMediaUrl = ''; // eventInfo['mediaframe']
-
-//
-enum EventStatus { initial, preEvent, live, replay }
-
-EventStatus eventStatus = EventStatus.initial;
-//
-// vars for the tracks and the markers
-Map<String, dynamic> replayTracks = {}; // see get-replay.php on the server
-Map<String, dynamic> liveTrails = {}; // see get-trails.php on the server
-Map<String, dynamic> route = {}; // geoJSON structure with the route
-//
-// extract from the live/replaytracks above to make addressing the info a bit simplet
-List<String> shipList = []; // list with ship names
-List<Color> shipColors = []; // corresponding list of ship colors
-List<String> shipColorsSvg = []; //same list but as a svg string
-//
-// lists for markers and polylines, created in moveShipsTo and moveWindTo
-List<Marker> shipMarkerList = [];
-List<Marker> shipLabelList = [];
-List<Polyline> shipTrailList = [];
-List<Marker> gpsBuoyMarkerList = [];
-List<Marker> gpsBuoyLabelList = [];
-List<Marker> windMarkerList = [];
-List<Marker> routeMarkerList = [];
-List<Polyline> routeLineList = [];
-List<Marker> routeLabelList = [];
-List<Marker> infoWindowMarkerList = [];
 //
 const List shipMarkerColorTable = [
   0xFF696969,
@@ -157,6 +94,74 @@ const List shipMarkerColorTable = [
   0xFFffc0cb
 ];
 //
+// vars for getting physical device info and the phoneId
+late MediaQueryData queryData; // needed for getting the screen width and height
+int screenWidth = 0;
+int screenHeight = 0;
+double menuOffset = 0; // used to calculate the offset of the menutext from the top of the screen
+//
+// variables for the flutter_map
+final mapController = MapController();
+const initialMapPosition = LatLng(52.5, 5.0);
+const double initialMapZoom = 9;
+//
+// vars for the selection of the event
+late SharedPreferences prefs; // local data storage
+Map<String, dynamic> dirList = {}; // see get-dirlist.php on the server
+Map<String, dynamic> eventInfo = {}; // see get-eventinfo.php on the server
+List<String> eventNameList = [];
+List<String> eventYearList = [];
+List<String> eventDayList = [];
+String eventDomain = '';
+String eventId = '';
+String eventName = 'Kies een evenement';
+String eventYear = '';
+String eventDay = '';
+//
+// eventinfo (related) variables
+int eventStart = 0; // evenInfo['eventstartstamp']
+int eventEnd = 0; // eventInfo['eventendstamp']
+int sliderEnd = 0; // end of the time slider, during live it is the current time, during replay it is eventend
+int maxReplay = 0; // eventInfo['maxreplay'] in hours
+// sets eventbegin xx hours before current time to limit the replay for continuous events (Olympia-charters, _TTTEST)
+bool allowShowSpeed = true; // eventInfo['allowshowspeed']
+bool hfUpdate = false; // eventInfo['hfupdate']. If 'true', positions are predicted every second during live
+bool allowShowWind = true; // eventInfo['buienradar'] If false, never show wind
+int trailsUpdateInterval = 60; // eventInfo['trailsupdateinterval'], in seconds between two subsequent get-trails requests from the db
+int eventTrailLength = 30; // eventInfo['traillength']
+int actualTrailLength = 30;
+String socialMediaUrl = ''; // eventInfo['mediaframe']
+
+//
+enum EventStatus { initial, preEvent, live, replay }
+
+EventStatus eventStatus = EventStatus.initial;
+//
+// vars for the tracks and the markers
+Map<String, dynamic> replayTracks = {}; // see get-replay.php on the server
+Map<String, dynamic> liveTrails = {}; // see get-trails.php on the server
+Map<String, dynamic> route = {}; // geoJSON structure with the route
+//
+// extract from the live/replaytracks above to make addressing the info a bit simpler
+List<String> shipList = []; // list with ship names
+List<String> shipLostSignalIndicators = [];
+List<Color> shipColors = []; // corresponding list of ship colors
+List<String> shipColorsSvg = []; //same list but as an svg string
+//
+// lists for markers and polylines, created in moveShipsTo, updateGpsBuoys and moveWindTo
+List<Marker> shipMarkerList = [];
+List<Marker> shipLabelList = [];
+List<Polyline> shipTrailList = [];
+List<Marker> gpsBuoyMarkerList = [];
+List<Marker> gpsBuoyLabelList = [];
+List<Marker> windMarkerList = [];
+List<Marker> routeMarkerList = [];
+List<Marker> routeLabelList = [];
+List<Polyline> routeLineList = [];
+List<Marker> infoWindowMarkerList = []; // although there is max 1 infowindow, we have a list to make it easy to add it to the other markers
+String infoWindowId = '';
+const nrWindStationsForCenterWindCalculation = 3;
+//
 // variables used for following ships and zooming
 Map<String, bool> following = {}; // list of shipnames to be followed
 bool followAll = true;
@@ -164,7 +169,7 @@ bool autoZoom = true;
 bool autoFollow = true;
 bool hideFloatingActionButtons = false;
 //
-// vars for the movement of ships and wind markers in time
+// vars and constants for the movement of ships and wind markers in time
 const speedIndexInitialValue = 4.0;
 double speedIndex = speedIndexInitialValue; // index in the following table en position of the speed slider, default = 3 min/sec
 const List<int> speedTable = [0, 1, 10, 30, 60, 180, 300, 900, 1800, 3600];
@@ -181,7 +186,7 @@ const List speedTextTable = [
   "1 uur/sec"
 ];
 List<int> shipTimeIndex = []; // for each ship the time position in its list of stamps
-List<int> gpsBuoyTimeIndex = [];
+List<int> gpsBuoyTimeIndex = []; // for each gps buoy the time position in its list of stamps
 List<int> windTimeIndex = []; // for each weather station the time position in the list of stamps
 //
 // timers and live/replay related vars
@@ -192,14 +197,15 @@ int liveSecondsTimer = 60;
 int currentReplayTime = 0;
 bool replayRunning = false;
 bool replayPause = false;
-const int replayUpdatesPerSecond = 15;
-const int replayRate = 1000 ~/ replayUpdatesPerSecond;
+int replayUpdatesPerSecond = 15; // set to 15 frames per second, gives acceptable smoothness of movement of the ships
+int replayRate = 1000 ~/ replayUpdatesPerSecond;
 bool replayLoop = false;
 //
 // UI messages in the EventSelection menu
 String selectionMessage = '';
 String eventTitle = "Kies een evenement";
 //
+// what are we to show?
 bool showEventMenu = false;
 bool showMapMenu = false;
 bool showShipMenu = false;
@@ -209,13 +215,14 @@ bool showAttribution = false;
 bool showProgress = false;
 bool cookieConsentGiven = false;
 bool fullScreen = false;
+//
 String infoPageHTML = ''; // HTML text for the info page from {server}/config/app-info-page.html
 //
 bool testing = false; // double tap the title of the app to set to true.
 //                    // Will cause the underscored events to be in the dirList
 //
 // map related vars
-// initial mapTileProviderData is imported from default_maptileproviders.dart
+// initial baseMapTileProviders is imported from default_maptileproviders.dart
 String selectedMapType = baseMapTileProviders.keys.toList()[0];
 String markerBackgroundColor = baseMapTileProviders[selectedMapType]['bgColor'];
 String labelBackgroundColor = markerBackgroundColor == hexBlack ? hexWhite : hexBlack;
@@ -225,12 +232,12 @@ bool mapOverlay = false;
 Map<String, dynamic> labelTileProviders = {};
 String labelOverlayType = '';
 //
-// Style for vector type maps (we do not support vector tiles yet as the vector_map_tiles package does not nsupport web yet)
+// Style for vector type maps (we do not support vector tiles yet as the vector_map_tiles package does not nsupport web (yet))
 Style? baseMapStyle; // a vector base map
 Style? overlayMapStyle; // a vector overlay map
 Style? labelMapStyle; // a vector label overlay for satellite type base maps
 //
-// default values for some booleans
+// default values for some booleans, selectable from the mapmenu and the appbar
 bool showWindMarkers = true;
 bool showRoute = true;
 bool showRouteLabels = false;
@@ -242,9 +249,6 @@ bool showMenuButtonBar = true;
 String shipInfoHTML = ''; // HTML from {server}/get?req=shipinfo&event=...&ship=...
 Offset shipInfoPosition = const Offset(0, 0);
 Offset shipInfoPositionAtDragStart = const Offset(0, 0);
-//
-// the Id of the markerInfoWindow, rout/wind/ship+xxx, or blank
-String infoWindowId = '';
 //
 // used to create/retrieve query parameterd when we press fullscreen on an <iframed>> web page
 String queryPlayString = '::';
@@ -265,7 +269,7 @@ DateFormat dtsFormat = DateFormat("d MMM y, HH:mm:ss", 'nl');
 void mainCommon({required String serverUrl}) async {
   WidgetsFlutterBinding.ensureInitialized();
   server = (kIsWeb) ? '/' : serverUrl; // defined in main.dart
-  // on web use the site's server name as default. This allows for redirection sv.zeilvaartwarmond.nl -> replay.sportvolgen.nl
+  // Using a simple '/' on web allows for redirection, for eaxample sv.zeilvaartwarmond.nl -> replay.sportvolgen.nl
   packageInfo = await PackageInfo.fromPlatform(); // who and where are we
   prefs = await SharedPreferences.getInstance(); // get access to local storage
   await initializeDateFormatting(); // initialize date formatting
@@ -278,13 +282,11 @@ void mainCommon({required String serverUrl}) async {
     prefs.setString('appversion', packageInfo.buildNumber); // and set the new appversion
   }
   //
-  // ----- PHONE ID
+  // ----- PHONE (DEVICE) ID
   // See if we already have a phone id, if not, create one and save it in local storage
-  phoneId = prefs.getString('phoneid') ?? '';
-  if (phoneId == '') {
-    phoneId = const Uuid().v1(); // generate a new phoneID
-    prefs.setString('phoneid', phoneId); // and save it
-  }
+  phoneId = prefs.getString('phoneid') ?? const Uuid().v1();
+  prefs.setString('phoneid', phoneId); // and save it (even if it did not change
+  //
   // add a platform prefix and the appversion in front of the phoneid
   // this phoneId is used in all communication with the server for statistical purposes
   String prefix = kIsWeb
@@ -300,7 +302,7 @@ void mainCommon({required String serverUrl}) async {
   phoneId = '$prefix${packageInfo.buildNumber}-$phoneId'; // use the saved phoneId with a platform/buildnumber prefix
   //
   // ----- CONFIG
-  // get the flutter app config items from the flutter_config.json file on the server config folder
+  // get the flutter app config items from the flutter_config.json file on the server /config folder
   // note that we get the config file through /get/index.php to record statistics on the number of times the app is started
   // the contents is merged with the default config in default_config.dart (but this only works for the first level...)
   var response = await http.get(Uri.parse('${server}get/?req=config&dev=$phoneId'));
@@ -312,6 +314,8 @@ void mainCommon({required String serverUrl}) async {
   // ----- APPICON URL
   response = await http.get(Uri.parse('${server}get?req=appiconurl&dev=$phoneId'));
   // the response contains the full servername, but we only want the relative path, remove the server name using this trick
+  // (replace the first slash after character position 8 with a vertical bar, split the string at the vertical bar and use the last part)
+  // if we did not receive an app icon url, we point to the server location with the defaultAppIcon (assuming there is a webapp there)
   appIconUrl =
       (response.statusCode == 200) ? response.body.replaceFirst('/', '|', 8).split('|').last : 'assets/assets/images/defaultAppIcon.png';
   //
@@ -340,7 +344,7 @@ void mainCommon({required String serverUrl}) async {
   if (kIsWeb && Uri.base.queryParameters.containsKey('map')) {
     selectedMapType = Uri.base.queryParameters['map'].toString(); //get parameter with attribute "map"
   }
-  // see if the map we want is in our list of maps, if not, set maptype to first maptype
+  // see if the map from the previous session or the query string is in our list of maps, if not, set maptype to first maptype
   if (!baseMapTileProviders.keys.toList().contains(selectedMapType)) {
     selectedMapType = baseMapTileProviders.keys.toList().first;
   }
@@ -354,7 +358,7 @@ void mainCommon({required String serverUrl}) async {
   //  }
   //
   // ----- MAP OVERLAY
-  // now the same for the map overlay and the map overlaytype
+  // now the same for the map overlays and the selected map overlaytype
   mapOverlay = prefs.getBool('mapoverlay') ?? false;
   selectedOverlayType = prefs.getString('overlaytype') ?? '';
   if (kIsWeb && Uri.base.queryParameters.containsKey('overlay')) {
@@ -402,7 +406,7 @@ void mainCommon({required String serverUrl}) async {
     // a[0] true/false, is the event playing yes/no
     // a[1] the currentreplaytime, and
     // a[2] the replayspeed
-    // adding two colons ensures a[1|2] ar never null
+    // adding two colons ensures a[1|2] are never null
     // handling this info will be done in startLive or startReplay
   }
   //
@@ -465,7 +469,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           liveSecondsTimer = 1;
           liveTimer = Timer.periodic(const Duration(milliseconds: 200), (_) => liveTimerRoutine());
         }
-        if (replayRunning) replayTimer = Timer.periodic(const Duration(milliseconds: replayRate), (_) => replayTimerRoutine());
+        if (replayRunning) replayTimer = Timer.periodic(Duration(milliseconds: replayRate), (_) => replayTimerRoutine());
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.hidden:
@@ -487,9 +491,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   //
   @override
   build(BuildContext context) {
-    // define the appbar here as a seperate widget, so that we can use it's height when positioning the menu's
+    //
+    // first define the appbar as a seperate widget, so that we can use it's height when positioning the menu's below the appbar
     AppBar myAppBar = AppBar(
-      backgroundColor: menuBackgroundColor?.withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu) ? 1 : 0.5),
+      backgroundColor: menuBackgroundColor.withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu) ? 1 : 0.5),
       foregroundColor: menuForegroundColor,
       elevation: 0,
       toolbarHeight: 50,
@@ -500,7 +505,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
               onDoubleTap: () async {
                 testing = !testing;
                 dirList = await getDirList();
-                eventList = dirList.keys.toList()..sort;
+                eventNameList = dirList.keys.toList()..sort;
                 eventYearList = [];
                 eventDayList = [];
               },
@@ -522,6 +527,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 // document.referrer != '' means we are runnig in an iframe
                 fullScreen = !fullScreen;
                 fullScreen ? document.documentElement?.requestFullscreen() : document.exitFullscreen();
+                if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
+                  // give the ui some time to settle and redraw the markers (especially the centerwind arrow and it's infowindow)
+                  Timer(const Duration(milliseconds: 500), () => setState(() => rotateWindTo(currentReplayTime)));
+                }
               } else {
                 launchUrl(Uri.parse('https://${window.location.hostname}?event=$eventDomain&map=$selectedMapType'
                     '&overlay=${mapOverlay ? 'true' : 'false'}:$selectedOverlayType'
@@ -536,10 +545,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
           IconButton(
             // button for fullscreen on Windows or macOS app
             tooltip: fullScreen ? 'exit fullscreen' : 'fullscreen',
-            onPressed: () => setState(() {
+            onPressed: () {
               fullScreen = !fullScreen;
-              fullScreen ? FullScreenWindow.setFullScreen(true) : FullScreenWindow.setFullScreen(false);
-            }),
+              FullScreenWindow.setFullScreen(fullScreen);
+              if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
+                // give the ui some time to settle and redraw the markers (especially the centerwind arrow and it's infowindow)
+                Timer(const Duration(milliseconds: 500), () => setState(() => rotateWindTo(currentReplayTime)));
+              }
+            },
             icon: fullScreen ? Icon(Icons.fullscreen_exit, color: menuForegroundColor) : Icon(Icons.fullscreen, color: menuForegroundColor),
           ),
         // button to open/close the menubuttobar
@@ -551,7 +564,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
             icon: showMenuButtonBar ? const Icon(Icons.expand_less) : const Icon(Icons.menu)),
       ],
     );
-    // Return the UI as a MaterialApp with title, theme and a home (with a Scaffold)
+    //
+    // Now return the UI as a MaterialApp with title, theme and a home (with a Scaffold)
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: eventTitle,
@@ -565,8 +579,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         screenWidth = MediaQuery.of(context).size.width.toInt();
         screenHeight = MediaQuery.of(context).size.height.toInt();
         menuOffset = MediaQuery.of(context).viewPadding.top + myAppBar.preferredSize.height;
-        // menuOffset is the heigth of the appBar + the notification area above the appbar on mobile
-        // we need to calcualte this because we extend the map behind the appBar and the notification area
+        // menuOffset is the heigth of the appBar + the notification area above the appbar on mobile devices
+        // we need to calcualte this because we extend the map behind the appBar and the notification area (viewpadding.top)
         // On Windows and web the height of the notification area = 0
         return Scaffold(
           extendBodyBehindAppBar: true,
@@ -600,13 +614,23 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       mapController: mapController,
       options: MapOptions(
           onMapReady: onMapCreated,
+          // when the map is ready, the onMapCreated routine starts the rest of the initialization
           initialCenter: initialMapPosition,
           initialZoom: initialMapZoom,
           maxZoom: baseMapTileProviders[selectedMapType]['maxZoom'],
           backgroundColor: Colors.blueGrey,
           interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
           onPositionChanged: (_, gesture) {
-            if (gesture) setState(() => autoZoom = showEventMenu = showInfoPage = showMapMenu = showShipMenu = false);
+            // only do this when the map position or zoom changed due to human interaction (gesture == true)
+            if (gesture) {
+              setState(() {
+                // stop autozoom, close all menu's and update the wind markers, in particular the "center wind marker"
+                autoZoom = showEventMenu = showInfoPage = showMapMenu = showShipMenu = false;
+                if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
+                  rotateWindTo(currentReplayTime);
+                }
+              });
+            }
           },
           onTap: (_, __) => setState(() {
                 // on tapping the map: close all popups and menu's, and show the floatingaction buttons again
@@ -731,6 +755,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     );
   }
 
+  //
   // on top of the map the slider area with the two sliders, the actionbuttons and the speed, date/time and live update timers
   Column uiSliderArea() {
     Color textColor = (markerBackgroundColor == hexBlack) ? Colors.black : Colors.white;
@@ -899,7 +924,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         Transform.scale(
             scale: 0.8,
             child: Switch(
-                activeTrackColor: menuBackgroundColor?.withOpacity(0.5),
+                activeTrackColor: menuBackgroundColor.withOpacity(0.5),
                 inactiveTrackColor: menuForegroundColor.withOpacity(0.5),
                 trackOutlineWidth: const MaterialStatePropertyAll(0.0),
                 thumbIcon: autoZoom ? const MaterialStatePropertyAll(Icon(Icons.check)) : null,
@@ -916,7 +941,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       Transform.scale(
         scale: 0.8,
         child: Switch(
-          activeTrackColor: menuBackgroundColor?.withOpacity(0.5),
+          activeTrackColor: menuBackgroundColor.withOpacity(0.5),
           inactiveTrackColor: menuForegroundColor.withOpacity(0.5),
           trackOutlineWidth: const MaterialStatePropertyAll(0.0),
           thumbIcon: autoFollow ? const MaterialStatePropertyAll(Icon(Icons.check)) : null,
@@ -942,7 +967,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         SizedBox(height: menuOffset),
         Container(
             width: 40,
-            color: menuBackgroundColor?.withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu) ? 1 : 0.5),
+            color: menuBackgroundColor.withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu) ? 1 : 0.5),
             child: Column(children: [
               IconButton(
                 // button for the shipList
@@ -993,12 +1018,18 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   onPressed: () => setState(() {
                         mapController.move(mapController.camera.center, mapController.camera.zoom + 0.5);
                         autoZoom = false;
+                        if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
+                          setState(() => rotateWindTo(currentReplayTime));
+                        }
                       }),
                   icon: Icon(Icons.add_box, color: menuForegroundColor)),
               IconButton(
                   onPressed: () => setState(() {
                         mapController.move(mapController.camera.center, mapController.camera.zoom - 0.5);
                         autoZoom = false;
+                        if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
+                          setState(() => rotateWindTo(currentReplayTime));
+                        }
                       }),
                   icon: Icon(Icons.indeterminate_check_box, color: menuForegroundColor)),
             ])),
@@ -1029,7 +1060,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                       key: dropEventKey,
                       offset: const Offset(15, 35),
                       itemBuilder: (BuildContext context) {
-                        return eventList.map((events) {
+                        return eventNameList.map((events) {
                           return PopupMenuItem(height: 30.0, value: events, child: Text(events, style: const TextStyle(fontSize: 15)));
                         }).toList();
                       },
@@ -1187,7 +1218,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                               child: Padding(
                                   padding: const EdgeInsets.fromLTRB(5, 0, 5, 0),
                                   child: InkWell(
-                                    child: Text(shipList[index]),
+                                    child: Text('${shipList[index]}${shipLostSignalIndicators[index]}'),
                                     onTap: () => loadAndShowShipDetails(index),
                                   )),
                             ),
@@ -1204,6 +1235,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                           ]);
                         },
                       ),
+                      Divider(color: menuForegroundColor),
+                      const Text("' achter de naam geeft aan dat de laatst doorgegeven positie ouder is dan 3 minuten"),
                       Divider(color: menuForegroundColor),
                       InkWell(
                           child: Text('Het spoor achter de ${config['text']['participants']} is $actualTrailLength minuten'),
@@ -1401,7 +1434,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                             Checkbox(
                                 visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                 activeColor: menuForegroundColor,
-                                checkColor: showRoute ? menuBackgroundColor : menuBackgroundColor?.withOpacity(0.5),
+                                checkColor: showRoute ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
                                 side: BorderSide(color: menuForegroundColor),
                                 value: showRouteLabels,
                                 onChanged: (value) => setState(() {
@@ -1450,7 +1483,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                               Checkbox(
                                   visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                   activeColor: menuForegroundColor,
-                                  checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor?.withOpacity(0.5),
+                                  checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
                                   side: BorderSide(color: menuForegroundColor),
                                   value: showShipSpeeds,
                                   onChanged: (value) => setState(() {
@@ -1644,7 +1677,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   void onMapCreated() async {
     // Get the list of events ready for selection
     dirList = await getDirList();
-    eventList = dirList.keys.toList()..sort();
+    eventNameList = dirList.keys.toList()..sort();
     eventYearList = [];
     eventDayList = [];
     //
@@ -1889,13 +1922,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (queryPlayString != '::') {
       var a = queryPlayString.split(':');
       queryPlayString = '::'; // set the string to 'empty' in case the user lateron selects an other event manually
-      if (a[2] != '' && a[2] != '0') speedIndex = double.parse(a[2]);
       if (a[1] != '' && a[1] != '0') currentReplayTime = int.parse(a[1]);
+      if (a[2] != '' && a[2] != '0') speedIndex = double.parse(a[2]);
       if (a[0] == 'true') startStopRunning();
     }
     autoFollow = true;
-    autoZoom = false;
+    autoZoom = true; // zoom to all ships at the start
     moveShipsBuoysAndWindTo(currentReplayTime);
+    autoZoom = false; // but turn of autozoom when running
     liveSecondsTimer = trailsUpdateInterval;
     liveTimer = Timer.periodic(const Duration(milliseconds: 200), (_) => liveTimerRoutine());
     setState(() {}); // redraw the UI
@@ -1982,14 +2016,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     if (queryPlayString != '::') {
       var a = queryPlayString.split(':');
       queryPlayString = '::'; // only use these values when we get here for the first time
-      if (a[2] != '' && a[2] != '0') speedIndex = double.parse(a[2]);
       if (a[1] != '' && a[1] != '0') currentReplayTime = int.parse(a[1]);
+      if (a[2] != '' && a[2] != '0') speedIndex = double.parse(a[2]);
       if (a[0] == 'true') startStopRunning();
     }
-    moveShipsBuoysAndWindTo(currentReplayTime, move: false);
     showRoute = true;
     if (shipList.isEmpty) showRouteLabels = true;
     if (route['features'] != null) buildRoute(move: true); // and move the map to the bounds of the route
+    moveShipsBuoysAndWindTo(currentReplayTime, move: false);
     setState(() {}); // redraw the UI
     Timer(const Duration(seconds: 2), () => setState(() => showEventMenu = showProgress = false));
   }
@@ -2050,7 +2084,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         currentReplayTime = eventStart;
       }
       if (replayRunning) {
-        replayTimer = Timer.periodic(const Duration(milliseconds: replayRate), (_) => replayTimerRoutine());
+        replayTimer = Timer.periodic(Duration(milliseconds: replayRate), (_) => replayTimerRoutine());
       } else {
         replayTimer.cancel();
       }
@@ -2109,7 +2143,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         // we are somewhere between two stamps
         // travel along the track from the previous index back or forth to find out where we are
         timeIndex = shipTimeIndex[i]; // get the timeindex of this ship from a previous run
-        var stamps = ship['stamp']; // make a ref to the lst of stamps, in an effort to speedup the search
+        var stamps = ship['stamp']; // make a ref to the list of stamps, in an effort to speedup the search
         if (time > stamps[timeIndex]) {
           // move forward in the track
           while (stamps[timeIndex] < time) {
@@ -2122,10 +2156,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
             timeIndex--;
           }
         }
-        // calculate the ratio of time since previous stamp and next stamp
+        // we are in between stamps, calculate the ratio of time since last stamp and next stamp
         double ratio = (time - ship['stamp'][timeIndex]) / (ship['stamp'][timeIndex + 1] - ship['stamp'][timeIndex]);
-        // and set the ship position and rotation at that ratio between previous and next position/rotation
-        // Formally we should do this along a circle around the earth, but the distances are so small that a simple calculation is ok
+        // and set the ship position and rotation at that ratio between last and next positions/rotations
+        // Formally we should do this along a circle around the earth, but the distances are so small that a simple linear extrapolation is ok
         calculatedPosition = LatLng(
             Tween(begin: ship['lat'][timeIndex] as double, end: ship['lat'][timeIndex + 1] as double).transform(ratio),
             Tween(begin: ship['lon'][timeIndex] as double, end: ship['lon'][timeIndex + 1] as double).transform(ratio));
@@ -2151,25 +2185,23 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       var speedString = '${((ship['speed'][timeIndex] / 10) / 1.852).toStringAsFixed(1)}kn ('
           '${(ship['speed'][timeIndex] / 10).toStringAsFixed(1)}km/h)';
       // make a new infowindow text with the name of the ship, the lostsignalindicator and the speed
-      String lostSignalIndicator = ((time - ship['stamp'][timeIndex]) > 180000) ? '\u0027' : '';
-      String iwTitle = '${ship['name']}$lostSignalIndicator';
+      shipLostSignalIndicators[i] = ((time - ship['stamp'][timeIndex]) > 180000) ? "'" : '';
+      String iwTitle = '${ship['name']}${shipLostSignalIndicators[i]}';
       String iwText = (allowShowSpeed) ? 'Snelheid: $speedString' : '';
-      iwText += (lostSignalIndicator != '' && eventStatus == EventStatus.live)
+      iwText += (shipLostSignalIndicators[i] != '' && eventStatus == EventStatus.live)
           ? '\nPositie op ${dtFormat.format(DateTime.fromMillisecondsSinceEpoch(ship['stamp'][timeIndex]))}'
           : '';
       // create / replace the ship marker
-      var svgString = '<svg width="22" height="22">'
-          '<polygon points="${config['icons']['boatSVGPath']}" '
+      var svgString = '<svg width="22" height="22"><polygon points="${config['icons']['boatSVGPath']}" '
           'style="fill:${shipColorsSvg[i]};stroke:$markerBackgroundColor;stroke-width:1" '
-          'transform="rotate($calculatedRotation 11,11)" />'
-          '</svg>';
+          'transform="rotate($calculatedRotation 11,11)" /></svg>';
       shipMarkerList.add(
         Marker(
           point: calculatedPosition,
           width: 22,
           height: 22,
           child: Tooltip(
-              message: showShipLabels ? '' : ('${ship['name']}$lostSignalIndicator${showShipSpeeds ? ', $speedString' : ''}'),
+              message: showShipLabels ? '' : ('${ship['name']}${shipLostSignalIndicators[i]}${showShipSpeeds ? ', $speedString' : ''}'),
               child: InkWell(
                   child: SvgPicture.string(svgString),
                   onTap: () => setState(() {
@@ -2186,8 +2218,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       //
       // build the shipLabel
       if (showShipLabels) {
-        // note that the labelforgroundcolor is the markerbackgroundcolor
-        var txt = '${ship['name']}$lostSignalIndicator${((showShipSpeeds) ? ', $speedString' : '')}';
+        // note that the labelforegroundcolor is the markerbackgroundcolor
+        var txt = '${ship['name']}${shipLostSignalIndicators[i]}${((showShipSpeeds) ? ', $speedString' : '')}';
         var svgString = '<svg width="300" height="35">'
             '<text x="0" y="32" fill="$labelBackgroundColor">$txt</text>'
             '<text x="2" y="32" fill="$labelBackgroundColor">$txt</text>'
@@ -2203,7 +2235,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
             child: SvgPicture.string(svgString)));
       }
       //
-      // finally build the shipTrail (note we destroy the timeIndex here...)
+      // build the shipTrail (note we destroy the timeIndex here...)
       List<LatLng> trail = [calculatedPosition];
       while ((timeIndex >= 0) && (ship['stamp'][timeIndex] > (time - actualTrailLength * 60 * 1000))) {
         trail.add(LatLng(ship['lat'][timeIndex].toDouble(), ship['lon'][timeIndex].toDouble()));
@@ -2261,7 +2293,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         }
       }
       gpsBuoyTimeIndex[i] = timeIndex;
-      // add the wind markers
+      // add the buoy markers
       String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="4" '
           'fill="${gpsBuoy['color']}" stroke="$markerBackgroundColor" stroke-width="1"/></svg>';
       LatLng gpsBuoyPosition = LatLng(gpsBuoy['lat'][timeIndex], gpsBuoy['lon'][timeIndex]);
@@ -2280,7 +2312,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                   }),
                 ))),
       );
-      // refresh the infowindow if it was open for this windstation
+      // refresh the infowindow if it was open for this buoy
       if (infoWindowId == 'buoy${gpsBuoy['name']}') {
         infoWindowMarkerList = [createInfoWindowMarker(gpsBuoy['name'], gpsBuoy['description'], '', gpsBuoyPosition)];
       }
@@ -2301,7 +2333,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
             child: SvgPicture.string(svgString)));
       }
     }
-    // no need to refresh the infowindow, because it does not contain changing info for gps buoys
+    // no need to refresh the infowindow, because for gps buoys it does not contain dynamic info
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
@@ -2322,7 +2354,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
         rotation = windStation['course'].last;
       } else {
         // somewhere between two stamps
-        // travel along the track back or forth to find out where we are
+        // travel along the track back or forth to find out where we are, starting from the previously saved timeIndex
         timeIndex = windTimeIndex[i];
         var stamps = windStation['stamp'];
         if (time > stamps[timeIndex]) {
@@ -2341,11 +2373,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
       // add the wind markers
       String iwText = '${windStation['speed'][timeIndex]} knopen, ${knotsToBft(windStation['speed'][timeIndex])} Bft';
       String fillColor = knotsToColor(windStation['speed'][timeIndex]);
-      String svgString = '''<svg width="22" height="22">
-          <polygon points="7,1 11,20 15,1 11,6"
-          style="fill:$fillColor;stroke:$markerBackgroundColor;stroke-width:1" 
-          transform="rotate($rotation 11,11)" />
-          </svg>''';
+      String svgString = '<svg width="22" height="22"><polygon points="7,1 11,20 15,1 11,6" '
+          'style="fill:$fillColor;stroke:$markerBackgroundColor;stroke-width:1" transform="rotate($rotation 11,11)" /></svg>';
       // windstation positions do not change over time, so use the first position of the track
       LatLng windStationPosition = LatLng(windStation['lat'].first.toDouble(), windStation['lon'].first.toDouble());
       windMarkerList.add(
@@ -2358,24 +2387,55 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
                 child: InkWell(
                   child: SvgPicture.string(svgString),
                   onTap: () => setState(() {
-                    infoWindowId = 'wind$windStation';
+                    infoWindowId = 'wind${windStation['name']}';
                     infoWindowMarkerList = [createInfoWindowMarker(windStation['name'], iwText, '', windStationPosition)];
                   }),
                 ))),
       );
       // refresh the infowindow if it was open for this windstation
-      if (infoWindowId == 'wind$windStation') {
+      if (infoWindowId == 'wind${windStation['name']}') {
         infoWindowMarkerList = [createInfoWindowMarker(windStation['name'], iwText, '', windStationPosition)];
+      }
+    }
+    // add a windmarker at the lefthand bottom corner of the screen, representing the average wind speed and direction of
+    // nrWindStationsForCenterWindCalculation in the middle of the screen
+    if (replayTracks['windtracks'].length > nrWindStationsForCenterWindCalculation - 1) {
+      // calculate average windspeed and direction at the middle of the screen
+      ({int dir, double speed}) center = centerWind(nrWindStationsForCenterWindCalculation);
+      String iwTitle = 'Wind midden van het scherm obv nabije weerstations';
+      String iwText = '${center.speed.toStringAsFixed(1)} knopen, ${knotsToBft(center.speed)} Bft';
+      String fillColor = knotsToColor(center.speed);
+      String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="10" '
+          'fill="none" stroke="$markerBackgroundColor" stroke-width="1.2"/><polygon points="7,1 11,20 15,1 11,6" '
+          'style="fill:$fillColor;stroke:$markerBackgroundColor;stroke-width:1" transform="rotate(${center.dir} 11,11)" /></svg>';
+      var arrowPosition = mapController.camera.pointToLatLng(Point(30, menuOffset + 30));
+      var infoWindowPosition = mapController.camera.pointToLatLng(Point(110, menuOffset + 130));
+      windMarkerList.add(
+        Marker(
+            point: arrowPosition,
+            width: 22,
+            height: 22,
+            child: Tooltip(
+                message: iwText,
+                child: InkWell(
+                  child: SvgPicture.string(svgString),
+                  onTap: () => setState(() {
+                    infoWindowId = 'windCenter';
+                    infoWindowMarkerList = [createInfoWindowMarker(iwTitle, iwText, '', infoWindowPosition)];
+                  }),
+                ))),
+      );
+      // refresh the infowindow if it was open for this windstation
+      if (infoWindowId == 'windCenter') {
+        infoWindowMarkerList = [createInfoWindowMarker(iwTitle, iwText, '', infoWindowPosition)];
       }
     }
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
-  // build the route polyline and routemarkers (and move the map to its bounds)
-  // if move = true, move the map to the bounds of the route after creating it
+  // build the route polyline and routemarkers
+  // if move = true, move the map to the bounds of the route after creating it, default = false, do not move
   // the route itself is contained in a .geojson file. We only look at Points and LineSrrings (i.e. no Polygons or other features)
-  // default = false, do not move
-  //
   void buildRoute({bool move = false}) {
     routeLineList = [];
     routeMarkerList = [];
@@ -2574,11 +2634,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   //
   void buildShipInfo() {
     shipList = [];
+    shipLostSignalIndicators = [];
     shipColors = [];
     shipColorsSvg = [];
     for (int i = 0; i < replayTracks['shiptracks'].length; i++) {
       var ship = replayTracks['shiptracks'][i];
       shipList.add(ship['name']); // add the name to the shipList for the shipmenu
+      shipLostSignalIndicators.add('');
       shipColors.add(Color(shipMarkerColorTable[int.parse(ship['colorcode']) % 32])); // and the color code
       shipColorsSvg.add('#${((shipColors[i].value) - 0xFF000000).toRadixString(16).padLeft(6, '0')}');
     }
@@ -2683,7 +2745,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   //----------------------------------------------------------------------------------------------------------------------------------------
   // routines to convert wind knots into Beaufort and SVG colors
   int knotsToBft(speedInKnots) {
-    const List<int> windKnots = [0, 1, 3, 6, 10, 16, 21, 27, 33, 40, 47, 55, 63];
+    const List<int> windKnots = [0, 1, 3, 6, 10, 16, 21, 27, 33, 40, 47, 55, 63, 999];
     return windKnots.indexOf(windKnots.firstWhere((i) => i >= speedInKnots)).toInt();
   }
 
@@ -2696,7 +2758,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
   //----------------------------------------------------------------------------------------------------------------------------------------
   // routine to predict new location based on initial location, speed in km/h, time in milliseconds and course in degrees
   LatLng predictPosition(LatLng initialPosition, double speed, int time, int course) {
-    var rdist = (speed / 3600) * time / 1000 / 6371; // angular distance in radians
+    var rdist = (speed / 3600) * time / earthRadius; // angular distance in radians
     var rcourse = course * pi / 180; // course in radians
     var rlat1 = initialPosition.latitudeInRad; // last known position in radians
     var rlon1 = initialPosition.longitudeInRad;
@@ -2704,5 +2766,54 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver {
     var rlon2 = rlon1 + atan2(sin(rcourse) * sin(rdist) * cos(rlat1), cos(rdist) - sin(rlat1) * sin(rlat2));
     rlon2 = ((rlon2 + (3 * pi)) % (2 * pi)) - pi; // normalise to -180..+180º
     return LatLng(rlat2 * 180 / pi, rlon2 * 180 / pi);
+  }
+
+  //
+  // routine to calculate the weighted average wind speed and direction based on nrStations nearest to the center of the screen
+  ({int dir, double speed}) centerWind(nrStations) {
+    var windTracks = replayTracks['windtracks'];
+    Map<int, double> unsortedDistanceTable = {}; // map with station index in the windTracks as key and the distance as value
+    var distance = const Distance();
+    List<double> eastWestVectors = [];
+    List<double> northSouthVectors = [];
+    List<double> distanceFactors = [];
+    double eastWestSum = 0;
+    double northSouthSum = 0;
+    // get the distances from the center of the screen to all Buienradar stations
+    for (int i = 0; i < windTracks.length; i++) {
+      unsortedDistanceTable.addAll({
+        i: distance.as(
+            LengthUnit.Meter, mapController.camera.center, LatLng(windTracks[i]['lat'][0].toDouble(), windTracks[i]['lon'][0].toDouble()))
+      });
+    }
+    // sort the map from near to far (values)
+    var distanceTable = unsortedDistanceTable.entries.toList()
+      ..sort((e1, e2) {
+        var diff = e1.value.compareTo(e2.value);
+        if (diff == 0) diff = e1.key.compareTo(e2.key);
+        return diff;
+      });
+    // get relevant info of the nearest stations in a number of lists
+    // first the sum of the nearest distances
+    double sumDistances = distanceTable.take(nrStations).fold(0, (sum, element) => sum + element.value);
+    // now create a list with 'reverse' distancefactors (nearest has highest value, but sum is higher then 1.0)
+    // and in the same loop lists for East-West and NorthSouth vectors using the speed and direction values in windTracks
+    for (int i = 0; i < nrStations; i++) {
+      distanceFactors.add(1 - (distanceTable[i].value / sumDistances));
+      var windDirection = (windTracks[distanceTable[i].key]['course'][windTimeIndex[distanceTable[i].key]] * pi / 180).toDouble();
+      var windSpeed = windTracks[distanceTable[i].key]['speed'][windTimeIndex[distanceTable[i].key]].toDouble();
+      eastWestVectors.add(windSpeed * cos(windDirection));
+      northSouthVectors.add(windSpeed * sin(windDirection));
+    }
+    // normalize the 'reversed' distancefactors to 1.0 (again) and use the elements to
+    // calculate the weighted vector at the center of the screen
+    sumDistances = distanceFactors.sum;
+    distanceFactors = distanceFactors.map((factor) => factor / sumDistances).toList();
+    for (int i = 0; i < nrStations; i++) {
+      eastWestSum += eastWestVectors[i] * distanceFactors[i];
+      northSouthSum += northSouthVectors[i] * distanceFactors[i];
+    }
+    // and return the result
+    return (dir: atan2(northSouthSum, eastWestSum) * 180 ~/ pi, speed: sqrt(pow(eastWestSum, 2) + pow(northSouthSum, 2)));
   }
 }
