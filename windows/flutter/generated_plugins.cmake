@@ -3,7 +3,6 @@
 #
 
 list(APPEND FLUTTER_PLUGIN_LIST
-  desktop_window
   fullscreen_window
   url_launcher_windows
 )

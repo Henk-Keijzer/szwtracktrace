@@ -4,10 +4,20 @@ Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen
 
 ----------------------------------------------------------------------------------------------------
 
-Version 3.2.0
+Version 3.2.0 released on March 5, 2024
 feature: Added a windarrow at the top-left of the screen, representing the weighted wind speed
 and wind direction of the <nrStations> nearest Buienradar windstations at the center of the screen.
 feature: Added the lostsignalindicator to the shipnames in the menu and added some explanation.
+optimalization: Timing for replay now based on 16.666 ticker signal from the flutter framework (
+replayTicker). Further optimizations in the moveTo routines, in particular wind and gpsBuoys.
+buildXxxinfo routine also updated in line with moveTo routines. Labels no longer created using svg
+strings, but using bordered text (required changing markercolors to flutter Color instead of svg hex
+colors.
+mod: moved loading the flutter_config file into a separate function (loadConfig()).
+mod: included safeArea to stay away from stupid iPhone on-screen features (like microphones and
+cameras)
+mod: in line with start/timer for live and replay, now also start/live routines for pre-event
+feature: (only for developers) added debugString
 
 Version 3.1.9 released on February 14, 2024
 feature: Added allowshowspeed option on a per event basis (event.json), default is true. If false,
