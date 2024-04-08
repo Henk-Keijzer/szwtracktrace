@@ -2739,7 +2739,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //
   Future<Map<String, dynamic>> getDirList() async {
     final response = await http.get(Uri.parse('${server}get/?req=dirlist&dev=$phoneId${(testing) ? '&tst=true' : ''}'));
-    return (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : {};
+    return ((response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : {}).remove('_Shipinfo');
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
