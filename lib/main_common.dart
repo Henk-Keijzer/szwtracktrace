@@ -24,7 +24,8 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_html/flutter_html.dart' show Html;
 import 'package:flutter_map/flutter_map.dart';
-import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
+
+//import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fullscreen_window/fullscreen_window.dart';
 import 'package:http/http.dart' as http;
@@ -33,10 +34,10 @@ import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:universal_html/html.dart' hide Text, Animation;
+import 'package:universal_html/html.dart' show document, window;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
-import 'package:vector_map_tiles/vector_map_tiles.dart';
+//import 'package:vector_map_tiles/vector_map_tiles.dart';
 
 //
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -64,13 +65,14 @@ final kIsWebOnAndroid = kIsWeb && (defaultTargetPlatform == TargetPlatform.andro
 String phoneId = "";
 //
 // Colors (menu colors are overruled by colors in config/flutter_config.json
-Color menuBackgroundColor =
-    const Color(0xffd32f2f); // Colors.red[700]   setting it as a hex value means we don't need a null check in the code
+Color menuBackgroundColor = const Color(0xffd32f2f); // Colors.red[700] setting it as hex means we don't need a null check in the code
 Color menuForegroundColor = const Color(0xb3ffffff); // Colors.white70;
+Color menuAccentColor = const Color(0xffffffff); // pure white
 //
 const String hexBlack = '#000000'; // marker and label outline colors depending on background black or white
 const String hexWhite = '#ffffff';
 //
+// the next color table is created using an online program to create 32 distinct colors, for example https://mokole.com/palette.html
 const List shipMarkerColorTable = [
   0xFF696969,
   0xFF556b2f,
@@ -112,9 +114,9 @@ int screenWidth = 0;
 int screenHeight = 0;
 double menuOffset = 0; // used to calculate the offset of the menutext from the top of the screen
 //
-// variable an constants for the flutter_map
-final mapController = MapController();
-const initialMapPosition = LatLng(52.5, 5.0);
+// variable and constants for the flutter_map
+final MapController mapController = MapController();
+const LatLng initialMapPosition = LatLng(52.5, 5.0);
 const double initialMapZoom = 9;
 //
 // vars for the selection of the event
@@ -138,7 +140,9 @@ int sliderEnd = 0; // end of the time slider, during live it is the current time
 int maxReplay = 0; // eventInfo['maxreplay'] in hours
 // sets eventbegin xx hours before current time to limit the replay for continuous events (Olympia-charters, _TTTEST)
 bool allowShowSpeed = true; // eventInfo['allowshowspeed']
-bool hfUpdate = false; // eventInfo['hfupdate']. If 'true', positions are predicted every second during live
+bool hfUpdate = false; // eventInfo['hfupdate']. If 'true', positions are predicted every hfUpdateInterval ms during live
+const int hfUpdateInterval = 100; // in ms, use these values: 100, 200, 250, 500 or 1000 (i.e. 1000/x preferably be an int)
+// don't go beyond 1000 ms, otherwise the timer at the bottom skips values
 bool allowShowWind = true; // eventInfo['buienradar'] If false, never show wind
 int trailsUpdateInterval = 60; // eventInfo['trailsupdateinterval'], in seconds between two subsequent get-trails requests from the db
 int eventTrailLength = 30; // eventInfo['traillength']
@@ -174,7 +178,7 @@ List<Marker> routeLabelList = [];
 List<Polyline> routeLineList = [];
 List<Marker> infoWindowMarkerList = []; // although there is max 1 infowindow, we have a list to make it easy to add it to the other markers
 String infoWindowId = '';
-const nrWindStationsForCenterWindCalculation = 3;
+const nrWindStationsForCenterWindCalculation = 3; // should we make this a flutter_config or eventInfo constant???
 //
 // variables used for following ships and zooming
 Map<String, bool> following = {}; // list of shipnames to be followed
@@ -184,7 +188,7 @@ bool autoFollow = true;
 bool hideFloatingActionButtons = false;
 //
 // vars and constants for the movement of ships and wind markers in time
-const speedIndexInitialValue = 4;
+const int speedIndexInitialValue = 4;
 int speedIndex = speedIndexInitialValue; // index in the following table en position of the speed slider, default = 3 min/sec
 const List<int> speedTable = [0, 1, 10, 30, 60, 180, 300, 900, 1800, 3600];
 const List speedTextTable = [
@@ -236,21 +240,22 @@ bool testing = false; // double tap the logo of the app to set to true.
 //
 // map related vars
 // initial baseMapTileProviders is imported from default_maptileproviders.dart
-String selectedMapType = baseMapTileProviders.keys.toList()[0];
-String bgColor = baseMapTileProviders[selectedMapType]['bgColor'];
+late String selectedMapType;
+late String bgColor;
 late Color markerBackgroundColor;
 late Color labelBackgroundColor;
+Map<String, dynamic> baseMapTileProviders = {};
 Map<String, dynamic> overlayTileProviders = {};
 String selectedOverlayType = '';
 bool mapOverlay = false;
 Map<String, dynamic> labelTileProviders = {};
 String labelOverlayType = '';
 //
-// Style for vector type maps (we do not support vector tiles yet as the vector_map_tiles package does not nsupport web (yet))
+/*// Style for vector type maps (we do not support vector tiles yet as the vector_map_tiles package does not nsupport web (yet))
 Style? baseMapStyle; // a vector base map
 Style? overlayMapStyle; // a vector overlay map
 Style? labelMapStyle; // a vector label overlay for satellite type base maps
-//
+*/ //
 // default values for some booleans, selectable from the mapmenu
 bool showWindMarkers = true;
 bool showRoute = true;
@@ -274,6 +279,13 @@ final GlobalKey dropDayKey = GlobalKey();
 DateFormat dtFormat = DateFormat("d MMM y, HH:mm", 'nl');
 DateFormat dtsFormat = DateFormat("d MMM y, HH:mm:ss", 'nl');
 //
+//
+/*
+late Map<String, dynamic> googleMapTilesSession;
+String googleApiKey = 'AIzaSyAoRc-lP_1CPM6raitUYAYxdDa4TBrKN9I';
+late String googleSessionKey;
+*/
+//
 //------------------------------------------------------------------------------
 //
 // The mainCommon function is called from main.dart with the serverUrl as parameter
@@ -291,13 +303,15 @@ void mainCommon({required String serverUrl}) async {
   // Using a simple '/' on web allows for redirection, for eaxample sv.zeilvaartwarmond.nl -> replay.sportvolgen.nl
   // for other platforms we need the full server url
   //
-  // ----- APP VERSION
+  // ----- APP VERSION and cookieConsent
   // See if we are running a new version and if so, clear local storage and save the new version number
-  var oldAppVersion = prefs.getString('appversion') ?? '';
+  String oldAppVersion = prefs.getString('appversion') ?? '';
+  cookieConsentGiven = prefs.getBool('cookieconsent') ?? false;
   if (oldAppVersion != packageInfo.buildNumber) {
     await prefs.clear(); // clear all data (and wait for it...)
     prefs.setString('appversion', packageInfo.buildNumber); // and set the new appversion
   }
+  prefs.setBool('cookieconsent', cookieConsentGiven);
   //
   // ----- PHONE (DEVICE) ID
   // See if we already have a phone id, if not, create one and save it in local storage
@@ -306,7 +320,7 @@ void mainCommon({required String serverUrl}) async {
   // add a platform prefix and the appversion in front of the phoneid
   // this phoneId is used in all communication with the server for statistical purposes
   String prefix = kIsWeb
-      ? "F"
+      ? "GD"
       : switch (defaultTargetPlatform) {
           TargetPlatform.android => 'A',
           TargetPlatform.iOS => 'I',
@@ -315,6 +329,8 @@ void mainCommon({required String serverUrl}) async {
           TargetPlatform.linux => 'L',
           TargetPlatform.fuchsia => 'U',
         };
+  if (kIsWebOnAndroid) prefix = 'GA';
+  if (kIsWebOnIOS) prefix = 'GI';
   phoneId = '$prefix${packageInfo.buildNumber}-$phoneId'; // use the saved phoneId with a platform/buildnumber prefix
   //
   // ----- CONFIG
@@ -322,16 +338,22 @@ void mainCommon({required String serverUrl}) async {
   // Note that we get the config file through /get/index.php to record statistics on the number of times the app is started
   // The contents is merged with the default config in default_config.dart (but this only works for two levels!!! and only for String keys
   // and String values)
-  var response = await http.get(Uri.parse('${server}get/?req=config&dev=$phoneId'));
-  var newConfig = (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : null;
-  for (final mainEntry in newConfig.keys) {
+  http.Response response = await http.get(Uri.parse('${server}get/?req=config&dev=$phoneId'));
+  Map<String, dynamic> newConfig = (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : null;
+  for (final String mainEntry in newConfig.keys) {
     for (final subEntry in newConfig[mainEntry].entries) {
-      (config[mainEntry]).addAll({subEntry.key.toString(): subEntry.value.toString()});
+      config[mainEntry].addAll({subEntry.key.toString(): subEntry.value.toString()});
     }
   }
   // decode some color values based on the info in the config file as they are used very often
-  menuBackgroundColor = Color(int.parse(config['colors']['menuBackgroundColor'], radix: 16));
-  menuForegroundColor = Color(int.parse(config['colors']['menuForegroundColor'], radix: 16));
+  menuBackgroundColor = config['colors']['menuBackgroundColor'] != null
+      ? Color(int.parse(config['colors']['menuBackgroundColor'], radix: 16))
+      : menuBackgroundColor;
+  menuForegroundColor = config['colors']['menuForgroundColor'] != null
+      ? Color(int.parse(config['colors']['menuForegroundColor'], radix: 16))
+      : menuForegroundColor;
+  menuAccentColor =
+      config['colors']['menuAccentColor'] != null ? Color(int.parse(config['colors']['menuAccentColor'], radix: 16)) : menuAccentColor;
   shipSvgPath = config['icons']['boatSVGPath'];
   //
   // ----- APPICON URL
@@ -351,7 +373,7 @@ void mainCommon({required String serverUrl}) async {
   // ----- MAPS
   // get the complete list of map tile providers from the server, overwriting the default mapdata in default_maptileproviders.dart
   response = await http.get(Uri.parse('${server}get?req=maptileproviders&dev=$phoneId'));
-  Map<String, dynamic> mapdata = (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : baseMapTileProviders;
+  Map<String, dynamic> mapdata = (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : defaultMapTileProviders;
   baseMapTileProviders = mapdata['basemaps'] ?? {};
   overlayTileProviders = mapdata['overlays'] ?? {};
   labelTileProviders = mapdata['labels'] ?? {};
@@ -365,7 +387,7 @@ void mainCommon({required String serverUrl}) async {
   // see if the map from the previous session or the query string is in our list of maps, if not, set maptype to first maptype
   selectedMapType =
       (!baseMapTileProviders.keys.toList().contains(selectedMapType)) ? baseMapTileProviders.keys.toList().first : selectedMapType;
-  // save the base maptype for next time and set the marker and labelbackgroudcolors, based on the
+  // save the base maptype for next time and set the marker and labelbackgroudcolors, based on the info in the map record
   prefs.setString('maptype', selectedMapType);
   bgColor = baseMapTileProviders[selectedMapType]['bgColor'];
   markerBackgroundColor = (bgColor == hexBlack) ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
@@ -425,9 +447,21 @@ void mainCommon({required String serverUrl}) async {
   showShipSpeeds = prefs.getBool('shipspeeds') ?? showShipSpeeds;
   if (!allowShowSpeed) showShipSpeeds = false;
   prefs.setBool('shipspeeds', showShipSpeeds);
+/*
   //
-  cookieConsentGiven = prefs.getBool('cookieconsent') ?? false;
-  prefs.setBool('cookieconsent', cookieConsentGiven);
+  // get google map tiles session key
+  //
+  googleMapTilesSession = jsonDecode(prefs.getString('googlemaptilessession') ?? '{}');
+  if (googleMapTilesSession.isEmpty || int.parse(googleMapTilesSession['expiry']!) < DateTime.now().millisecondsSinceEpoch / 1000) {
+  response = await http.post(Uri.parse("https://tile.googleapis.com/v1/createSession?key=$googleApiKey"),
+      headers: {"Content-Type": "application/json"},
+      body: '{"mapType": "satellite", "language": "nl-NL", "region": "nl", "layerTypes": ["layerRoadmap"], "overlay": false,'
+          '"scale":"scaleFactor2x", "highDpi":true}');
+  googleMapTilesSession = response.statusCode == 200 ? jsonDecode(response.body) : {};
+  prefs.setString('googlemaptilessession', jsonEncode(googleMapTilesSession));
+  }
+  googleSessionKey = googleMapTilesSession['session'];
+*/
   //
   // start the flutter framework
   //
@@ -444,20 +478,11 @@ class MyApp extends StatefulWidget {
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 // The main program (= the "state" belonging to MyApp)
+// The methods dispose() and didChangeAppLifecycleState(..) are called on exit or when we pause or resume
 // The flutter framework calls initState()
-// The methods dispose() and didChangeAppLifecycleState(..) are called on exit and when we pause or resume
 // After initState() the build(..) method is called repetitatively each time the ui needs to be rebuild
 //
 class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
-  @override
-  initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this); // needed to get the MediaQuery working
-    replayTicker = createTicker((elapsed) {
-      replayTickerRoutine(elapsed);
-    });
-  }
-
   @override
   dispose() {
     WidgetsBinding.instance.removeObserver(this);
@@ -470,22 +495,37 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     super.didChangeAppLifecycleState(state);
     switch (state) {
       case AppLifecycleState.resumed:
-        if (eventStatus == EventStatus.preEvent) preEventTimer = Timer.periodic(const Duration(seconds: 5), (_) => preEventTimerRoutine());
-        if (eventStatus == EventStatus.live) {
-          liveSecondsTimer = 1;
-          liveTimer = Timer.periodic(const Duration(milliseconds: 100), (_) => liveTimerRoutine());
-        }
-        if (replayRunning && !replayTicker.isTicking) replayTicker.start();
+        setState(() {
+          if (eventStatus == EventStatus.preEvent) {
+            preEventTimer = Timer.periodic(const Duration(seconds: 5), (_) => preEventTimerRoutine());
+          }
+          if (eventStatus == EventStatus.live) {
+            liveSecondsTimer = 1;
+            liveTimer = Timer.periodic(const Duration(milliseconds: hfUpdateInterval), (_) => liveTimerRoutine());
+          }
+          if (replayRunning && !replayTicker.isTicking) replayTicker.start();
+        });
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.hidden:
       case AppLifecycleState.paused:
       case AppLifecycleState.detached:
-        if (eventStatus == EventStatus.preEvent) preEventTimer.cancel();
-        if (eventStatus == EventStatus.live) liveTimer.cancel();
-        if (replayTicker.isTicking) replayTicker.stop();
+        setState(() {
+          if (eventStatus == EventStatus.preEvent) preEventTimer.cancel();
+          if (eventStatus == EventStatus.live) liveTimer.cancel();
+          if (replayTicker.isTicking) replayTicker.stop();
+        });
         break;
     }
+  }
+
+  @override
+  initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this); // needed to get the MediaQuery working
+    replayTicker = createTicker((elapsed) {
+      replayTickerRoutine(elapsed);
+    });
   }
 
   //----------------------------------------------------------------------------
@@ -511,27 +551,24 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       leading: Container(
           padding: const EdgeInsets.fromLTRB(5, 0, 0, 0),
           child: InkWell(
-/*              onTap: () async {
-                server = 'https://replay.sportvolgen.nl/';
-                await loadConfig(server);
-                eventDomain = '';
-                eventTitle = 'Kies een evenement';
-                onMapCreated();
-              },
-*/
-              // double tappable appIcon of the T&T organization, toggles testing mode, reloads the dirList, with or without underscored events
+              // appIcon of the T&T organization. single tap opens event menu, double tap enters testing mode
+              onTap: () => setState(() {
+                    showShipMenu = showMapMenu = showInfoPage = showAttribution = false;
+                    showEventMenu = !showEventMenu;
+                  }),
               onDoubleTap: () async {
                 testing = !testing;
+                if (!testing) debugString = '';
                 dirList = await getDirList();
                 eventNameList = dirList.keys.toList()..sort;
                 eventYearList = [];
                 eventDayList = [];
               },
-              child: Image.network('$server$appIconUrl'))),
+              child: Tooltip(message: 'evenementmenu', child: Image.network('$server$appIconUrl')))),
       title: InkWell(
         onTap: () => setState(() {
-          showShipMenu = showMapMenu = showInfoPage = showShipInfo = showAttribution = false;
-          showEventMenu = replayPause = !showEventMenu;
+          showShipMenu = showMapMenu = showInfoPage = showAttribution = false;
+          showEventMenu = !showEventMenu;
         }),
         child: Tooltip(message: 'evenementmenu', child: Text(eventTitle)),
       ),
@@ -557,35 +594,39 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 if (replayRunning) startStopRunning();
               }
             }),
-            icon: fullScreen ? Icon(Icons.fullscreen_exit, color: menuForegroundColor) : Icon(Icons.fullscreen, color: menuForegroundColor),
+            icon: fullScreen
+                ? Icon(Icons.close_fullscreen, color: menuForegroundColor, size: 18)
+                : Icon(Icons.open_in_full, color: menuForegroundColor, size: 18),
           ),
         if (kIsDesktop)
           IconButton(
             // button for fullscreen on Windows or macOS app
             tooltip: fullScreen ? 'exit fullscreen' : 'fullscreen',
-            onPressed: () {
+            onPressed: () => setState(() {
               fullScreen = !fullScreen;
               FullScreenWindow.setFullScreen(fullScreen);
               if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
                 // give the ui some time to settle and redraw the markers (especially the centerwind arrow and it's infowindow)
                 Timer(const Duration(milliseconds: 500), () => setState(() => rotateWindTo(currentReplayTime)));
               }
-            },
-            icon: fullScreen ? Icon(Icons.fullscreen_exit, color: menuForegroundColor) : Icon(Icons.fullscreen, color: menuForegroundColor),
+            }),
+            icon: fullScreen
+                ? Icon(Icons.close_fullscreen, color: menuForegroundColor, size: 18)
+                : Icon(Icons.open_in_full, color: menuForegroundColor, size: 18),
           ),
         // button to open/close the menubuttobar
         IconButton(
             onPressed: () => setState(() {
                   showMenuButtonBar = !showMenuButtonBar;
-                  if (!showMenuButtonBar) showEventMenu = showInfoPage = showMapMenu = showShipInfo = showShipMenu = replayPause = false;
+                  if (!showMenuButtonBar) showEventMenu = showInfoPage = showMapMenu = showShipMenu = false;
                 }),
             icon: showMenuButtonBar ? const Icon(Icons.expand_less) : const Icon(Icons.menu)),
       ],
     );
     //
-    // Now return the UI as a MaterialApp with title, theme and a home (with a Scaffold)
+    // Now return the UI as a MaterialApp with title, theme and a homepage (with a Scaffold)
     return MaterialApp(
-        debugShowCheckedModeBanner: false,
+        debugShowCheckedModeBanner: testing,
         title: eventTitle,
         theme: ThemeData(
           canvasColor: menuBackgroundColor,
@@ -660,8 +701,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 // on tapping the map: close all popups and menu's, and show the floatingaction buttons again
                 infoWindowId = '';
                 infoWindowMarkerList = [];
-                showEventMenu = showMapMenu =
-                    showShipMenu = showShipInfo = showInfoPage = replayPause = showAttribution = hideFloatingActionButtons = false;
+                showEventMenu = showMapMenu = showShipMenu = showInfoPage = showAttribution = hideFloatingActionButtons = false;
               })),
       children: [
         // five children: the base map, the optional labeloverlay for satellite maps,
@@ -669,33 +709,33 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         //
         // the selected base map layer with three options, WMS, WMTS or vector (once available for web)
         switch (baseMapTileProviders[selectedMapType]['service']) {
+/*          "Google" => TileLayer(
+              urlTemplate: 'https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session=$googleSessionKey&key=$googleApiKey',
+              tileProvider: NetworkTileProvider(),
+              retinaMode: RetinaMode.isHighDensity(context),
+              tileDisplay: const TileDisplay.instantaneous(),
+              userAgentPackageName: packageInfo.packageName,
+            ),
+*/
           "WMS" => TileLayer(
               wmsOptions: WMSTileLayerOptions(
                 baseUrl: baseMapTileProviders[selectedMapType]['wmsbaseURL'],
                 layers: baseMapTileProviders[selectedMapType]['wmslayers'].cast<String>(),
               ),
-              tileProvider: CancellableNetworkTileProvider(),
-              keepBuffer: 2,
-              panBuffer: 1,
+              tileProvider: NetworkTileProvider(),
+              retinaMode: RetinaMode.isHighDensity(context),
               tileDisplay: const TileDisplay.instantaneous(),
-              evictErrorTileStrategy: EvictErrorTileStrategy.notVisible,
+//              evictErrorTileStrategy: EvictErrorTileStrategy.notVisible,
               userAgentPackageName: packageInfo.packageName,
             ),
           "WMTS" => TileLayer(
               urlTemplate: baseMapTileProviders[selectedMapType]['URL'],
               subdomains: List<String>.from(baseMapTileProviders[selectedMapType]['subDomains']),
-              tileProvider: CancellableNetworkTileProvider(),
-              keepBuffer: 2,
-              panBuffer: 1,
+              tileProvider: NetworkTileProvider(),
+              retinaMode: RetinaMode.isHighDensity(context),
               tileDisplay: const TileDisplay.instantaneous(),
-              evictErrorTileStrategy: EvictErrorTileStrategy.notVisible,
               userAgentPackageName: packageInfo.packageName,
             ),
-//          'vector' => VectorTileLayer(      // not supported on web (yet)
-//              tileProviders: baseMapStyle!.providers,
-//              theme: baseMapStyle!.theme,
-//              sprites: baseMapStyle?.sprites,
-//            ),
           _ => const SizedBox()
         },
         // the tile layer for the streetlabels (only when the selected basemap indicates a labels layer
@@ -706,29 +746,19 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   baseUrl: labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['wmsbaseURL'],
                   layers: labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['wmslayers'].cast<String>(),
                 ),
-                tileProvider: CancellableNetworkTileProvider(),
-                keepBuffer: 2,
-                panBuffer: 1,
+                tileProvider: NetworkTileProvider(),
+                retinaMode: RetinaMode.isHighDensity(context),
                 tileDisplay: const TileDisplay.instantaneous(),
-                evictErrorTileStrategy: EvictErrorTileStrategy.notVisible,
                 userAgentPackageName: packageInfo.packageName,
               ),
             'WMTS' => TileLayer(
                 urlTemplate: labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['URL'],
                 subdomains: List<String>.from(labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['subDomains']),
-                tileProvider: CancellableNetworkTileProvider(),
-                keepBuffer: 2,
-                panBuffer: 1,
-                retinaMode: true,
+                tileProvider: NetworkTileProvider(),
+                retinaMode: RetinaMode.isHighDensity(context),
                 tileDisplay: const TileDisplay.instantaneous(),
-                evictErrorTileStrategy: EvictErrorTileStrategy.notVisible,
                 userAgentPackageName: packageInfo.packageName,
               ),
-//            'vector' => VectorTileLayer(
-//                tileProviders: labelMapStyle!.providers,
-//                theme: labelMapStyle!.theme,
-//                sprites: labelMapStyle?.sprites,
-//              ),
             _ => const SizedBox()
           },
         // the tilelayer for the selecatble overlays, showing waterways, etc
@@ -739,35 +769,25 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   baseUrl: overlayTileProviders[selectedOverlayType]['wmsbaseURL'],
                   layers: overlayTileProviders[selectedOverlayType]['wmslayers'].cast<String>(),
                 ),
-                tileProvider: CancellableNetworkTileProvider(),
-                keepBuffer: 2,
-                panBuffer: 1,
+                tileProvider: NetworkTileProvider(),
+                retinaMode: RetinaMode.isHighDensity(context),
                 tileDisplay: const TileDisplay.instantaneous(),
-                evictErrorTileStrategy: EvictErrorTileStrategy.notVisible,
                 userAgentPackageName: packageInfo.packageName,
               ),
             'WMTS' => TileLayer(
                 urlTemplate: overlayTileProviders[selectedOverlayType]['URL'],
                 subdomains: List<String>.from(overlayTileProviders[selectedOverlayType]['subDomains']),
-                tileProvider: CancellableNetworkTileProvider(),
-                keepBuffer: 2,
-                panBuffer: 1,
+                tileProvider: NetworkTileProvider(),
+                retinaMode: RetinaMode.isHighDensity(context),
                 tileDisplay: const TileDisplay.instantaneous(),
-                evictErrorTileStrategy: EvictErrorTileStrategy.notVisible,
                 userAgentPackageName: packageInfo.packageName,
               ),
-//            'vector' => VectorTileLayer(
-//                tileProviders: overlayMapStyle!.providers,
-//                theme: overlayMapStyle!.theme,
-//                sprites: overlayMapStyle?.sprites,
-//              ),
             _ => const SizedBox()
           },
         //
         // two more layers: the lines of the route and trails, and the markers
         PolylineLayer(
           polylines: routeLineList + shipTrailList,
-          polylineCulling: true,
         ),
         MarkerLayer(
             markers: routeLabelList + // in this order from bottom to top
@@ -785,7 +805,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //
   // on top of the map the slider area with the two sliders, the actionbuttons and the speed, date/time and live update timers
   Column uiSliderArea() {
-    Color textColor = (bgColor == hexBlack) ? Colors.black : Colors.white;
+    Color textColor = (bgColor == hexBlack) ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
     return Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
       // a column with 4 children: 1. Row with timeslider and actionbuttons, 2. Container with the start/stop button and the timeslider,
       // 3. a Row with texts and 4. a Sizedbox with some space
@@ -801,6 +821,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       uiTimeSlider(),
       // a container showing the selected speed, the currentreplaytime and the livetimer
       Container(
+          padding: const EdgeInsets.fromLTRB(0, 0, 50, 15),
           color: Colors.transparent, // set a color so that the area does not allow click-through to the map
           child: Row(
             // row with some texts
@@ -821,7 +842,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                         child: AutoSizeText(
                           ((currentReplayTime == sliderEnd) && (sliderEnd != eventEnd)
                               ? 'Live ${dtsFormat.format(DateTime.fromMillisecondsSinceEpoch(currentReplayTime))}'
-                              : 'Replay ${dtFormat.format(DateTime.fromMillisecondsSinceEpoch(currentReplayTime))}'),
+                              : 'Replay ${dtsFormat.format(DateTime.fromMillisecondsSinceEpoch(currentReplayTime))}'),
                           style: TextStyle(color: textColor),
                           minFontSize: 8,
                           maxLines: 1,
@@ -836,18 +857,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                               liveSecondsTimer = 0;
                             }),
                         child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                          Text((liveSecondsTimer / 10).ceil().toString(), textAlign: TextAlign.right, style: TextStyle(color: textColor)),
+                          Text((liveSecondsTimer * hfUpdateInterval / 1000).ceil().toString(),
+                              textAlign: TextAlign.right, style: TextStyle(color: textColor)),
                           const SizedBox(width: 2),
                           Icon(Icons.refresh, color: textColor, size: 15),
                         ]))),
-              const SizedBox(width: 50),
             ],
           )),
-      // and finally some (extra) space at the bottom of the screen for those poor iOS users
-      const SizedBox(
-//        height: (defaultTargetPlatform == TargetPlatform.iOS) ? 15 + MediaQuery.of(context).viewPadding.bottom : 15,
-        height: 15,
-      )
     ]);
   }
 
@@ -1002,28 +1018,28 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 onPressed: () {
                   if (eventStatus != EventStatus.preEvent && shipList.isNotEmpty) {
                     setState(() {
-                      showEventMenu = showMapMenu = showInfoPage = showShipInfo = showAttribution = false;
-                      showShipMenu = replayPause = !showShipMenu;
+                      showEventMenu = showMapMenu = showInfoPage = showAttribution = false;
+                      showShipMenu = !showShipMenu;
                     });
                   }
                 },
-                icon: Icon(boatIcons[config['icons']['boatIcon']], color: menuForegroundColor),
+                icon: Icon(boatIcons[config['icons']['boatIcon']], color: showShipMenu ? menuAccentColor : menuForegroundColor),
               ),
               IconButton(
                 // button for the mapMenu
                 onPressed: () => setState(() {
-                  showEventMenu = showShipMenu = showInfoPage = showShipInfo = showAttribution = false;
-                  showMapMenu = replayPause = !showMapMenu;
+                  showEventMenu = showShipMenu = showInfoPage = showAttribution = false;
+                  showMapMenu = !showMapMenu;
                 }),
-                icon: Icon(Icons.map, color: menuForegroundColor),
+                icon: Icon(Icons.map, color: showMapMenu ? menuAccentColor : menuForegroundColor),
               ),
               IconButton(
                 // button for the infoPage
                 onPressed: () => setState(() {
-                  showEventMenu = showShipMenu = showMapMenu = showShipInfo = showAttribution = false;
-                  showInfoPage = replayPause = !showInfoPage;
+                  showEventMenu = showShipMenu = showMapMenu = showAttribution = false;
+                  showInfoPage = !showInfoPage;
                 }),
-                icon: Icon(Icons.info, color: menuForegroundColor),
+                icon: Icon(Icons.info, color: showInfoPage ? menuAccentColor : menuForegroundColor),
               ),
               if ((config['options']['windy'] == "true" ? true : false) &&
                   (eventStatus == EventStatus.live || eventStatus == EventStatus.preEvent))
@@ -1033,9 +1049,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                       var latlng = mapController.camera.center;
                       var zoom = mapController.camera.zoom;
                       launchUrl(Uri.parse('https://embed.windy.com/embed2.html?lat=${latlng.latitude}&lon=${latlng.longitude}'
-                          '&detailLat=${latlng.latitude}&detailLon=${latlng.longitude}'
-                          '&width=$screenWidth&height=$screenHeight&zoom=$zoom&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker='
-                          '&calendar=now&pressure=&type=map&location=coordinates&detail=true&metricWind=bft&metricTemp=%C2%B0C&radarRange=-1'));
+                          '&detailLat=${latlng.latitude}&detailLon=${latlng.longitude}&width=$screenWidth&height=$screenHeight'
+                          '&zoom=$zoom&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker=&calendar=now&pressure='
+                          '&type=map&location=coordinates&detail=true&metricWind=bft&metricTemp=%C2%B0C&radarRange=-1'));
                     },
                     icon: Tooltip(
                         message: 'open windy.com\nin een nieuw venster',
@@ -1051,6 +1067,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                         }
                       }),
                   icon: Icon(Icons.add_box, color: menuForegroundColor)),
+              if (testing) Text(mapController.camera.zoom.toStringAsFixed(1), style: const TextStyle(fontSize: 11)),
               IconButton(
                   onPressed: () => setState(() {
                         mapController.move(mapController.camera.center, mapController.camera.zoom - 0.5);
@@ -1077,7 +1094,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 const Text("Evenementmenu"),
                 const Spacer(),
                 IconButton(
-                    onPressed: () => setState(() => showEventMenu = replayPause = false),
+                    onPressed: () => setState(() => showEventMenu = false),
                     icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor)),
               ]),
               Container(
@@ -1143,27 +1160,26 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           const Text(' \n')
                         ]),
                       ),
-                    if (selectionMessage != '')
+                    if (selectionMessage != '') Wrap(children: [Divider(color: menuForegroundColor, height: 30), Text(selectionMessage)]),
+                    if (eventDomain != '')
                       Wrap(children: [
                         Divider(color: menuForegroundColor, height: 30),
-                        Text(selectionMessage),
-                        Divider(color: menuForegroundColor, height: 30),
-                        if (eventDomain != '')
-                          Container(
-                              alignment: Alignment.center,
-                              margin: const EdgeInsets.fromLTRB(0, 10, 0, 10),
-                              child: InkWell(
-                                onTap: () =>
-                                    {if (socialMediaUrl != '') launchUrl(Uri.parse(socialMediaUrl), mode: LaunchMode.externalApplication)},
-                                child: Image.network('${server}data/$eventDomain/logo.png'),
-                              )),
+                        Container(
+                            alignment: Alignment.center,
+                            margin: const EdgeInsets.fromLTRB(0, 10, 0, 10),
+                            child: InkWell(
+                              onTap: () {
+                                if (socialMediaUrl != '') launchUrl(Uri.parse(socialMediaUrl), mode: LaunchMode.externalApplication);
+                              },
+                              child: Image.network('${server}data/$eventDomain/logo.png'),
+                            )),
                         Text((socialMediaUrl == '') ? '' : 'Klik op het logo voor de laatste info over deze wedstrijd.')
                       ]),
                     if (kIsWebOnAndroid && ((config['options']['playstorelink'] ?? '') != ''))
                       Wrap(
                         children: [
                           Divider(color: menuForegroundColor),
-                          const Text('\nMobiele Track & Trace App\nDe mobiele app werkt op uw '
+                          const Text('Mobiele Track & Trace App\nDe mobiele app werkt op uw '
                               'telefoon sneller dan de web-versie en verbruikt minder data. '
                               'Klik hier om de gratis Android app op uw telefoon installeren.'),
                           InkWell(
@@ -1177,7 +1193,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                       Wrap(
                         children: [
                           Divider(color: menuForegroundColor),
-                          const Text('\nMobiele Track & Trace App\nDe mobiele app werkt op uw '
+                          const Text('Mobiele Track & Trace App\nDe mobiele app werkt op uw '
                               'telefoon sneller dan de web-versie en verbruikt minder data. '
                               'Klik hier om de gratis iOS app op uw telefoon installeren.'),
                           InkWell(
@@ -1205,7 +1221,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   const Text('Deelnemersmenu'),
                   const Spacer(),
                   IconButton(
-                      onPressed: () => setState(() => showShipMenu = replayPause = false),
+                      onPressed: () => setState(() => showShipMenu = false),
                       icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor)),
                   const SizedBox(width: 3)
                 ]),
@@ -1227,11 +1243,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                             side: BorderSide(color: menuForegroundColor),
                             value: followAll,
                             onChanged: (value) => setState(() {
-                                  following.forEach((k, v) {
-                                    following[k] = value!;
-                                  });
+                                  following.forEach((k, v) => following[k] = value!);
                                   followAll = value!;
+                                  showShipMenu = !value;
+                                  var saveZoom = autoZoom;
+                                  autoZoom = true;
                                   moveShipsBuoysAndWindTo(currentReplayTime);
+                                  autoZoom = saveZoom;
                                 })),
                       ]),
                       ListView.builder(
@@ -1258,7 +1276,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 value: (following[shipList[index]] == null) ? false : following[shipList[index]],
                                 onChanged: (value) => setState(() {
                                       following[shipList[index]] = value!;
+                                      var saveZoom = autoZoom;
+                                      autoZoom = true;
                                       moveShipsBuoysAndWindTo(currentReplayTime);
+                                      autoZoom = saveZoom;
                                     })),
                           ]);
                         },
@@ -1267,7 +1288,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                       const Text("' achter de naam geeft aan dat de laatst doorgegeven positie ouder is dan 3 minuten"),
                       Divider(color: menuForegroundColor),
                       InkWell(
-                          child: Text('Het spoor achter de ${config['text']['participants']} is $actualTrailLength minuten'),
+                          child: Text('Het spoor achter de ${config['text']['participants']} is $actualTrailLength '
+                              '${actualTrailLength == 1 ? 'minuut' : 'minuten'}'),
                           onTap: () => setState(() {
                                 if (actualTrailLength == eventTrailLength) {
                                   if (maxReplay == 0) {
@@ -1301,7 +1323,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   const Text('Kaartmenu'),
                   const Spacer(),
                   IconButton(
-                      onPressed: () => setState(() => showMapMenu = replayPause = false),
+                      onPressed: () => setState(() => showMapMenu = false),
                       icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor)),
                   const SizedBox(width: 3)
                 ]),
@@ -1334,19 +1356,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                       onChanged: (value) async {
                                         selectedMapType = value!;
                                         prefs.setString('maptype', selectedMapType);
-//                                        if (baseMapTileProviders[selectedMapType]['labels'] != '' &&
-//                                            labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['service'] == 'vector') {
-//                                          //set labelMapStyle
-//                                        }
                                         bgColor = baseMapTileProviders[selectedMapType]['bgColor'];
                                         markerBackgroundColor = bgColor == hexBlack ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
                                         labelBackgroundColor = bgColor == hexBlack ? const Color(0xBfFFFFFF) : const Color(0xFF000000);
-                                        if (baseMapTileProviders[selectedMapType]['service'] == 'vector') {
-                                          baseMapStyle =
-                                              await StyleReader(uri: baseMapTileProviders[selectedMapType]['URL'], apiKey: '').read();
+                                        if (eventStatus == EventStatus.live || eventStatus == EventStatus.replay) {
+                                          moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                         }
-                                        if (eventStatus != EventStatus.preEvent) moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
-                                        showMapMenu = replayPause = false;
+                                        showMapMenu = false;
                                         if (route['features'] != null) buildRoute();
                                         setState(() {});
                                       }))
@@ -1371,7 +1387,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 onChanged: (value) => setState(() {
                                       mapOverlay = value!;
                                       prefs.setBool('mapoverlay', mapOverlay);
-                                      showMapMenu = replayPause = false;
+                                      showMapMenu = false;
                                     })),
                           ]),
                           ListView.builder(
@@ -1396,7 +1412,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                           onChanged: (value) => setState(() {
                                                 selectedOverlayType = value!;
                                                 prefs.setString('overlaytype', selectedOverlayType);
-                                                if (mapOverlay) showMapMenu = replayPause = false;
+                                                if (mapOverlay) showMapMenu = false;
                                               })))
                                 ]);
                               })
@@ -1422,7 +1438,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                       windTimeIndex = List.filled(windTimeIndex.length, -1, growable: true);
                                       rotateWindTo(currentReplayTime);
                                       prefs.setBool('windmarkers', showWindMarkers);
-                                      showMapMenu = replayPause = false;
+                                      showMapMenu = false;
                                     }))
                           ])
                         ]),
@@ -1448,7 +1464,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                       buildRoute();
                                       showGPSBuoys(currentReplayTime);
                                       prefs.setBool('showroute', showRoute);
-                                      showMapMenu = replayPause = false;
+                                      showMapMenu = false;
                                     }))
                           ]),
                           Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
@@ -1470,7 +1486,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                       gpsBuoyTimeIndex = List.filled(gpsBuoyTimeIndex.length, -1, growable: true);
                                       showGPSBuoys(currentReplayTime);
                                       prefs.setBool('routelabels', showRouteLabels);
-                                      if (showRoute) showMapMenu = replayPause = false;
+                                      if (showRoute) showMapMenu = false;
                                     }))
                           ])
                         ]),
@@ -1493,7 +1509,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 onChanged: (value) => setState(() {
                                       showShipLabels = !showShipLabels;
                                       if (eventStatus != EventStatus.preEvent) moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
-                                      showMapMenu = replayPause = false;
+                                      showMapMenu = false;
                                       prefs.setBool('shiplabels', showShipLabels);
                                     }))
                           ]),
@@ -1516,7 +1532,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                         if (eventStatus != EventStatus.preEvent) {
                                           moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                         }
-                                        if (showShipLabels) showMapMenu = replayPause = false;
+                                        if (showShipLabels) showMapMenu = false;
                                         prefs.setBool('shipspeeds', showShipSpeeds);
                                       }))
                             ])
@@ -1539,7 +1555,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 value: replayLoop,
                                 onChanged: (value) => setState(() {
                                       replayLoop = !replayLoop;
-                                      showMapMenu = replayPause = false;
+                                      showMapMenu = false;
                                     }))
                           ])
                         ]),
@@ -1553,7 +1569,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
       SingleChildScrollView(
         child: GestureDetector(
-            onTap: () => setState(() => showInfoPage = replayPause = false),
+            onTap: () => setState(() => showInfoPage = false),
             child: Container(
                 width: (screenWidth > 750) ? 750 - 45 : screenWidth - 45,
                 color: Color(int.parse(config['colors']['infoPageColor'], radix: 16)),
@@ -1562,9 +1578,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      IconButton(
-                          onPressed: () => setState(() => showInfoPage = replayPause = false),
-                          icon: const Icon(Icons.cancel_outlined, size: 20)),
+                      IconButton(onPressed: () => setState(() => showInfoPage = false), icon: const Icon(Icons.cancel_outlined, size: 20)),
                     ],
                   ),
                   Container(
@@ -1586,19 +1600,16 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         top: shipInfoPosition.dy,
         child: GestureDetector(
           onPanStart: (details) => shipInfoPositionAtDragStart = shipInfoPosition - details.localPosition,
-          onPanUpdate: (details) => setState(() {
-            shipInfoPosition = shipInfoPositionAtDragStart + details.localPosition;
-          }),
-          onTap: () => setState(() {
-            if (!showShipMenu) replayPause = false; // continue the replay if the shipmenu is not open
-            showShipInfo = false; // remove the info again from the screen on a tap
-          }),
+          onPanUpdate: (details) => setState(() => shipInfoPosition = shipInfoPositionAtDragStart + details.localPosition),
+          onTap: () => setState(() => showShipInfo = false),
           child: Container(
               constraints: const BoxConstraints(minHeight: 100, maxHeight: 500, maxWidth: 350),
               decoration: BoxDecoration(color: menuBackgroundColor, border: Border.all(color: menuForegroundColor, width: 1)),
               padding: const EdgeInsets.fromLTRB(10.0, 10.0, 10.0, 10.0),
               child: Stack(children: [
-                SingleChildScrollView(child: Html(data: shipInfoHTML)),
+                SingleChildScrollView(
+                    child: Html(
+                        data: shipInfoHTML, onLinkTap: (link, _, __) => launchUrl(Uri.parse(link!), mode: LaunchMode.externalApplication))),
                 Row(children: [
                   const Spacer(),
                   Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor),
@@ -1831,6 +1842,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     followAll = true; // the follow all ships checkbox
     autoZoom = true; // the status of the autozoom switch
     replayLoop = false;
+    showShipInfo = false;
     replayTracks = {};
     shipList = []; // list of patricipting shipnames
     shipColors = []; // and their corresponding colors
@@ -1947,7 +1959,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     if (shipList.isEmpty) showRouteLabels = true;
     if (route['features'] != null) buildRoute();
     selectionMessage = shipList.isNotEmpty ? 'De tracks zijn geladen en worden elke $trailsUpdateInterval seconden bijgewerkt' : '';
-    replayPause = false; // allow replay to run
     sliderEnd = currentReplayTime = DateTime.now().millisecondsSinceEpoch; // put the timeslider to 'now'
     speedIndex = speedIndexInitialValue;
     if (queryPlayString != '::') {
@@ -1961,8 +1972,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     autoZoom = true; // zoom to all ships at the start
     moveShipsBuoysAndWindTo(currentReplayTime);
     autoZoom = false; // but turn of autozoom when running
-    liveSecondsTimer = trailsUpdateInterval * 10;
-    liveTimer = Timer.periodic(const Duration(milliseconds: 100), (_) => liveTimerRoutine());
+    liveSecondsTimer = trailsUpdateInterval * 1000 ~/ hfUpdateInterval;
+    liveTimer = Timer.periodic(const Duration(milliseconds: hfUpdateInterval), (_) => liveTimerRoutine());
     setState(() {}); // redraw the UI
     // hide the event menu and the progress indicator after 1.5 seconds
     Timer(const Duration(milliseconds: 1500), () => setState(() => showEventMenu = showProgress = false));
@@ -1981,7 +1992,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       liveSecondsTimer--;
       if (liveSecondsTimer <= 0) {
         // we've waited 'trailsUpdateInterval' seconds, so, reset it and get new trails and add them to what we have
-        liveSecondsTimer = trailsUpdateInterval * 10; // we run 10 times per second
+        liveSecondsTimer = trailsUpdateInterval * 1000 ~/ hfUpdateInterval; // we run 10 times per second
         if ((now - replayTracks['endtime']) > (trailsUpdateInterval * 3 * 1000)) {
           // we must have been asleep for at least two trailsUpdatePeriods, get a complete uopdate since the last fetch
           liveTrails = await getTrails(eventDomain, fromTime: (replayTracks['endtime'] / 1000).toInt()); // fetch special
@@ -1992,23 +2003,24 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         }
         addLiveTrailsToTracks(); // add it to what we already had and store it
         setupShipGpsBuoyAndWindInfo(); // prepare menu and track info
-        if (!replayRunning || replayPause) moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
+        if (!replayRunning) moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
       }
       if (currentReplayTime == sliderEnd) {
         // slider is at the end
         sliderEnd = currentReplayTime = now; // extend the slider and move the handle to the new end
         if (hfUpdate) {
-          // predict positions every 100 ms second
+          // predict positions every hfUpdateInterval milliseconds
           moveShipsBuoysAndWindTo(currentReplayTime);
         } else {
           // update positions only at trailsUpdatInterval
-          if (liveSecondsTimer == trailsUpdateInterval * 10) moveShipsBuoysAndWindTo(currentReplayTime);
+          if (liveSecondsTimer == trailsUpdateInterval * 1000 ~/ hfUpdateInterval) moveShipsBuoysAndWindTo(currentReplayTime);
         }
       } else {
         // slider is not at the end, the slider has been moved back in time by the user
         sliderEnd = now; // just make the slider a second longer
       }
-      if (!showShipInfo) setState(() {}); // If shipInfo is shown, don't update. It makes the info flash, for whatever reason
+//      if (!showShipInfo)
+      setState(() {}); // If shipInfo is shown, don't update. It makes the info flash, for whatever reason
     } else {
       // the live event is over
       liveTimer.cancel();
@@ -2035,7 +2047,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       getReplayTracks(eventDomain, nodata: true);
       replayTracks = jsonDecode(savedTracks); // and just use the data from local storage
     }
-    replayPause = replayRunning = false;
+    replayRunning = false;
     setupShipGpsBuoyAndWindInfo(); // prepare menu and track info
     for (var name in shipList) {
       following[name] = true;
@@ -2107,9 +2119,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // Routine to handle start/stop button
   void startStopRunning() {
     if (eventStatus != EventStatus.preEvent) {
-      showEventMenu = showInfoPage = showMapMenu = showShipMenu = showShipInfo = replayPause = false;
+      showEventMenu = showInfoPage = showMapMenu = showShipMenu = false;
       replayRunning = !replayRunning;
-      if (replayRunning && currentReplayTime == sliderEnd) {
+      if (currentReplayTime == sliderEnd && replayRunning) {
         // if he wants to run while at the end of the slider, move it to the beginning
         currentReplayTime = eventStart;
       }
@@ -2135,7 +2147,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     moveShipsTo(time, moveMap);
     if (showRoute) showGPSBuoys(time);
     if (showWindMarkers && allowShowWind) rotateWindTo(time);
-    if (!showShipInfo) setState(() {}); // If shipInfo is shown, don't update. It makes the info flash, for whatever reason
+//    if (!showShipInfo)
+    setState(() {}); // If shipInfo is shown, don't update. It makes the info flash, for whatever reason
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
@@ -2229,10 +2242,25 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         width: 22,
         height: 22,
         child: Tooltip(
-            message: showShipLabels ? '' : ('${shipTrack['name']}${shipLostSignalIndicators[i]}${showShipSpeeds ? ', $speedString' : ''}'),
+            message: showShipLabels
+                ? (showShipSpeeds ? '' : speedString)
+                : ('${shipTrack['name']}${shipLostSignalIndicators[i]}${showShipSpeeds ? ', $speedString' : ''}'),
             child: InkWell(
                 child: SvgPicture.string(svgString),
+                onSecondaryTap: () => setState(() => loadAndShowShipDetails(i)),
+                onDoubleTap: () => setState(() {
+                      // zoom in on the ship double tapped
+                      followAll = false;
+                      following.forEach((k, v) => following[k] = false);
+                      autoFollow = following[shipTrack['name']] = true;
+                      var saveZoom = autoZoom;
+                      autoZoom = true;
+                      moveShipsBuoysAndWindTo(currentReplayTime);
+                      autoZoom = saveZoom;
+                      showShipMenu = true;
+                    }),
                 onTap: () => setState(() {
+                      // show infowindow
                       infoWindowId = 'ship${shipTrack['name']}';
                       infoWindowMarkerList = [createInfoWindowMarker(iwTitle, iwText, '', calculatedPosition)];
                       moveShipsTo(time, false);
@@ -2273,16 +2301,15 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       );
     }
     //
-    // finally after all ships, see if we need to move/zoom the camera to the ships
-    if (followBounds.isEmpty) autoZoom = false; // no ships to follow: turn autozoom off
-    if (moveMap && followBounds.isNotEmpty && autoFollow && !showShipInfo) {
+    // finally after all ships were moved, see if we need to move/zoom the camera to the ships
+    if (moveMap && followBounds.isNotEmpty && autoFollow) {
       LatLngBounds bounds = LatLngBounds.fromPoints(followBounds);
       if (autoZoom) {
         mapController.fitCamera(CameraFit.bounds(
             maxZoom: 16,
             bounds: bounds,
             padding: EdgeInsets.fromLTRB(
-                screenWidth * 0.15, menuOffset + (screenHeight * 0.10), screenWidth * 0.15, (screenHeight * 0.10) + 60)));
+                screenWidth * 0.15, menuOffset + (screenHeight * 0.10), screenWidth * 0.15, (screenHeight * 0.10) + menuOffset)));
       } else {
         mapController.move(bounds.center, mapController.camera.zoom);
       }
@@ -2440,13 +2467,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     } else {
       if (replayTracks['windtracks'].length > nrWindStationsForCenterWindCalculation - 1) {
         // calculate average windspeed and direction at the middle of the screen
-        ({int dir, double speed}) center = centerWind(nrWindStationsForCenterWindCalculation);
-        String iwTitle = 'Wind midden van het scherm obv nabije weerstations';
+        ({int heading, double speed}) center = centerWind(nrWindStationsForCenterWindCalculation);
+        String iwTitle = 'Wind midden van de kaart\nobv nabije weerstations';
         String iwText = '${center.speed.toStringAsFixed(1)} knopen, ${knotsToBft(center.speed)} Bft';
         String fillColor = knotsToColor(center.speed);
         String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="10" '
             'fill="none" stroke="$bgColor" stroke-width="1.2"/><polygon points="7,1 11,20 15,1 11,6" '
-            'style="fill:$fillColor;stroke:$bgColor;stroke-width:1" transform="rotate(${center.dir} 11,11)" /></svg>';
+            'style="fill:$fillColor;stroke:$bgColor;stroke-width:1" transform="rotate(${center.heading} 11,11)" /></svg>';
         var arrowPosition = mapController.camera.pointToLatLng(Point(30, menuOffset + 30));
         // position the infowindow beneath the marker
         var infoWindowPosition = mapController.camera.pointToLatLng(Point(110, menuOffset + 130));
@@ -2785,7 +2812,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     final response = await http.get(Uri.parse('${server}get/?req=shipinfo&dev=$phoneId&event=$eventDomain&ship=${shipList[ship]}'));
     shipInfoHTML = (response.statusCode == 200 && response.body != '') ? response.body : 'Could not load ship info';
     shipInfoHTML = shipInfoHTML.replaceFirst('Schipper:', '${config['text']['skipper'] ?? 'Schipper'}:');
-    replayPause = true;
     if (!showShipInfo) shipInfoPosition = Offset((screenWidth - 350) / 2, menuOffset + 25);
     showShipInfo = true;
     setState(() {});
@@ -2835,7 +2861,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //----------------------------------------------------------------------------------------------------------------------------------------
   // routine to calculate the weighted average wind speed and direction based on nrStations nearest to the center of the screen
   //
-  ({int dir, double speed}) centerWind(nrStations) {
+  ({int heading, double speed}) centerWind(nrStations) {
     var windTracks = replayTracks['windtracks'];
     Map<int, double> unsortedDistanceTable = {}; // map with station index in the windTracks as key and the distance as value
     var distance = const Distance();
@@ -2879,6 +2905,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       northSouthSum += northSouthVectors[i] * distanceFactors[i];
     }
     // and return the result
-    return (dir: atan2(northSouthSum, eastWestSum) * 180 ~/ pi, speed: sqrt(pow(eastWestSum, 2) + pow(northSouthSum, 2)));
+    return (heading: atan2(northSouthSum, eastWestSum) * 180 ~/ pi, speed: sqrt(pow(eastWestSum, 2) + pow(northSouthSum, 2)));
   }
 }

@@ -1,12 +1,14 @@
-Map<String, dynamic> baseMapTileProviders = {
+Map<String, dynamic> defaultMapTileProviders = {
   'basemaps': {
-    'service': 'WMTS',
-    'URL': 'https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/standaard/EPSG:3857/{z}/{x}/{y}.png',
-    'subDomains': [],
-    'labels': 'false',
-    'maxZoom': 19.0,
-    'bgColor': '#000000',
-    'attrib': 'Kadaster',
-    'attribLink': 'https://www.kadaster.nl'
-  },
+    'Standaard': {
+      'service': 'WMTS',
+      'URL': 'https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/standaard/EPSG:3857/{z}/{x}/{y}.png',
+      'subDomains': [],
+      'labels': 'false',
+      'maxZoom': 19.0,
+      'bgColor': '#000000',
+      'attrib': 'Kadaster',
+      'attribLink': 'https://www.kadaster.nl'
+    },
+  }
 };
