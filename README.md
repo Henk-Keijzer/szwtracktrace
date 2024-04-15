@@ -4,14 +4,19 @@ Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen
 
 ----------------------------------------------------------------------------------------------------
 
-Version 3.2.1
+Version 3.2.2 released on April 14, 2024
 bugfix: mapchange fails when eventstatus is initial. solved.
 bugfix: ui error causing problems when no shiptracks available at the start of an event. solved
-feature/bugfix: shipInfo window remains on screen until explicitely cleared and it does not stop
+feature/bugfix: shipInfoWindow remains on screen until explicitely cleared and it does not stop
 replay or live. Image is not flickering anymore due to change in server php script (/get/index.php)
 feature: double click on a ship-marker sets following that ship (only) and opens the shipmenu to
 allow for additional ships to select (autofollow is set to true, autozoom is not changed)
+feature: rightclick on the ship-marker opens the shipInfoWindow.
+feature: click on the body of the ship's infowindow opens de shipInfoWindop
 enhancement: fullscreen en fulllscreen_exit icons vervangen
+enhancement: signalLossTime now eventinfo parameter
+
+Version 3.2.1 - only released to web
 
 Version 3.2.0 released on March 5, 2024
 feature: Added a windarrow at the top-left of the screen, representing the weighted wind speed
