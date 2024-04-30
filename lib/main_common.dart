@@ -178,6 +178,7 @@ List<Marker> windMarkerList = [];
 List<Marker> routeMarkerList = [];
 List<Marker> routeLabelList = [];
 List<Polyline> routeLineList = [];
+List<Polygon> routePolygons = [];
 List<Marker> infoWindowMarkerList = []; // although there is max 1 infowindow, we have a list to make it easy to add it to the other markers
 String infoWindowId = '';
 const nrWindStationsForCenterWindCalculation = 3; // should we make this a flutter_config or eventInfo constant???
@@ -242,10 +243,10 @@ bool testing = false; // double tap the logo of the app to set to true.
 //
 // map related vars
 // initial baseMapTileProviders is imported from default_maptileproviders.dart
-late String selectedMapType;
-late String bgColor;
-late Color markerBackgroundColor;
-late Color labelBackgroundColor;
+String selectedMapType = 'Standaard';
+String bgColor = hexBlack;
+Color markerBackgroundColor = const Color(0xFFFFFFFF);
+Color labelBackgroundColor = const Color(0xFF000000);
 Map<String, dynamic> baseMapTileProviders = {};
 Map<String, dynamic> overlayTileProviders = {};
 String selectedOverlayType = '';
@@ -253,11 +254,6 @@ bool mapOverlay = false;
 Map<String, dynamic> labelTileProviders = {};
 String labelOverlayType = '';
 //
-/*// Style for vector type maps (we do not support vector tiles yet as the vector_map_tiles package does not nsupport web (yet))
-Style? baseMapStyle; // a vector base map
-Style? overlayMapStyle; // a vector overlay map
-Style? labelMapStyle; // a vector label overlay for satellite type base maps
-*/ //
 // default values for some booleans, selectable from the mapmenu
 bool showWindMarkers = true;
 bool showRoute = true;
@@ -416,6 +412,7 @@ void mainCommon({required String serverUrl}) async {
     eventDomain = Uri.base.queryParameters['event'].toString(); //get parameter with attribute "event"
   }
   // ----- AUTOSTART PLAY
+  // this occurs after fullscreen on a web-embedded version of the app.
   if (kIsWeb && Uri.base.queryParameters.containsKey('play')) {
     queryPlayString = '${Uri.base.queryParameters['play']}::'; //get parameter with attribute "play (and add some separators)"
     // consists of (up to) 3 values, separated by a ':' namely
@@ -536,99 +533,16 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //
   @override
   Widget build(BuildContext context) {
-    //
     // first define the appbar as a seperate widget, so that we can use it's height when positioning the menu's below the appbar
-    AppBar myAppBar = AppBar(
-      backgroundColor: menuBackgroundColor.withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu) ? 1 : 0.5),
-      foregroundColor: menuForegroundColor,
-      elevation: 0,
-      toolbarHeight: 40,
-      leading: Container(
-          padding: const EdgeInsets.fromLTRB(5, 0, 0, 0),
-          child: InkWell(
-              // appIcon of the T&T organization. single tap opens event menu, double tap enters testing mode
-              onTap: () => setState(() {
-                    showShipMenu = showMapMenu = showInfoPage = showAttribution = false;
-                    showEventMenu = !showEventMenu;
-                  }),
-              onDoubleTap: () async {
-                testing = !testing;
-                if (!testing) debugString = '';
-                dirList = await getDirList();
-                eventNameList = dirList.keys.toList()..sort;
-                eventYearList = [];
-                eventDayList = [];
-              },
-              child: Tooltip(message: 'evenementmenu', child: Image.network('$server$appIconUrl')))),
-      title: InkWell(
-        onTap: () => setState(() {
-          showShipMenu = showMapMenu = showInfoPage = showAttribution = false;
-          showEventMenu = !showEventMenu;
-        }),
-        child: Tooltip(message: 'evenementmenu', child: Text(eventTitle)),
-      ),
-      actions: [
-        // button for fullscreen on web and desktop
-        if (kIsWeb)
-          IconButton(
-            tooltip: fullScreen ? 'exit fullscreen' : (document.referrer == '' ? 'fullscreen' : 'open in een nieuw tabblad'),
-            onPressed: () => setState(() {
-              if (document.referrer == '') {
-                // document.referrer != '' means we are runnig in an iframe
-                fullScreen = !fullScreen;
-                fullScreen ? document.documentElement?.requestFullscreen() : document.exitFullscreen();
-                if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
-                  // give the ui some time to settle and redraw the markers (especially the centerwind arrow and it's infowindow)
-                  Timer(const Duration(milliseconds: 500), () => setState(() => rotateWindTo(currentReplayTime)));
-                }
-              } else {
-                launchUrl(Uri.parse('https://${window.location.hostname}?event=$eventDomain&map=$selectedMapType'
-                    '&overlay=${mapOverlay ? 'true' : 'false'}:$selectedOverlayType'
-                    '&play=${replayRunning ? 'true' : 'false'}:${currentReplayTime == sliderEnd ? '0' : currentReplayTime.toString()}'
-                    ':$speedIndex'));
-                if (replayRunning) startStopRunning();
-              }
-            }),
-            icon: fullScreen
-                ? Icon(Icons.close_fullscreen, color: menuForegroundColor, size: 18)
-                : Icon(Icons.open_in_full, color: menuForegroundColor, size: 18),
-          ),
-        if (kIsDesktop)
-          IconButton(
-            // button for fullscreen on Windows or macOS app
-            tooltip: fullScreen ? 'exit fullscreen' : 'fullscreen',
-            onPressed: () => setState(() {
-              fullScreen = !fullScreen;
-              FullScreenWindow.setFullScreen(fullScreen);
-              if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
-                // give the ui some time to settle and redraw the markers (especially the centerwind arrow and it's infowindow)
-                Timer(const Duration(milliseconds: 500), () => setState(() => rotateWindTo(currentReplayTime)));
-              }
-            }),
-            icon: fullScreen
-                ? Icon(Icons.close_fullscreen, color: menuForegroundColor, size: 18)
-                : Icon(Icons.open_in_full, color: menuForegroundColor, size: 18),
-          ),
-        // button to open/close the menubuttobar
-        IconButton(
-            onPressed: () => setState(() {
-                  showMenuButtonBar = !showMenuButtonBar;
-                  if (!showMenuButtonBar) showEventMenu = showInfoPage = showMapMenu = showShipMenu = false;
-                }),
-            icon: showMenuButtonBar ? const Icon(Icons.expand_less) : const Icon(Icons.menu)),
-      ],
-    );
-    //
-    // Now return the UI as a MaterialApp with title, theme and a homepage (with a Scaffold)
+    AppBar myAppBar = uiAppBar();
+    // Now return the UI as a MaterialApp with title, theme and a (single) homepage (with a Scaffold)
     return MaterialApp(
         debugShowCheckedModeBanner: testing,
         title: eventTitle,
         theme: ThemeData(
           canvasColor: menuBackgroundColor,
           useMaterial3: true,
-          textTheme: TextTheme(
-            bodyMedium: TextStyle(color: menuForegroundColor, fontSize: 15),
-          ),
+          textTheme: TextTheme(bodyMedium: TextStyle(color: menuForegroundColor, fontSize: 15)),
         ),
         home: SafeArea(
           top: false,
@@ -669,6 +583,69 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //
   // the UI elements called above. The names speak for themselves (I hope)
   //
+  AppBar uiAppBar() {
+    return AppBar(
+      backgroundColor: menuBackgroundColor.withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu) ? 1 : 0.5),
+      foregroundColor: menuForegroundColor,
+      elevation: 0,
+      toolbarHeight: 40,
+      leading: Container(
+          padding: const EdgeInsets.fromLTRB(5, 0, 0, 0),
+          child: InkWell(
+              // appIcon of the T&T organization. single tap opens event menu, double tap enters testing mode
+              onTap: () => setState(() {
+                    showShipMenu = showMapMenu = showInfoPage = showAttribution = false;
+                    showEventMenu = !showEventMenu;
+                  }),
+              onDoubleTap: () {
+                testing = !testing;
+                setUnsetTestingActions();
+              },
+              child: Tooltip(message: 'evenementmenu', child: Image.network('$server$appIconUrl')))),
+      title: InkWell(
+        onTap: () => setState(() {
+          showShipMenu = showMapMenu = showInfoPage = showAttribution = false;
+          showEventMenu = !showEventMenu;
+        }),
+        child: Tooltip(message: 'evenementmenu', child: Text(eventTitle)),
+      ),
+      actions: [
+        // button for fullscreen on web and desktop
+        if (kIsWeb || kIsDesktop)
+          IconButton(
+            tooltip: fullScreen ? 'exit fullscreen' : (kIsWeb && (document.referrer == '') ? 'fullscreen' : 'open in een nieuw tabblad'),
+            onPressed: () => setState(() {
+              fullScreen = !fullScreen;
+              if (kIsWeb && (document.referrer != '')) {
+                // document.referrer != '' means we are runnig in an iframe
+                launchUrl(Uri.parse('https://${window.location.hostname}?event=$eventDomain&map=$selectedMapType'
+                    '&overlay=${mapOverlay ? 'true' : 'false'}:$selectedOverlayType'
+                    '&play=${replayRunning ? 'true' : 'false'}:${currentReplayTime == sliderEnd ? '0' : currentReplayTime.toString()}'
+                    ':$speedIndex'));
+                if (replayRunning) startStopRunning();
+              } else {
+                FullScreenWindow.setFullScreen(fullScreen);
+                if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
+                  // give the ui some time to settle and redraw the markers (especially the centerwind arrow and it's infowindow)
+                  Timer(const Duration(milliseconds: 500), () => setState(() => rotateWindTo(currentReplayTime)));
+                }
+              }
+            }),
+            icon: fullScreen
+                ? Icon(Icons.close_fullscreen, color: menuForegroundColor, size: 18)
+                : Icon(Icons.open_in_full, color: menuForegroundColor, size: 18),
+          ),
+        // button to open/close the menubuttobar
+        IconButton(
+            onPressed: () => setState(() {
+                  showMenuButtonBar = !showMenuButtonBar;
+                  if (!showMenuButtonBar) showEventMenu = showInfoPage = showMapMenu = showShipMenu = false;
+                }),
+            icon: showMenuButtonBar ? const Icon(Icons.expand_less) : const Icon(Icons.menu)),
+      ],
+    );
+  }
+
   FlutterMap uiFlutterMap() {
     return FlutterMap(
       mapController: mapController,
@@ -718,9 +695,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               urlTemplate: baseMapTileProviders[selectedMapType]['URL'],
               subdomains: List<String>.from(baseMapTileProviders[selectedMapType]['subDomains']),
               tileProvider: NetworkTileProvider(),
-              retinaMode: false,
-              //retinaMode: RetinaMode.isHighDensity(context),
-              //TODO check na update van flutter_map
+              retinaMode: baseMapTileProviders[selectedMapType]['URL'].contains('{r}') ? RetinaMode.isHighDensity(context) : false,
               tileDisplay: const TileDisplay.instantaneous(),
               userAgentPackageName: packageInfo.packageName,
             ),
@@ -743,8 +718,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 urlTemplate: labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['URL'],
                 subdomains: List<String>.from(labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['subDomains']),
                 tileProvider: NetworkTileProvider(),
-                retinaMode: false,
-                //retinaMode: RetinaMode.isHighDensity(context),
+                retinaMode: labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['URL'].contains('{r}')
+                    ? RetinaMode.isHighDensity(context)
+                    : false,
                 tileDisplay: const TileDisplay.instantaneous(),
                 userAgentPackageName: packageInfo.packageName,
               ),
@@ -759,7 +735,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   layers: overlayTileProviders[selectedOverlayType]['wmslayers'].cast<String>(),
                 ),
                 tileProvider: NetworkTileProvider(),
-                retinaMode: RetinaMode.isHighDensity(context),
+                retinaMode: false,
+                //RetinaMode.isHighDensity(context),
                 tileDisplay: const TileDisplay.instantaneous(),
                 userAgentPackageName: packageInfo.packageName,
               ),
@@ -767,18 +744,24 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 urlTemplate: overlayTileProviders[selectedOverlayType]['URL'],
                 subdomains: List<String>.from(overlayTileProviders[selectedOverlayType]['subDomains']),
                 tileProvider: NetworkTileProvider(),
-                retinaMode: false,
-                //retinaMode: RetinaMode.isHighDensity(context),
+                retinaMode: overlayTileProviders[selectedOverlayType]['URL'].contains('{r}') ? RetinaMode.isHighDensity(context) : false,
                 tileDisplay: const TileDisplay.instantaneous(),
                 userAgentPackageName: packageInfo.packageName,
               ),
             _ => const SizedBox()
           },
+        Scalebar(
+            alignment: Alignment.topLeft,
+            padding: EdgeInsets.fromLTRB((showWindMarkers) ? 60 : 15, menuOffset + 15, 0, 0),
+            lineColor: markerBackgroundColor,
+            textStyle: TextStyle(color: markerBackgroundColor),
+            strokeWidth: 1),
         //
-        // two more layers: the lines of the route and trails, and the markers
+        // three more layers: the lines of the route and trails, and the markers
         PolylineLayer(
           polylines: routeLineList + shipTrailList,
         ),
+        if (testing) PolygonLayer(polygons: routePolygons),
         MarkerLayer(
             markers: routeLabelList + // in this order from bottom to top
                 gpsBuoyLabelList +
@@ -1031,8 +1014,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 }),
                 icon: Icon(Icons.info, color: showInfoPage ? menuAccentColor : menuForegroundColor),
               ),
-              if ((config['options']['windy'] == "true" ? true : false) &&
-                  (eventStatus == EventStatus.live || eventStatus == EventStatus.preEvent))
+              if ((config['options']['windy'] == "true") && (eventStatus == EventStatus.live || eventStatus == EventStatus.preEvent))
                 IconButton(
                     //optional button for windy.com
                     onPressed: () {
@@ -1427,6 +1409,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                       showWindMarkers = !showWindMarkers;
                                       windTimeIndex = List.filled(windTimeIndex.length, -1, growable: true);
                                       rotateWindTo(currentReplayTime);
+                                      if (infoWindowId != '' && infoWindowId.substring(0, 4) == 'wind') {
+                                        infoWindowId = '';
+                                        infoWindowMarkerList = [];
+                                      }
                                       prefs.setBool('windmarkers', showWindMarkers);
                                       showMapMenu = false;
                                     }))
@@ -1451,6 +1437,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 value: showRoute,
                                 onChanged: (value) => setState(() {
                                       showRoute = !showRoute;
+                                      if (infoWindowId != '' && infoWindowId.substring(0, 4) == 'rout') {
+                                        infoWindowId = '';
+                                        infoWindowMarkerList = [];
+                                      }
                                       buildRoute();
                                       showGPSBuoys(currentReplayTime);
                                       prefs.setBool('showroute', showRoute);
@@ -2155,7 +2145,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       if (time <= shipTrack['stamp'].first) {
         // before the first timestamp
         timeIndex = 0; // set the track's timeIndex to the first entry
-        calculatedPosition = LatLng(shipTrack['lat'].first, shipTrack['lon'].first);
+        calculatedPosition = LatLng(shipTrack['lat'].first.toDouble(), shipTrack['lon'].first.toDouble());
         calculatedRotation = shipTrack['course'].first;
       } else if (time >= shipTrack['stamp'].last) {
         // we are at or beyond the last timestamp
@@ -2165,11 +2155,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           // we are live AND we are at the end of the slider AND the last stamp is less then 3 minutes old
           // in this situation we make a prediction where the ship could be, based on the last known location, speed, time since the last
           // location and the heading
-          calculatedPosition = predictPosition(LatLng(shipTrack['lat'].last, shipTrack['lon'].last), shipTrack['speed'].last / 10,
-              time - shipTrack['stamp'].last, calculatedRotation);
+          calculatedPosition = predictPosition(LatLng(shipTrack['lat'].last.toDouble(), shipTrack['lon'].last.toDouble()),
+              shipTrack['speed'].last / 10, time - shipTrack['stamp'].last, calculatedRotation);
         } else {
           // we are beyond the last timestamp and beyond the 3 minute lostSignal time
-          calculatedPosition = LatLng(shipTrack['lat'].last, shipTrack['lon'].last);
+          calculatedPosition = LatLng(shipTrack['lat'].last.toDouble(), shipTrack['lon'].last.toDouble());
         }
       } else {
         // we are somewhere between two stamps:
@@ -2192,8 +2182,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         double ratio = (time - stamps[timeIndex]) / (stamps[timeIndex + 1] - stamps[timeIndex]);
         // and set the ship position and rotation at that ratio between last and next positions/rotations
         calculatedPosition = LatLngTween(
-                begin: LatLng(shipTrack['lat'][timeIndex], shipTrack['lon'][timeIndex]),
-                end: LatLng(shipTrack['lat'][timeIndex + 1], shipTrack['lon'][timeIndex + 1]))
+                begin: LatLng(shipTrack['lat'][timeIndex].toDouble(), shipTrack['lon'][timeIndex].toDouble()),
+                end: LatLng(shipTrack['lat'][timeIndex + 1].toDouble(), shipTrack['lon'][timeIndex + 1].toDouble()))
             .transform(ratio);
         // calculate the rotation
         // tried this with a conversion to vectors, but the sin, cos and atan2 functions require too much time
@@ -2258,35 +2248,23 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 onTap: () => setState(() {
                       // show infowindow
                       infoWindowId = 'ship${shipTrack['name']}';
-                      infoWindowMarkerList = [createInfoWindowMarker(iwTitle, iwText, '$i', calculatedPosition)];
+                      infoWindowMarkerList = [infoWindowMarker(iwTitle, iwText, '$i', calculatedPosition)];
                       moveShipsTo(time, false);
                     }))),
       );
       // refresh the infowindow if it was open for this ship
       if (infoWindowId == 'ship${shipTrack['name']}') {
-        infoWindowMarkerList = [createInfoWindowMarker(iwTitle, iwText, '$i', calculatedPosition)];
+        infoWindowMarkerList = [infoWindowMarker(iwTitle, iwText, '$i', calculatedPosition)];
       }
       // build the shipLabel
-      if (!showShipLabels) {
-        shipLabelList[i] = const Marker(point: LatLng(0, 0), child: SizedBox());
-      } else {
-        var txt = '${shipTrack['name']}${shipLostSignalIndicators[i]}${((showShipSpeeds) ? ', $speedString' : '')}';
-        shipLabelList[i] = Marker(
-            point: calculatedPosition,
-            width: 300,
-            height: 30,
-            alignment: const Alignment(0.95, 1.5),
-            child: Wrap(alignment: WrapAlignment.start, children: [
-              BorderedText(
-                  strokeWidth: 1.5,
-                  strokeColor: labelBackgroundColor,
-                  child: Text(txt, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: markerBackgroundColor)))
-            ]));
-      }
+      shipLabelList[i] = showShipLabels
+          ? mapTextLabel(
+              calculatedPosition, '${shipTrack['name']}${shipLostSignalIndicators[i]}${(showShipSpeeds ? ', $speedString' : '')}')
+          : const Marker(point: LatLng(0, 0), child: SizedBox());
       // build the shipTrail (note we reuse/destroy the timeIndex here...)
       List<LatLng> trail = [calculatedPosition];
       while ((timeIndex >= 0) && (shipTrack['stamp'][timeIndex] > (time - actualTrailLength * 60 * 1000))) {
-        trail.add(LatLng(shipTrack['lat'][timeIndex], shipTrack['lon'][timeIndex]));
+        trail.add(LatLng(shipTrack['lat'][timeIndex].toDouble(), shipTrack['lon'][timeIndex].toDouble()));
         timeIndex--;
       }
       shipTrailList[i] = Polyline(
@@ -2348,7 +2326,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           // add the buoy marker
           String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="4" '
               'fill="${gpsBuoy['color']}" stroke="$bgColor" stroke-width="1"/></svg>';
-          LatLng gpsBuoyPosition = LatLng(gpsBuoy['lat'][timeIndex], gpsBuoy['lon'][timeIndex]);
+          LatLng gpsBuoyPosition = LatLng(gpsBuoy['lat'][timeIndex].toDouble(), gpsBuoy['lon'][timeIndex].toDouble());
           gpsBuoyMarkerList[i] = Marker(
               point: gpsBuoyPosition,
               width: 22,
@@ -2359,29 +2337,15 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                     child: SvgPicture.string(svgString),
                     onTap: () => setState(() {
                       infoWindowId = 'buoy${gpsBuoy['name']}';
-                      infoWindowMarkerList = [createInfoWindowMarker(gpsBuoy['name'], gpsBuoy['description'], '', gpsBuoyPosition)];
+                      infoWindowMarkerList = [infoWindowMarker(gpsBuoy['name'], gpsBuoy['description'], '', gpsBuoyPosition)];
                     }),
                   )));
           // refresh the infowindow if it was open for this buoy
           if (infoWindowId == 'buoy${gpsBuoy['name']}') {
-            infoWindowMarkerList = [createInfoWindowMarker(gpsBuoy['name'], gpsBuoy['description'], '', gpsBuoyPosition)];
+            infoWindowMarkerList = [infoWindowMarker(gpsBuoy['name'], gpsBuoy['description'], '', gpsBuoyPosition)];
           }
-          if (!showRouteLabels) {
-            gpsBuoyLabelList[i] = const Marker(point: LatLng(0, 0), child: SizedBox());
-          } else {
-            gpsBuoyLabelList[i] = Marker(
-                point: gpsBuoyPosition,
-                width: 300,
-                height: 30,
-                alignment: const Alignment(0.95, 1.25),
-                child: Wrap(alignment: WrapAlignment.start, children: [
-                  BorderedText(
-                      strokeWidth: 1.5,
-                      strokeColor: labelBackgroundColor,
-                      child:
-                          Text(gpsBuoy['name'], style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: markerBackgroundColor)))
-                ]));
-          }
+          gpsBuoyLabelList[i] =
+              showRouteLabels ? mapTextLabel(gpsBuoyPosition, gpsBuoy['name']) : const Marker(point: LatLng(0, 0), child: SizedBox());
         }
       }
       // no need to refresh the infowindow that may be open for this floating buoy, because for gps buoys it does not contain
@@ -2445,12 +2409,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                     child: SvgPicture.string(svgString),
                     onTap: () => setState(() {
                       infoWindowId = 'wind${windStation['name']}';
-                      infoWindowMarkerList = [createInfoWindowMarker(windStation['name'], iwText, '', windStationPosition)];
+                      infoWindowMarkerList = [infoWindowMarker(windStation['name'], iwText, '', windStationPosition)];
                     }),
                   )));
           // refresh the infowindow if it was open for this windstation
-          if (infoWindowId == 'wind${windStation['name']}') {
-            infoWindowMarkerList = [createInfoWindowMarker(windStation['name'], iwText, '', windStationPosition)];
+          if (infoWindowId == 'wind-${windStation['name']}') {
+            infoWindowMarkerList = [infoWindowMarker(windStation['name'], iwText, '', windStationPosition)];
           }
         }
       }
@@ -2466,104 +2430,115 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         ({int heading, double speed}) center = centerWind(nrWindStationsForCenterWindCalculation);
         String iwTitle = 'Wind midden van de kaart\nobv nabije weerstations';
         String iwText = '${center.speed.toStringAsFixed(1)} knopen, ${knotsToBft(center.speed)} Bft';
+        String toolTipText = iwText;
+        bool showWindy = ((config['options']['windy'] == 'true') && eventStatus == EventStatus.live);
+        iwText += showWindy ? '\n(www.windy.com)' : '';
         String fillColor = knotsToColor(center.speed);
         String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="10" '
             'fill="none" stroke="$bgColor" stroke-width="1.2"/><polygon points="7,1 11,20 15,1 11,6" '
             'style="fill:$fillColor;stroke:$bgColor;stroke-width:1" transform="rotate(${center.heading} 11,11)" /></svg>';
-        var arrowPosition = mapController.camera.pointToLatLng(Point(30, menuOffset + 30));
+        LatLng arrowPosition = mapController.camera.pointToLatLng(Point(30, menuOffset + 30));
         // position the infowindow beneath the marker
-        var infoWindowPosition = mapController.camera.pointToLatLng(Point(110, menuOffset + 130));
+        LatLng infoWindowPosition = mapController.camera.pointToLatLng(Point(110, menuOffset + (showWindy ? 145 : 130)));
+        LatLng midMap = mapController.camera.center;
+        String iwLink = 'https://embed.windy.com/embed2.html?lat=${midMap.latitude}&lon=${midMap.longitude}'
+            '&detailLat=${midMap.latitude}&detailLon=${midMap.longitude}&width=$screenWidth&height=$screenHeight'
+            '&zoom=${mapController.camera.zoom}&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker=&calendar=now&pressure='
+            '&type=map&location=coordinates&detail=true&metricWind=bft&metricTemp=%C2%B0C&radarRange=-1';
         windMarkerList.last = Marker(
             point: arrowPosition,
             width: 22,
             height: 22,
             child: Tooltip(
-                message: iwText,
+                message: toolTipText,
                 child: InkWell(
                   child: SvgPicture.string(svgString),
                   onTap: () => setState(() {
                     infoWindowId = 'windCenter';
-                    infoWindowMarkerList = [createInfoWindowMarker(iwTitle, iwText, '', infoWindowPosition)];
+                    infoWindowMarkerList = [infoWindowMarker(iwTitle, iwText, showWindy ? iwLink : '', infoWindowPosition)];
                   }),
                 )));
         // refresh the infowindow if it was open for this windstation
         if (infoWindowId == 'windCenter') {
-          infoWindowMarkerList = [createInfoWindowMarker(iwTitle, iwText, '', infoWindowPosition)];
+          infoWindowMarkerList = [infoWindowMarker(iwTitle, iwText, showWindy ? iwLink : '', infoWindowPosition)];
         }
       }
     }
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
-  // build the route polyline, routemarkers and the labels
-  // if move = true, move the map to the bounds of the route after creating it, default = false, do not move
-  // the route itself is contained in a .geojson file. We only look at Points and LineStrings (i.e. no Polygons or other features)
+  // Build the route polyline, routemarkers and the labels.
+  // If move = true, move the map to the bounds of the route after creating it, default = false, do not move.
+  // The route itself is contained in a .geojson file. We only look at Points and LineStrings (i.e. no Polygons or other features)
   //
   void buildRoute({bool move = false}) {
     routeLineList = [];
+    routePolygons = [];
     routeMarkerList = [];
     routeLabelList = [];
     List<LatLng> routeBounds = [];
+    List<LatLng> points = [];
+    List<dynamic> pts = [];
     // if there is an active infowindow for a route element: get rid of it
     if (infoWindowId != '' && infoWindowId.substring(0, 4) == 'rout') {
       infoWindowId = '';
       infoWindowMarkerList = [];
     }
-    if (showRoute) {
-      for (int k = 0; k < route['features'].length; k++) {
-        if (route['features'][k]['geometry']['type'] == 'LineString') {
-          List<LatLng> points = [];
-          List<dynamic> pts = route['features'][k]['geometry']['coordinates'];
+    if (showRoute && route.isNotEmpty) {
+      route['features'].forEach((feature) {
+        if (feature['geometry']['type'] == 'LineString') {
+          points = [];
+          pts = feature['geometry']['coordinates'];
           for (int i = 0; i < pts.length; i++) {
             points.add(LatLng(pts[i][1], pts[i][0]));
           }
           routeBounds += move ? points : [];
           routeLineList.add(Polyline(
               points: points,
-              color: Color(int.parse('6F${route['features'][k]['properties']['stroke'].toString().substring(1)}', radix: 16)),
+              color: Color(int.parse('8F${feature['properties']['stroke'].toString().substring(1)}', radix: 16)),
               strokeWidth: eventStatus == EventStatus.preEvent ? 4 : 2));
-        } else if (route['features'][k]['geometry']['type'] == 'Point') {
-          LatLng point = LatLng(route['features'][k]['geometry']['coordinates'][1], route['features'][k]['geometry']['coordinates'][0]);
-          var fillColor = route['features'][k]['properties']['fillcolor'] ?? 'red';
+        } else if (feature['geometry']['type'] == 'Point') {
+          LatLng point = LatLng(feature['geometry']['coordinates'][1], feature['geometry']['coordinates'][0]);
+          var fillColor = feature['properties']['fillcolor'] ?? 'red';
           String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="4" '
               'fill="$fillColor" stroke="$bgColor" stroke-width="1"/></svg>';
-          String iwTitle = '${route['features'][k]['properties']['name']}';
-          String iwText = route['features'][k]['properties']['description'] ?? '';
-          String iwLink = route['features'][k]['properties']['link'] ?? '';
+          String iwTitle = '${feature['properties']['name']}';
+          String iwText = feature['properties']['description'] ?? '';
+          String iwLink = feature['properties']['link'] ?? '';
           iwText += (iwLink == '') ? '' : ' (klik of tap)';
           routeMarkerList.add(Marker(
               point: point,
               width: 22,
               height: 22,
               child: Tooltip(
-                  message: showRouteLabels ? '' : route['features'][k]['properties']['name'],
+                  message: showRouteLabels ? '' : feature['properties']['name'],
                   child: InkWell(
                     child: SvgPicture.string(svgString),
                     onTap: () => setState(() {
-                      infoWindowId = 'rout$k';
-                      infoWindowMarkerList = [createInfoWindowMarker(iwTitle, iwText, iwLink, point)];
+                      infoWindowId = 'rout-${feature['properties']['name']}';
+                      infoWindowMarkerList = [infoWindowMarker(iwTitle, iwText, iwLink, point)];
                     }),
                   ))));
-          if (showRouteLabels) {
-            var name = route['features'][k]['properties']['name'];
-            routeLabelList.add(Marker(
-                point: point,
-                width: 300,
-                height: 30,
-                alignment: const Alignment(0.95, 1.25),
-                child: Wrap(alignment: WrapAlignment.start, children: [
-                  BorderedText(
-                      strokeWidth: 1.5,
-                      strokeColor: labelBackgroundColor,
-                      child: Text(name, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: markerBackgroundColor)))
-                ])));
-          }
+          if (showRouteLabels) routeLabelList.add(mapTextLabel(point, feature['properties']['name']));
           routeBounds += move ? [point] : [];
+        } else if ((feature['geometry']['type'] == 'Polygon') && testing) {
+          points = [];
+          pts = feature['geometry']['coordinates'];
+          for (int i = 0; i < pts[0].length; i++) {
+            points.add(LatLng(pts[0][i][1], pts[0][i][0]));
+          }
+          routePolygons.add(Polygon(
+              points: points,
+              color: Colors.black12,
+              borderStrokeWidth: 1,
+              borderColor: Colors.black,
+              label: feature['properties']['name'],
+              labelStyle: const TextStyle(color: Colors.black)));
         }
-      }
+      });
     }
     if (move && routeBounds.isNotEmpty) {
-      //move the map to the route
+      //move the map to show the whole route
       mapController.fitCamera(CameraFit.bounds(
           bounds: LatLngBounds.fromPoints(routeBounds),
           maxZoom: 17,
@@ -2574,54 +2549,20 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
-  // routine to create an infowindow that can be added to the map as a marker
-  //
-  Marker createInfoWindowMarker(String title, String body, String link, LatLng point) {
-    return Marker(
-        point: point,
-        alignment: const Alignment(0.0, -1.1),
-        width: 200,
-        height: 200,
-        child: Wrap(alignment: WrapAlignment.center, runAlignment: WrapAlignment.end, children: [
-          Card(
-              color: Colors.white,
-              child: Container(
-                  padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(title, style: const TextStyle(fontSize: 12.0, color: Colors.black, fontWeight: FontWeight.bold)),
-                    if (body != '')
-                      MouseRegion(
-                          cursor: SystemMouseCursors.click,
-                          child: GestureDetector(
-                              onTap: (link == '')
-                                  ? null
-                                  : (int.tryParse(link) != null)
-                                      ? () => loadAndShowShipDetails(int.parse(link))
-                                      : () => setState(() {
-                                            showEventMenu = showShipMenu = showMapMenu = showShipInfo = false;
-                                            launchUrl(Uri.parse(link));
-                                          }),
-                              child: Text(body, style: const TextStyle(fontSize: 12.0, color: Colors.black))))
-                  ])))
-        ]));
-  }
-
-  //----------------------------------------------------------------------------------------------------------------------------------------
   // Routine to merge the latest live ship, gps buoy and wind trails with saved replay trails into an updated replay trails object
   // Note that there may be more/new ships/buoys/windstations in liveTrails then in replayTracks, because a ship may have joined the race later
   // (tracker or AIS data only turned on after eventStart, or the admin added a ship).
   // At the end of the routine the merged data is saved in local storage (pref)
   //
   void addLiveTrailsToTracks() async {
-    for (int i = 0; i < liveTrails['shiptracks'].length; i++) {
-      var liveShip = liveTrails['shiptracks'][i];
+    liveTrails['shiptracks'].forEach((liveShip) {
       // get the index (index) in the replaytracks with the same name as the ship we try to add (liveShip)
       int index = replayTracks['shiptracks'].indexWhere((item) => item['name'] == liveShip['name']);
       if (index != -1) {
         // we found a ship with this name, add the 'live' info to the 'replay' track info
         var replayShip = replayTracks['shiptracks'][index];
         replayShip['colorcode'] = liveShip['colorcode']; // copy possible new colorcode
-        int laststamp = replayShip['stamp'].last; // there may overlapping data, so make sure we start with dat newer then our last stamp
+        int laststamp = replayShip['stamp'].last; // there may overlapping data, so make sure we start with data newer then our last stamp
         for (int k = 0; k < liveShip['stamp'].length; k++) {
           // add stamps, lats, lons, speeds and courses
           if (liveShip['stamp'][k] > laststamp) {
@@ -2639,10 +2580,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       }
       // sort tracks based on colorcode (new tracks and tracks with changed colorcodes)
       replayTracks['shiptracks'].sort((a, b) => int.parse(a['colorcode']).compareTo(int.parse(b['colorcode'])));
-    }
+    });
     // now for the gps buoys
-    for (int i = 0; i < liveTrails['buoytracks'].length; i++) {
-      var liveBuoy = liveTrails['buoytracks'][i];
+    liveTrails['buoytracks'].forEach((liveBuoy) {
       // get the index (index) in the replaytracks with the same name as the buoy we try to add (liveBuoy)
       int index = replayTracks['buoytracks'].indexWhere((item) => item['name'] == liveBuoy['name']);
       if (index != -1) {
@@ -2662,10 +2602,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         // we had no buoy with this name yet, just add it
         replayTracks['buoytracks'].add(liveBuoy);
       }
-    }
+    });
     // and finally the same for the weather stations
-    for (int i = 0; i < liveTrails['windtracks'].length; i++) {
-      var liveWindStation = liveTrails['windtracks'][i];
+    liveTrails['windtracks'].forEach((liveWindStation) {
       int index = replayTracks['windtracks'].indexWhere((item) => item['name'] == liveWindStation['name']);
       if (index != -1) {
         // we already had a weather station with this name
@@ -2684,7 +2623,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         // we had no weather station with this name yet
         replayTracks['windtracks'].add(liveWindStation); // add the complete weather station
       }
-    }
+    });
     //
     replayTracks['endtime'] = liveTrails['endtime']; // set the new endtime and store locally
     // browsers do not allow us to store more then 5 Mbyte. But for the rest: store/overwrite the updated tracks
@@ -2715,18 +2654,66 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       shipTrailList.add(Polyline(points: [const LatLng(0, 0)]));
     }
     gpsBuoyTimeIndex = List.filled(replayTracks['buoytracks'].length, -1, growable: true);
-    gpsBuoyMarkerList = [];
-    gpsBuoyLabelList = [];
-    for (int i = 0; i < replayTracks['buoytracks'].length; i++) {
-      gpsBuoyMarkerList.add(const Marker(point: LatLng(0, 0), child: SizedBox()));
-      gpsBuoyLabelList.add(const Marker(point: LatLng(0, 0), child: SizedBox()));
-    }
+    gpsBuoyMarkerList =
+        List.filled(replayTracks['buoytracks'].length, const Marker(point: LatLng(0, 0), child: SizedBox()), growable: true);
+    gpsBuoyLabelList = List.filled(replayTracks['buoytracks'].length, const Marker(point: LatLng(0, 0), child: SizedBox()), growable: true);
     windTimeIndex = List.filled(replayTracks['windtracks'].length, -1, growable: true);
-    windMarkerList = [];
     // note: one extra for the centerscreenwindmarker
-    for (int i = 0; i < replayTracks['windtracks'].length + 1; i++) {
-      windMarkerList.add(const Marker(point: LatLng(0, 0), child: SizedBox()));
-    }
+    windMarkerList =
+        List.filled(replayTracks['windtracks'].length + 1, const Marker(point: LatLng(0, 0), child: SizedBox()), growable: true);
+  }
+
+  //
+  // a few widget creating routines
+  //
+  //----------------------------------------------------------------------------------------------------------------------------------------
+  // one to create an infowindow that can be added to the map as a marker
+  //
+  Marker infoWindowMarker(String title, String body, String link, LatLng point) {
+    return Marker(
+        point: point,
+        alignment: const Alignment(0.0, -1.1),
+        width: 200,
+        height: 200,
+        child: Wrap(alignment: WrapAlignment.center, runAlignment: WrapAlignment.end, children: [
+          Card(
+              color: Colors.white,
+              child: Container(
+                  padding: const EdgeInsets.fromLTRB(10, 7, 10, 7),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(title, style: const TextStyle(fontSize: 12.0, color: Colors.black, fontWeight: FontWeight.bold)),
+                    if (body != '')
+                      MouseRegion(
+                          cursor: SystemMouseCursors.click,
+                          child: GestureDetector(
+                              onTap: (link == '')
+                                  ? null
+                                  : (int.tryParse(link) != null)
+                                      ? () => loadAndShowShipDetails(int.parse(link))
+                                      : () => setState(() {
+                                            showEventMenu = showShipMenu = showMapMenu = showShipInfo = false;
+                                            launchUrl(Uri.parse(link));
+                                          }),
+                              child: Text(body, style: const TextStyle(fontSize: 12.0, color: Colors.black))))
+                  ])))
+        ]));
+  }
+
+  //
+  // and a routine to create labels next to ships, buoys and route points
+  //
+  Marker mapTextLabel(LatLng point, String txt) {
+    return Marker(
+        point: point,
+        width: 300,
+        height: 30,
+        alignment: const Alignment(0.95, 1.25),
+        child: Wrap(alignment: WrapAlignment.start, children: [
+          BorderedText(
+              strokeWidth: 1.5,
+              strokeColor: labelBackgroundColor,
+              child: Text(txt, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: markerBackgroundColor)))
+        ]));
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
@@ -2770,7 +2757,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
 
   //----------------------------------------------------------------------------------------------------------------------------------------
   // routine for getting a replay json file (during the event max 5 minutes old)
-  // the optional noData parameter is just for statistics collected by the server
+  // the optional noData and noStats parameters is just for statistics collected by the server
+  // with noData = true, we will not receive any data back. This is used when we are running as a mobile app or a windows app and we
+  // alreadu have replay data in shared preference data.
+  // with noStats, the server will not log statistical data. This is done when we retreive replay data during live.
   //
   Future<Map<String, dynamic>> getReplayTracks(domain, {noData = false, noStats = false}) async {
     final response = await http.get(
@@ -2790,9 +2780,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
-  // All stamps in the file are in seconds. In the app we work with milliseconds so after getting the jsonfile into a map,
-  // we need to multiply all stamps with 1000. To save us some null-checking lateron, we also add empty ship-, buoy- and windtracks just
-  // in case they were not in the file
+  // All stamps in the file we receive from the server are in seconds. In the app we work with milliseconds so after getting the jsonfile
+  // into a map, we need to multiply all stamps with 1000. To save us some null-checking lateron, we also add empty ship-, buoy- and
+  // windtracks just in case they were not in the file
   //
   Map<String, dynamic> convertTimes(track) {
     track['starttime'] *= 1000;
@@ -2907,5 +2897,17 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     }
     // and return the result
     return (heading: atan2(northSouthSum, eastWestSum) * 180 ~/ pi, speed: sqrt(pow(eastWestSum, 2) + pow(northSouthSum, 2)));
+  }
+
+  void setUnsetTestingActions() async {
+    // clear the test string under the time slider (currently set in replayTickerRoutine if testing is true)
+    if (!testing) debugString = '';
+    // get a new dirlist WITH (or without, depending on the value of testing) domain name items starting with an underscore
+    dirList = await getDirList();
+    eventNameList = dirList.keys.toList()..sort;
+    eventYearList = [];
+    eventDayList = [];
+    // redraw the route with or without the geofence polygons in line with the testing boolean
+    buildRoute();
   }
 }

@@ -1,4 +1,4 @@
-#./build-variant szw/sv/oly
+#./build-variant szw/sv/olympia
 #
 # Dit PowerShell script maakt de executables voor Web, Android en Windows, voor de als parameter aangegeven variant
 # Voor elke variant moet je een folder maken in de folder variants/xxx (kopieer van een andere variant) met daarin
@@ -47,7 +47,7 @@ rename setBundleId --value $appbundle --targets android,ios,web,windows,macos
 
 # create the icons for all platforms using the appropriate yaml file. De yaml file moet
 # volgens de documentatie in dezelfde folder als pubspec.yaml staan...
-Copy-Item -Path "variants/$variant/flutter_launcher_icons.yaml" -Destination "flutter_launcher_icons.yaml"
+Copy-Item -Path "variants\$variant\flutter_launcher_icons.yaml" -Destination "flutter_launcher_icons.yaml"
 dart run flutter_launcher_icons flutter_launcher_icons.yaml
 
 # copy the variant/xxx/main.dart to lib/main.dart (so we always build main.dart)

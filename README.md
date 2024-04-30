@@ -3,6 +3,12 @@
 Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen
 
 ----------------------------------------------------------------------------------------------------
+Version 3.2.3
+Internal optimizations (full screen button, widgets for mapTextLabels)
+Feature: link to windy.com in infoWindow van center wind arrow
+Enhancement: show start/finish polygons in route in testing mode
+Feature: added scalebar
+Bugfix: wind/route infowindow closed when windarrows/route turned off
 
 Version 3.2.2 released on April 14, 2024
 bugfix: mapchange fails when eventstatus is initial. solved.
