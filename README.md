@@ -9,6 +9,10 @@ Feature: link to windy.com in infoWindow van center wind arrow
 Enhancement: show start/finish polygons in route in testing mode
 Feature: added scalebar
 Bugfix: wind/route infowindow closed when windarrows/route turned off
+Bugfix: windmarkers were not updated immediately after mapchange
+Several cosmetic optimizations
+change: turn of autozoom ánd autofollow after manually zooming/moving the map
+change: upgrade to flutter 3.22 with change in index.html for web
 
 Version 3.2.2 released on April 14, 2024
 bugfix: mapchange fails when eventstatus is initial. solved.
