@@ -11,6 +11,7 @@
 // library imports
 //
 import 'dart:async';
+import 'dart:core';
 import 'dart:convert';
 import 'dart:math';
 
@@ -642,7 +643,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               if (gesture) {
                 setState(() {
                   // stop autozoom and autofollow, close all menu's and update wind markers, in order to update the "center wind marker"
-                  autoZoom = autoFollow = showEventMenu = showInfoPage = showMapMenu = showShipMenu = false;
+                  autoFollow = showEventMenu = showInfoPage = showMapMenu = showShipMenu = false;
                   if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
                     rotateWindTo(currentReplayTime);
                   }
@@ -935,7 +936,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           thumbIcon: autoFollow ? const WidgetStatePropertyAll(Icon(Icons.check)) : null,
           value: autoFollow,
           onChanged: (value) => setState(() {
-            autoFollow = value;
+            var temp = false;
+            following.forEach((_, val) {
+              if (val) temp = true;
+            }); // set temp to true if there are ships to follow
+            autoFollow = temp ? value : false; // dont allow autoFollow on when no ship to follow
+            showShipMenu = temp ? showShipMenu : true; // show shipmenu if no ships to follow
             moveShipsBuoysAndWindTo(currentReplayTime);
           }),
         ),
@@ -1033,7 +1039,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             padding: EdgeInsets.fromLTRB(10, menuOffset + 5, 0, 10),
             child: Column(children: [
               Row(children: [
-                const Text("Evenementmenu"),
+                const Text("Kies hieronder een evenement"),
                 const Spacer(),
                 IconButton(
                     onPressed: () => setState(() => showEventMenu = false),
@@ -1173,13 +1179,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                             side: BorderSide(color: menuForegroundColor),
                             value: followAll,
                             onChanged: (value) => setState(() {
-                                  following.forEach((k, v) => following[k] = value!);
-                                  followAll = value!;
-                                  showShipMenu = !value;
-                                  var saveZoom = autoZoom;
-                                  autoZoom = true;
+                                  showShipMenu = value!;
+                                  following.forEach((k, v) => following[k] = value);
+                                  followAll = autoZoom = autoFollow = value;
                                   moveShipsBuoysAndWindTo(currentReplayTime);
-                                  autoZoom = saveZoom;
                                 })),
                       ]),
                       ListView.builder(
@@ -1206,10 +1209,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 value: (following[shipList[index]] == null) ? false : following[shipList[index]],
                                 onChanged: (value) => setState(() {
                                       following[shipList[index]] = value!;
-                                      var saveZoom = autoZoom;
-                                      autoZoom = true;
+                                      autoFollow = autoZoom = false;
+                                      following.forEach((_, val) {
+                                        if (val) autoFollow = autoZoom = true;
+                                      });
                                       moveShipsBuoysAndWindTo(currentReplayTime);
-                                      autoZoom = saveZoom;
                                     })),
                           ]);
                         },
@@ -1912,7 +1916,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     autoFollow = true;
     autoZoom = true; // zoom to all ships at the start
     moveShipsBuoysAndWindTo(currentReplayTime);
-    autoZoom = false; // but turn of autozoom when running
+    //autoZoom = false; // but turn of autozoom when running
     liveSecondsTimer = trailsUpdateInterval * 1000 ~/ hfUpdateInterval;
     liveTimer = Timer.periodic(const Duration(milliseconds: hfUpdateInterval), (_) => liveTimerRoutine());
     setState(() {}); // redraw the UI
@@ -2765,7 +2769,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // routine to get shipInfo from the server and show it in a draggable window (see uiShipInfo widget)
   //
   void loadAndShowShipDetails(ship) async {
-    final response = await http.get(Uri.parse('${server}get/?req=shipinfo&dev=$phoneId&event=$eventDomain&ship=${shipList[ship]}'));
+    final response = await http
+        .get(Uri.parse('${server}get/?req=shipinfo&dev=$phoneId&event=$eventDomain&ship=${Uri.encodeQueryComponent(shipList[ship])}'));
     shipInfoHTML = (response.statusCode == 200 && response.body != '') ? response.body : 'Could not load ship info';
     shipInfoHTML = shipInfoHTML.replaceFirst('Schipper:', '${config['text']['skipper'] ?? 'Schipper'}:');
     if (!showShipInfo) shipInfoPosition = Offset(55, menuOffset + 25);

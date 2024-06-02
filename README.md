@@ -3,11 +3,14 @@
 Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen
 
 ----------------------------------------------------------------------------------------------------
-Version 3.2.4
-change: turn of autozoom ánd autofollow after manually zooming/moving the map
+Version 3.2.4 released on June 2, 2024
+improvement: turn off autofollow after manually zooming/moving the map, turn off autofollow when no
+ships are selected, and don't allow autofollow to be turned on when no ships are selected. Turn on
+autoFollow and autoZoom when user selects one or more ships.
 change: upgrade to flutter 3.22 with change in index.html for web
+bugfix: allow shipnames containing single quotes and ampersands
 
-Version 3.2.3
+Version 3.2.3 released on April 30, 2024
 Internal optimizations (full screen button, widgets for mapTextLabels)
 Feature: link to windy.com in infoWindow van center wind arrow
 Enhancement: show start/finish polygons in route in testing mode
@@ -24,7 +27,7 @@ replay or live. Image is not flickering anymore due to change in server php scri
 feature: double click on a ship-marker sets following that ship (only) and opens the shipmenu to
 allow for additional ships to select (autofollow is set to true, autozoom is not changed)
 feature: rightclick on the ship-marker opens the shipInfoWindow.
-feature: click on the body of the ship's infowindow opens de shipInfoWindop
+feature: click on the body of the ship's infowindow opens de shipInfoWindow
 enhancement: fullscreen en fulllscreen_exit icons vervangen
 enhancement: signalLossTime now eventinfo parameter
 
