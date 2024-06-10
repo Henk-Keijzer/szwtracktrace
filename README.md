@@ -3,21 +3,44 @@
 Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen
 
 ----------------------------------------------------------------------------------------------------
+
+feature requests:
+
+- veld bij shiptracks toevoegen, naast colorcode en shipname ook 'sleepwaarde' voor het berekenen
+  van het wattage van roeisloepen, dit natuurlijk ook verwerken in de admin me pagina, get/index.php
+  en de database (participans tabel), selectievakje om ipv de snelheid het wattage te tonen, maar
+  dit wel in event.json optioneel te maken
+- optie om in de deelnemenrslijst in plaats van scheepsnaam de naam van de schipper te tonen
+- toegang tot testmodus dmv username password, met name voor toegang tot underscored events
+
+optimalisaties:
+
+- live en replay verder integreren en ook live door (replay)ticker aansturen
+
+----------------------------------------------------------------------------------------------------
+Version 3.2.5
+
+- functional improvement: during live, introduced possibility of delayed display of ships, to enable
+  smooth mevement towards the last posion received. This in combination with a (possibly) shorter
+  prediction time.
+
 Version 3.2.4 released on June 2, 2024
-improvement: turn off autofollow after manually zooming/moving the map, turn off autofollow when no
-ships are selected, and don't allow autofollow to be turned on when no ships are selected. Turn on
-autoFollow and autoZoom when user selects one or more ships.
-change: upgrade to flutter 3.22 with change in index.html for web
-bugfix: allow shipnames containing single quotes and ampersands
+
+- improvement: turn off autofollow after manually zooming/moving the map, turn off autofollow when
+  no ships are selected, and don't allow autofollow to be turned on when no ships are selected. Turn
+  on autoFollow and autoZoom when user selects one or more ships.
+- change: upgrade to flutter 3.22 with change in index.html for web
+- bugfix: allow shipnames containing single quotes and ampersands
 
 Version 3.2.3 released on April 30, 2024
-Internal optimizations (full screen button, widgets for mapTextLabels)
-Feature: link to windy.com in infoWindow van center wind arrow
-Enhancement: show start/finish polygons in route in testing mode
-Feature: added scalebar
-Bugfix: wind/route infowindow closed when windarrows/route turned off
-Bugfix: windmarkers were not updated immediately after mapchange
-Several cosmetic optimizations
+
+- Internal optimizations (full screen button, widgets for mapTextLabels)
+- Feature: link to windy.com in infoWindow van center wind arrow
+- Enhancement: show start/finish polygons in route in testing mode
+- Feature: added scalebar
+- Bugfix: wind/route infowindow closed when windarrows/route turned off
+- Bugfix: windmarkers were not updated immediately after mapchange
+- Several cosmetic optimizations
 
 Version 3.2.2 released on April 14, 2024
 bugfix: mapchange fails when eventstatus is initial. solved.

@@ -143,6 +143,8 @@ int maxReplay = 0; // eventInfo['maxreplay'] in hours
 // sets eventbegin xx hours before current time to limit the replay for continuous events (Olympia-charters, _TTTEST)
 bool allowShowSpeed = true; // eventInfo['allowshowspeed']
 bool hfUpdate = true; // eventInfo['hfupdate']. If 'true', positions are predicted every hfUpdateInterval ms during live
+int displayDelay = 30; // eventInfo['dispaydelay'], seconds to wait for displaying the ships positions
+int predictTime = 30; // eventInfo['predicttime'], seconds to predict postions after the the last position received
 const int hfUpdateInterval = 100; // in ms, use these values: 100, 200, 250, 500 or 1000 (i.e. 1000/x preferably be an int)
 // don't go beyond 1000 ms, otherwise the timer at the bottom skips values
 bool allowShowWind = true; // eventInfo['buienradar'] If false, never show wind
@@ -785,14 +787,15 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               children: [
                 Text(
                     (eventStatus == EventStatus.live && currentReplayTime == sliderEnd)
-                        ? '1 sec/sec $debugString'
-                        : '${speedTextTable[speedIndex.toInt()]} $debugString',
+                        ? '1 sec/sec${(testing) ? ' | $debugString' : ''}'
+                        : '${speedTextTable[speedIndex.toInt()]}${(testing) ? ' | $debugString' : ''}',
                     style: TextStyle(color: textColor)),
                 const Spacer(),
                 if (eventStatus != EventStatus.preEvent)
                   AutoSizeText(
                     ((currentReplayTime == sliderEnd) && (sliderEnd != eventEnd) ? 'Live ' : 'Replay ') +
-                        dtsFormat.format(DateTime.fromMillisecondsSinceEpoch(currentReplayTime)),
+                        dtsFormat.format(DateTime.fromMillisecondsSinceEpoch(
+                            currentReplayTime - ((currentReplayTime == sliderEnd && hfUpdate) ? displayDelay : 0))),
                     style: TextStyle(color: textColor),
                     minFontSize: 8,
                     maxLines: 1,
@@ -1179,9 +1182,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                             side: BorderSide(color: menuForegroundColor),
                             value: followAll,
                             onChanged: (value) => setState(() {
-                                  showShipMenu = value!;
-                                  following.forEach((k, v) => following[k] = value);
-                                  followAll = autoZoom = autoFollow = value;
+//                                  showShipMenu = value!;
+                                  following.forEach((k, v) => following[k] = value!);
+                                  followAll = autoZoom = autoFollow = value!;
                                   moveShipsBuoysAndWindTo(currentReplayTime);
                                 })),
                       ]),
@@ -1236,7 +1239,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 }
                                 moveShipsBuoysAndWindTo(currentReplayTime);
                               })),
-                    ]))
+                      if (testing)
+                        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                          const Divider(),
+                          Text('displayDelay: ${displayDelay / 1000} seconden'),
+                          Text('predictTime: ${predictTime / 1000} seconden')
+                        ]),
+                    ])),
               ]))),
       const SizedBox(width: 45),
     ]);
@@ -1807,10 +1816,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     sliderEnd = eventEnd;
     eventTrailLength = actualTrailLength = int.parse(eventInfo['traillength'] ?? '30');
     maxReplay = int.parse(eventInfo['maxreplay'] ?? '0');
+    trailsUpdateInterval = int.parse(eventInfo['trailsupdateinterval'] ?? '15');
+    trailsUpdateInterval = trailsUpdateInterval < 5 ? 5 : trailsUpdateInterval;
     hfUpdate = bool.parse(eventInfo['hfupdate'] ?? 'false');
-    trailsUpdateInterval = int.parse(eventInfo['trailsupdateinterval'] ?? '60');
-    trailsUpdateInterval = trailsUpdateInterval < 5 ? 60 : trailsUpdateInterval;
-    signalLostTime = int.parse(eventInfo['signallosttime'] ?? '180');
+    displayDelay = (int.parse(eventInfo['displaydelay'] ?? '25')) * 1000;
+    predictTime = (int.parse(eventInfo['predicttime'] ?? '15')) * 1000;
+    signalLostTime = int.parse(eventInfo['signallosttime'] ?? '60');
     signalLostTimeText = signalLostTime ~/ 60 == 0 ? '' : '${signalLostTime ~/ 60} ${signalLostTime ~/ 60 == 1 ? ' minuut' : ' minuten'}';
     signalLostTimeText += signalLostTime % 60 == 0 ? '' : '${signalLostTime ~/ 60 == 0 ? '' : ' en '}${signalLostTime % 60} seconden';
     signalLostTime *= 1000;
@@ -1915,7 +1926,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     }
     autoFollow = true;
     autoZoom = true; // zoom to all ships at the start
-    moveShipsBuoysAndWindTo(currentReplayTime);
+    moveShipsBuoysAndWindTo(currentReplayTime - (hfUpdate ? displayDelay : 0));
     //autoZoom = false; // but turn of autozoom when running
     liveSecondsTimer = trailsUpdateInterval * 1000 ~/ hfUpdateInterval;
     liveTimer = Timer.periodic(const Duration(milliseconds: hfUpdateInterval), (_) => liveTimerRoutine());
@@ -1943,23 +1954,18 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           liveTrails = await getTrails(eventDomain, fromTime: (replayTracks['endtime'] / 1000).toInt()); // fetch special
         } else {
           // we have relatively recent data, go get the latest. Note this fetch does not (always) access the database on the server
-          // but gets data stored in the trails.json file, which is not older then the trailsUpdateInterval
+          // but gets data stored in the trails.json file, which is not older then the trailsUpdateInterval and contains the positions of
+          // the last four trails update periods (see get/index/php)
           liveTrails = await getTrails(eventDomain); // fetch the latest data
         }
         addLiveTrailsToTracks(); // add it to what we already had and store it
         setupShipGpsBuoyAndWindInfo(); // prepare menu and track info
-        if (!replayRunning) moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
+//        if (!replayRunning) moveShipsBuoysAndWindTo(currentReplayTime);
       }
       if (currentReplayTime == sliderEnd) {
         // slider is at the end
         sliderEnd = currentReplayTime = now; // extend the slider and move the handle to the new end
-        if (hfUpdate) {
-          // predict positions every hfUpdateInterval milliseconds
-          moveShipsBuoysAndWindTo(currentReplayTime);
-        } else {
-          // update positions only at trailsUpdatInterval
-          if (liveSecondsTimer == trailsUpdateInterval * 1000 ~/ hfUpdateInterval) moveShipsBuoysAndWindTo(currentReplayTime);
-        }
+        moveShipsBuoysAndWindTo(currentReplayTime - (hfUpdate ? displayDelay : 0));
       } else {
         // slider is not at the end, the slider has been moved back in time by the user
         sliderEnd = now; // just make the slider a second longer
@@ -2020,7 +2026,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // the replayTickerRoutine runs every fluttertick i.e. 60 times per second
   // this ticker routine ensures that ships are moving forward and wind is rotating in a timely manner during replay
   void replayTickerRoutine(Duration elapsedTime) {
-    debugString = testing ? '$elapsedTime' : '';
     if (replayPause) {
       // no need to move forward, but reset elapsed time to zero
       replayTicker.stop();
@@ -2111,14 +2116,16 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         // we are at or beyond the last timestamp
         timeIndex = shipTrack['stamp'].length - 1; // set the track timeIndex to point to the last entry
         calculatedRotation = shipTrack['course'].last;
-        if ((eventStatus == EventStatus.live) && (time == sliderEnd) && hfUpdate && (time - shipTrack['stamp'].last) < signalLostTime) {
-          // we are live AND we are at the end of the slider AND the last stamp is less then 3 minutes old
+        if (hfUpdate &&
+            (eventStatus == EventStatus.live) &&
+            (currentReplayTime == sliderEnd) &&
+            (time - shipTrack['stamp'].last) < predictTime) {
+          // we are allowed to predict AND we are live AND at the end of the slider AND the last stamp is less then predictTime old
           // in this situation we make a prediction where the ship could be, based on the last known location, speed, time since the last
           // location and the heading
           calculatedPosition = predictPosition(LatLng(shipTrack['lat'].last.toDouble(), shipTrack['lon'].last.toDouble()),
               shipTrack['speed'].last / 10, time - shipTrack['stamp'].last, calculatedRotation);
         } else {
-          // we are beyond the last timestamp and beyond the 3 minute lostSignal time
           calculatedPosition = LatLng(shipTrack['lat'].last.toDouble(), shipTrack['lon'].last.toDouble());
         }
       } else {
@@ -2127,15 +2134,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         timeIndex = shipTimeIndex[i]; // get the timeindex of this ship from a previous run
         var stamps = shipTrack['stamp']; // make a ref to the list of stamps, in an effort to speedup the search
         if (time > stamps[timeIndex]) {
-          // move forward in the track
           while (stamps[timeIndex] < time) {
-            timeIndex++;
+            timeIndex++; // move forward in the track
           }
           timeIndex--; // we went one entry too far
         } else {
-          // else move backward in the track
           while (stamps[timeIndex] > time) {
-            timeIndex--;
+            timeIndex--; // else move backward in the track
           }
         }
         // we are in between stamps, calculate the ratio of time since last stamp and next stamp
@@ -2167,12 +2172,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       var speedString = '${(shipTrack['speed'][timeIndex] / 18.52).toStringAsFixed(1)}kn ('
           '${(shipTrack['speed'][timeIndex] / 10).toStringAsFixed(1)}km/h)';
       // make a new infowindow text with the name of the ship, the lostsignalindicator and the speed
-      shipLostSignalIndicators[i] = ((time - shipTrack['stamp'][timeIndex]) > signalLostTime) ? "'" : '';
+      shipLostSignalIndicators[i] =
+          ((time - (replayRunning ? shipTrack['stamp'][timeIndex] : shipTrack['stamp'].last)) > signalLostTime) ? "'" : '';
       String iwTitle = '${shipTrack['name']}${shipLostSignalIndicators[i]}';
       String iwText = (allowShowSpeed) ? 'Snelheid: $speedString' : '';
       // only during live AND lost signal we add a line with info when this 'more-then-3-minutes-old' position was received
       iwText += (shipLostSignalIndicators[i] != '' && eventStatus == EventStatus.live && !replayRunning)
-          ? '\nPositie op ${dtFormat.format(DateTime.fromMillisecondsSinceEpoch(shipTrack['stamp'][timeIndex]))}'
+          ? '\nPositie op ${dtsFormat.format(DateTime.fromMillisecondsSinceEpoch(shipTrack['stamp'][timeIndex]))}'
           : '';
       // create the shipmarker's icon with the correct color and rotation
       var svgString = '<svg width="22" height="22"><polygon points="$shipSvgPath" '
@@ -2246,6 +2252,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       } else {
         mapController.move(bounds.center, mapController.camera.zoom);
       }
+      setState(() {});
     }
   }
 
@@ -2676,7 +2683,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         point: point,
         width: 300,
         height: 30,
-        alignment: const Alignment(0.95, 1.25),
+        alignment: const Alignment(0.95, 1.4),
         child: Wrap(alignment: WrapAlignment.start, children: [
           BorderedText(
               strokeWidth: 1.5,
