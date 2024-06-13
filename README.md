@@ -18,7 +18,14 @@ optimalisaties:
 - live en replay verder integreren en ook live door (replay)ticker aansturen
 
 ----------------------------------------------------------------------------------------------------
-Version 3.2.5
+
+Version 3.2.6
+
+- Feature: new field added for Teamname. Event option to enable teamnames and show teamname instead
+  of shipname as default. Added a menu option to switch between team-shipname in case it is enabled
+  for the event
+
+Version 3.2.5 released on June 10, 2024
 
 - functional improvement: during live, introduced possibility of delayed display of ships, to enable
   smooth mevement towards the last posion received. This in combination with a (possibly) shorter

@@ -143,6 +143,7 @@ int maxReplay = 0; // eventInfo['maxreplay'] in hours
 // sets eventbegin xx hours before current time to limit the replay for continuous events (Olympia-charters, _TTTEST)
 bool allowShowSpeed = true; // eventInfo['allowshowspeed']
 bool hfUpdate = true; // eventInfo['hfupdate']. If 'true', positions are predicted every hfUpdateInterval ms during live
+bool showTeam = false; // show team instead of shipname
 int displayDelay = 30; // eventInfo['dispaydelay'], seconds to wait for displaying the ships positions
 int predictTime = 30; // eventInfo['predicttime'], seconds to predict postions after the the last position received
 const int hfUpdateInterval = 100; // in ms, use these values: 100, 200, 250, 500 or 1000 (i.e. 1000/x preferably be an int)
@@ -167,6 +168,7 @@ Map<String, dynamic> route = {}; // geoJSON structure with the route
 //
 // extract from the live/replaytracks above to make addressing the info a bit simpler
 List<String> shipList = []; // list with ship names
+List<String> teamList = []; // list with team names
 List<String> shipLostSignalIndicators = []; // either "" or "'"
 List<Color> shipColors = []; // corresponding list of ship colors used in the participantsmenu
 List<String> shipColorsSvg = []; //same list but as an svg string used as markercolor
@@ -1200,7 +1202,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                               child: Padding(
                                   padding: const EdgeInsets.fromLTRB(5, 0, 5, 0),
                                   child: InkWell(
-                                    child: Text('${shipList[index]}${shipLostSignalIndicators[index]}'),
+                                    child: (showTeam)
+                                        ? Text('${teamList[index]}${shipLostSignalIndicators[index]}')
+                                        : Text('${shipList[index]}${shipLostSignalIndicators[index]}'),
                                     onTap: () => loadAndShowShipDetails(index),
                                   )),
                             ),
@@ -1221,6 +1225,74 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           ]);
                         },
                       ),
+                      if (replayTracks['shiptracks'] != null) // shipnames and speeds
+                        Wrap(children: [
+                          const Divider(),
+                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(5, 0, 5, 0),
+                                child: Text(config['text']['shipNames']),
+                              ),
+                            ),
+                            Checkbox(
+                                visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                                activeColor: menuForegroundColor,
+                                checkColor: menuBackgroundColor,
+                                side: BorderSide(color: menuForegroundColor),
+                                value: showShipLabels,
+                                onChanged: (value) => setState(() {
+                                      showShipLabels = !showShipLabels;
+                                      if (eventStatus != EventStatus.preEvent) moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
+                                      showMapMenu = false;
+                                      prefs.setBool('shiplabels', showShipLabels);
+                                    }))
+                          ]),
+                          if (allowShowSpeed)
+                            Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                              const Expanded(
+                                child: Padding(
+                                  padding: EdgeInsets.fromLTRB(20, 0, 5, 0),
+                                  child: Text('met snelheden'),
+                                ),
+                              ),
+                              Checkbox(
+                                  visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                                  activeColor: menuForegroundColor,
+                                  checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
+                                  side: BorderSide(color: menuForegroundColor),
+                                  value: showShipSpeeds,
+                                  onChanged: (value) => setState(() {
+                                        showShipSpeeds = !showShipSpeeds;
+                                        if (eventStatus != EventStatus.preEvent) {
+                                          moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
+                                        }
+                                        if (showShipLabels) showMapMenu = false;
+                                        prefs.setBool('shipspeeds', showShipSpeeds);
+                                      }))
+                            ]),
+                          if (eventInfo['showteam'] == 'true')
+                            Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                              const Expanded(
+                                child: Padding(
+                                  padding: EdgeInsets.fromLTRB(20, 0, 5, 0),
+                                  child: Text('teamnamen'),
+                                ),
+                              ),
+                              Checkbox(
+                                  visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                                  activeColor: menuForegroundColor,
+                                  checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
+                                  side: BorderSide(color: menuForegroundColor),
+                                  value: showTeam,
+                                  onChanged: (value) => setState(() {
+                                        showTeam = !showTeam;
+                                        if (eventStatus != EventStatus.preEvent) {
+                                          moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
+                                        }
+                                      }))
+                            ]),
+                        ]),
                       const Divider(),
                       Text("' achter de naam geeft aan dat de laatst doorgegeven positie ouder is dan $signalLostTimeText"),
                       const Divider(),
@@ -1486,7 +1558,28 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                         if (showShipLabels) showMapMenu = false;
                                         prefs.setBool('shipspeeds', showShipSpeeds);
                                       }))
-                            ])
+                            ]),
+                          if (eventInfo['showteam'] == 'true')
+                            Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                              const Expanded(
+                                child: Padding(
+                                  padding: EdgeInsets.fromLTRB(20, 0, 5, 0),
+                                  child: Text('teamnamen'),
+                                ),
+                              ),
+                              Checkbox(
+                                  visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                                  activeColor: menuForegroundColor,
+                                  checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
+                                  side: BorderSide(color: menuForegroundColor),
+                                  value: showTeam,
+                                  onChanged: (value) => setState(() {
+                                        showTeam = !showTeam;
+                                        if (eventStatus != EventStatus.preEvent) {
+                                          moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
+                                        }
+                                      }))
+                            ]),
                         ]),
                       if (eventStatus == EventStatus.replay) // replay loop checkbox
                         Wrap(children: [
@@ -1795,6 +1888,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     showShipInfo = false;
     replayTracks = {};
     shipList = []; // list of patricipting shipnames
+    teamList = []; // teams
+    showTeam = false;
     shipColors = []; // and their corresponding colors
     shipColorsSvg = []; // same but in svg format
     shipMarkerList = [];
@@ -1825,6 +1920,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     signalLostTimeText = signalLostTime ~/ 60 == 0 ? '' : '${signalLostTime ~/ 60} ${signalLostTime ~/ 60 == 1 ? ' minuut' : ' minuten'}';
     signalLostTimeText += signalLostTime % 60 == 0 ? '' : '${signalLostTime ~/ 60 == 0 ? '' : ' en '}${signalLostTime % 60} seconden';
     signalLostTime *= 1000;
+    showTeam = bool.parse(eventInfo['showteam'] ?? 'false');
     eventInfo['mediaframe'] ??= '';
     socialMediaUrl = switch (eventInfo['mediaframe'].split(':').first) {
       'facebook' => 'https://www.facebook.com/${eventInfo['mediaframe'].split(':').last}',
@@ -1960,7 +2056,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         }
         addLiveTrailsToTracks(); // add it to what we already had and store it
         setupShipGpsBuoyAndWindInfo(); // prepare menu and track info
-//        if (!replayRunning) moveShipsBuoysAndWindTo(currentReplayTime);
       }
       if (currentReplayTime == sliderEnd) {
         // slider is at the end
@@ -1969,6 +2064,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       } else {
         // slider is not at the end, the slider has been moved back in time by the user
         sliderEnd = now; // just make the slider a second longer
+        if (!replayRunning || replayPause) {
+          moveShipsBuoysAndWindTo(currentReplayTime); // and redraw the ships at the current replaytime,
+          // only whenreplay is not running or replay is pausing (user moves slider during replayrunning)
+        }
       }
       setState(() {});
     } else {
@@ -2223,8 +2322,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       }
       // build the shipLabel
       shipLabelList[i] = showShipLabels
-          ? mapTextLabel(
-              calculatedPosition, '${shipTrack['name']}${shipLostSignalIndicators[i]}${(showShipSpeeds ? ', $speedString' : '')}')
+          ? mapTextLabel(calculatedPosition,
+              '${showTeam ? teamList[i] : shipList[i]}${shipLostSignalIndicators[i]}${(showShipSpeeds ? ', $speedString' : '')}')
           : const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
       // build the shipTrail (note we reuse/destroy the timeIndex here...)
       List<LatLng> trail = [calculatedPosition];
@@ -2612,6 +2711,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   void setupShipGpsBuoyAndWindInfo() {
     shipTimeIndex = List.filled(replayTracks['shiptracks'].length, 0, growable: true);
     shipList = [];
+    teamList = [];
     shipLostSignalIndicators = [];
     shipColors = [];
     shipColorsSvg = [];
@@ -2621,6 +2721,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     for (int i = 0; i < replayTracks['shiptracks'].length; i++) {
       var ship = replayTracks['shiptracks'][i];
       shipList.add(ship['name']); // add the name to the shipList for the shipmenu
+      ship['team'] = ship['team'] ?? "";
+      teamList.add((ship['team'] != "") ? ship['team'] : "team ${ship['name']}");
       shipLostSignalIndicators.add('');
       shipColors.add(Color(shipMarkerColorTable[int.parse(ship['colorcode']) % 32])); // and the color code
       shipColorsSvg.add('#${((shipColors[i].value) - 0xFF000000).toRadixString(16).padLeft(6, '0')}');
@@ -2776,8 +2878,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // routine to get shipInfo from the server and show it in a draggable window (see uiShipInfo widget)
   //
   void loadAndShowShipDetails(ship) async {
-    final response = await http
-        .get(Uri.parse('${server}get/?req=shipinfo&dev=$phoneId&event=$eventDomain&ship=${Uri.encodeQueryComponent(shipList[ship])}'));
+    final response = await http.get(Uri.parse(
+        '${server}get/?req=shipinfo&dev=$phoneId&event=$eventDomain&ship=${Uri.encodeQueryComponent(shipList[ship])}&team=${showTeam ? 'true' : 'false'}'));
     shipInfoHTML = (response.statusCode == 200 && response.body != '') ? response.body : 'Could not load ship info';
     shipInfoHTML = shipInfoHTML.replaceFirst('Schipper:', '${config['text']['skipper'] ?? 'Schipper'}:');
     if (!showShipInfo) shipInfoPosition = Offset(55, menuOffset + 25);
