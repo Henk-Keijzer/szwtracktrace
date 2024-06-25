@@ -19,11 +19,12 @@ optimalisaties:
 
 ----------------------------------------------------------------------------------------------------
 
-Version 3.2.6
+Version 3.2.6 released on June 24, 2024
 
 - Feature: new field added for Teamname. Event option to enable teamnames and show teamname instead
   of shipname as default. Added a menu option to switch between team-shipname in case it is enabled
   for the event
+- Optimization: removed some superfluous setStates
 
 Version 3.2.5 released on June 10, 2024
 

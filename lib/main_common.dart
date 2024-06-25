@@ -161,10 +161,11 @@ enum EventStatus { initial, preEvent, live, replay }
 
 EventStatus eventStatus = EventStatus.initial;
 //
-// vars for the tracks and the route
+// vars for the tracks, route and participants
 Map<String, dynamic> replayTracks = {}; // see get-replay.php on the server
 Map<String, dynamic> liveTrails = {}; // see get-trails.php on the server
 Map<String, dynamic> route = {}; // geoJSON structure with the route
+List<dynamic> participants = []; // list of colorcodes, shipnames and teamnames
 //
 // extract from the live/replaytracks above to make addressing the info a bit simpler
 List<String> shipList = []; // list with ship names
@@ -235,6 +236,7 @@ bool showMenuButtonBar = true;
 bool showEventMenu = false;
 bool showMapMenu = false;
 bool showShipMenu = false;
+bool showPreEventParticipants = false;
 bool showInfoPage = false;
 bool showShipInfo = false;
 bool showAttribution = false;
@@ -558,6 +560,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                     if (showInfoPage) uiInfoPage().animate().slide(),
                     if (showMapMenu) uiMapMenu().animate().slide(),
                     if (showShipMenu) uiShipMenu().animate().slide(),
+                    if (showPreEventParticipants) uiPreEventParticipants().animate().slide(),
                     if (showShipInfo) uiShipInfo().animate().slide(),
                     if (!cookieConsentGiven) uiCookieConsent(),
                     if (showProgress) uiProgressIndicator(),
@@ -571,7 +574,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //
   AppBar uiAppBar() {
     return AppBar(
-        backgroundColor: menuBackgroundColor.withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu) ? 1 : 0.5),
+        backgroundColor: menuBackgroundColor
+            .withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu || showPreEventParticipants) ? 1 : 0.5),
         foregroundColor: menuForegroundColor,
         elevation: 0,
         toolbarHeight: 40,
@@ -580,7 +584,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             child: InkWell(
                 // appIcon of the T&T organization. single tap opens event menu, double tap enters testing mode (without redrawing the ui)
                 onTap: () => setState(() {
-                      showShipMenu = showMapMenu = showInfoPage = showAttribution = false;
+                      showShipMenu = showMapMenu = showInfoPage = showAttribution = showPreEventParticipants = false;
                       showEventMenu = !showEventMenu;
                     }),
                 onDoubleTap: () {
@@ -590,7 +594,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 child: Tooltip(message: 'evenementmenu', child: Image.network('$server$appIconUrl')))),
         title: InkWell(
           onTap: () => setState(() {
-            showShipMenu = showMapMenu = showInfoPage = showAttribution = false;
+            showShipMenu = showMapMenu = showInfoPage = showAttribution = showPreEventParticipants = false;
             showEventMenu = !showEventMenu;
           }),
           child: Tooltip(message: 'evenementmenu', child: Text(eventTitle)),
@@ -743,9 +747,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               strokeWidth: 1),
           //
           // three more layers: the lines of the route and trails, and the markers
-          PolylineLayer(
-            polylines: routeLineList + shipTrailList,
-          ),
+          PolylineLayer(polylines: routeLineList + shipTrailList),
           if (testing) PolygonLayer(polygons: routePolygons),
           MarkerLayer(
               markers: routeLabelList + // in this order from bottom to top
@@ -923,10 +925,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 trackOutlineWidth: const WidgetStatePropertyAll(0.0),
                 thumbIcon: autoZoom ? const WidgetStatePropertyAll(Icon(Icons.check)) : null,
                 value: autoZoom,
-                onChanged: (value) => setState(() {
-                      autoZoom = value;
-                      moveShipsBuoysAndWindTo(currentReplayTime);
-                    }))),
+                onChanged: (value) {
+                  autoZoom = value;
+                  moveShipsBuoysAndWindTo(currentReplayTime);
+                })),
       if (autoFollow)
         Text('zoom',
             textAlign: TextAlign.center,
@@ -940,7 +942,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           trackOutlineWidth: const WidgetStatePropertyAll(0),
           thumbIcon: autoFollow ? const WidgetStatePropertyAll(Icon(Icons.check)) : null,
           value: autoFollow,
-          onChanged: (value) => setState(() {
+          onChanged: (value) {
             var temp = false;
             following.forEach((_, val) {
               if (val) temp = true;
@@ -948,7 +950,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             autoFollow = temp ? value : false; // dont allow autoFollow on when no ship to follow
             showShipMenu = temp ? showShipMenu : true; // show shipmenu if no ships to follow
             moveShipsBuoysAndWindTo(currentReplayTime);
-          }),
+          },
         ),
       ),
       Text('volgen',
@@ -965,24 +967,27 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         SizedBox(height: menuOffset),
         Container(
             width: 40,
-            color: menuBackgroundColor.withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu) ? 1 : 0.5),
+            color: menuBackgroundColor
+                .withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu || showPreEventParticipants) ? 1 : 0.5),
             child: Column(children: [
               IconButton(
                 // button for the shipList
-                onPressed: () {
+                onPressed: () => setState(() {
                   if (eventStatus != EventStatus.preEvent && shipList.isNotEmpty) {
-                    setState(() {
-                      showEventMenu = showMapMenu = showInfoPage = showAttribution = false;
-                      showShipMenu = !showShipMenu;
-                    });
+                    showEventMenu = showMapMenu = showInfoPage = showAttribution = showPreEventParticipants = false;
+                    showShipMenu = !showShipMenu;
+                  } else {
+                    showEventMenu = showMapMenu = showInfoPage = showAttribution = showShipMenu = false;
+                    showPreEventParticipants = !showPreEventParticipants;
                   }
-                },
-                icon: Icon(boatIcons[config['icons']['boatIcon']], color: showShipMenu ? menuAccentColor : menuForegroundColor),
+                }),
+                icon: Icon(boatIcons[config['icons']['boatIcon']],
+                    color: (showShipMenu || showPreEventParticipants) ? menuAccentColor : menuForegroundColor),
               ),
               IconButton(
                 // button for the mapMenu
                 onPressed: () => setState(() {
-                  showEventMenu = showShipMenu = showInfoPage = showAttribution = false;
+                  showEventMenu = showShipMenu = showInfoPage = showAttribution = showPreEventParticipants = false;
                   showMapMenu = !showMapMenu;
                 }),
                 icon: Icon(Icons.map, color: showMapMenu ? menuAccentColor : menuForegroundColor),
@@ -990,7 +995,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               IconButton(
                 // button for the infoPage
                 onPressed: () => setState(() {
-                  showEventMenu = showShipMenu = showMapMenu = showAttribution = false;
+                  showEventMenu = showShipMenu = showMapMenu = showAttribution = showPreEventParticipants = false;
                   showInfoPage = !showInfoPage;
                 }),
                 icon: Icon(Icons.info, color: showInfoPage ? menuAccentColor : menuForegroundColor),
@@ -1016,7 +1021,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                         mapController.move(mapController.camera.center, mapController.camera.zoom + 0.5);
                         autoZoom = false;
                         if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
-                          setState(() => rotateWindTo(currentReplayTime));
+                          rotateWindTo(currentReplayTime);
                         }
                       }),
                   icon: Icon(Icons.add_box, color: menuForegroundColor)),
@@ -1026,7 +1031,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                         mapController.move(mapController.camera.center, mapController.camera.zoom - 0.5);
                         autoZoom = false;
                         if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
-                          setState(() => rotateWindTo(currentReplayTime));
+                          rotateWindTo(currentReplayTime);
                         }
                       }),
                   icon: Icon(Icons.indeterminate_check_box, color: menuForegroundColor)),
@@ -1184,7 +1189,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                             side: BorderSide(color: menuForegroundColor),
                             value: followAll,
                             onChanged: (value) => setState(() {
-//                                  showShipMenu = value!;
                                   following.forEach((k, v) => following[k] = value!);
                                   followAll = autoZoom = autoFollow = value!;
                                   moveShipsBuoysAndWindTo(currentReplayTime);
@@ -1205,7 +1209,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                     child: (showTeam)
                                         ? Text('${teamList[index]}${shipLostSignalIndicators[index]}')
                                         : Text('${shipList[index]}${shipLostSignalIndicators[index]}'),
-                                    onTap: () => loadAndShowShipDetails(index),
+                                    onTap: () => loadAndShowShipDetails(shipList[index]),
                                   )),
                             ),
                             Checkbox(
@@ -1214,14 +1218,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 checkColor: menuBackgroundColor,
                                 side: BorderSide(color: menuForegroundColor),
                                 value: (following[shipList[index]] == null) ? false : following[shipList[index]],
-                                onChanged: (value) => setState(() {
-                                      following[shipList[index]] = value!;
-                                      autoFollow = autoZoom = false;
-                                      following.forEach((_, val) {
-                                        if (val) autoFollow = autoZoom = true;
-                                      });
-                                      moveShipsBuoysAndWindTo(currentReplayTime);
-                                    })),
+                                onChanged: (value) {
+                                  following[shipList[index]] = value!;
+                                  autoFollow = autoZoom = false;
+                                  following.forEach((_, val) {
+                                    if (val) autoFollow = autoZoom = true;
+                                  });
+                                  moveShipsBuoysAndWindTo(currentReplayTime);
+                                }),
                           ]);
                         },
                       ),
@@ -1244,7 +1248,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 onChanged: (value) => setState(() {
                                       showShipLabels = !showShipLabels;
                                       if (eventStatus != EventStatus.preEvent) moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
-                                      showMapMenu = false;
+//                                      showMapMenu = false;
                                       prefs.setBool('shiplabels', showShipLabels);
                                     }))
                           ]),
@@ -1267,16 +1271,16 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                         if (eventStatus != EventStatus.preEvent) {
                                           moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                         }
-                                        if (showShipLabels) showMapMenu = false;
+//                                        if (showShipLabels) showMapMenu = false;
                                         prefs.setBool('shipspeeds', showShipSpeeds);
                                       }))
                             ]),
                           if (eventInfo['showteam'] == 'true')
                             Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                              const Expanded(
+                              Expanded(
                                 child: Padding(
-                                  padding: EdgeInsets.fromLTRB(20, 0, 5, 0),
-                                  child: Text('teamnamen'),
+                                  padding: const EdgeInsets.fromLTRB(20, 0, 5, 0),
+                                  child: Text('Team- ipv ${config['text']['shipNames']}'),
                                 ),
                               ),
                               Checkbox(
@@ -1299,23 +1303,95 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                       InkWell(
                           child: Text('Het spoor achter de ${config['text']['participants']} is $actualTrailLength '
                               '${actualTrailLength == 1 ? 'minuut' : 'minuten'}'),
-                          onTap: () => setState(() {
-                                if (actualTrailLength == eventTrailLength) {
-                                  if (maxReplay == 0) {
-                                    actualTrailLength = (eventEnd - eventStart) / 1000 ~/ 60;
-                                  } else {
-                                    actualTrailLength = maxReplay * 60; // minuten
-                                  }
-                                } else {
-                                  actualTrailLength = eventTrailLength;
-                                }
-                                moveShipsBuoysAndWindTo(currentReplayTime);
-                              })),
+                          onTap: () {
+                            if (actualTrailLength == eventTrailLength) {
+                              if (maxReplay == 0) {
+                                actualTrailLength = (eventEnd - eventStart) / 1000 ~/ 60;
+                              } else {
+                                actualTrailLength = maxReplay * 60; // minuten
+                              }
+                            } else {
+                              actualTrailLength = eventTrailLength;
+                            }
+                            moveShipsBuoysAndWindTo(currentReplayTime);
+                          }),
                       if (testing)
                         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           const Divider(),
                           Text('displayDelay: ${displayDelay / 1000} seconden'),
                           Text('predictTime: ${predictTime / 1000} seconden')
+                        ]),
+                    ])),
+              ]))),
+      const SizedBox(width: 45),
+    ]);
+  }
+
+  Row uiPreEventParticipants() {
+    return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+      SingleChildScrollView(
+          child: Container(
+              width: 275,
+              color: menuBackgroundColor,
+              padding: EdgeInsets.fromLTRB(10, menuOffset, 0, 10),
+              child: Column(children: [
+                Row(children: [
+                  const Text('Voorlopige lijst deelnemers'),
+                  const Spacer(),
+                  IconButton(
+                      onPressed: () => setState(() => showPreEventParticipants = false),
+                      icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor)),
+                  const SizedBox(width: 3)
+                ]),
+                Container(
+                    padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
+                    child: Column(children: [
+                      const Divider(),
+                      ListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        padding: const EdgeInsets.all(0),
+                        itemCount: participants.length,
+                        itemBuilder: (BuildContext context, index) {
+                          return Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                            Icon(Icons.square,
+                                color: Color(shipMarkerColorTable[int.parse(participants[index]['colorcode']) % 32]), size: 20),
+                            Expanded(
+                              child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(5, 0, 5, 0),
+                                  child: InkWell(
+                                    child: (showTeam)
+                                        ? Text('${participants[index]['teamname']}')
+                                        : Text('${participants[index]['shipname']}'),
+                                    onTap: () => loadAndShowShipDetails(participants[index]['shipname']),
+                                  )),
+                            ),
+                          ]);
+                        },
+                      ),
+                      if (eventInfo['showteam'] == 'true')
+                        Wrap(children: [
+                          const Divider(),
+                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                            Expanded(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(20, 0, 5, 0),
+                                child: Text('Team- ipv ${config['text']['shipNames']}'),
+                              ),
+                            ),
+                            Checkbox(
+                                visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                                activeColor: menuForegroundColor,
+                                checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
+                                side: BorderSide(color: menuForegroundColor),
+                                value: showTeam,
+                                onChanged: (value) => setState(() {
+                                      showTeam = !showTeam;
+                                      if (eventStatus != EventStatus.preEvent) {
+                                        moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
+                                      }
+                                    }))
+                          ])
                         ]),
                     ])),
               ]))),
@@ -1361,26 +1437,26 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                               Theme(
                                   data: ThemeData.dark(),
                                   child: Radio(
-                                      activeColor: menuForegroundColor,
-                                      visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-                                      value: baseMapTileProviders.keys.toList()[index],
-                                      groupValue: selectedMapType,
-                                      onChanged: (value) async {
-                                        selectedMapType = value!;
-                                        prefs.setString('maptype', selectedMapType);
-                                        bgColor = baseMapTileProviders[selectedMapType]['bgColor'];
-                                        markerBackgroundColor = bgColor == hexBlack ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
-                                        labelBackgroundColor = bgColor == hexBlack ? const Color(0xBfFFFFFF) : const Color(0xFF000000);
-                                        if (eventStatus == EventStatus.live || eventStatus == EventStatus.replay) {
-                                          // force windTimeIndexes to beginning of the timestamp tables to ensure redrawing of the windmarkers
-                                          windTimeIndex = List.filled(replayTracks['windtracks'].length, -1, growable: true);
-                                          // and redraw all markers and labels
-                                          moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
-                                        }
-                                        showMapMenu = false;
-                                        if (route['features'] != null) buildRoute();
-                                        setState(() {});
-                                      }))
+                                    activeColor: menuForegroundColor,
+                                    visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                                    value: baseMapTileProviders.keys.toList()[index],
+                                    groupValue: selectedMapType,
+                                    onChanged: (value) => setState(() {
+                                      selectedMapType = value!;
+                                      prefs.setString('maptype', selectedMapType);
+                                      bgColor = baseMapTileProviders[selectedMapType]['bgColor'];
+                                      markerBackgroundColor = bgColor == hexBlack ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
+                                      labelBackgroundColor = bgColor == hexBlack ? const Color(0xBfFFFFFF) : const Color(0xFF000000);
+                                      if (eventStatus == EventStatus.live || eventStatus == EventStatus.replay) {
+                                        // force windTimeIndexes to beginning of the timestamp tables to ensure redrawing of the windmarkers
+                                        windTimeIndex = List.filled(replayTracks['windtracks'].length, -1, growable: true);
+                                        // and redraw all markers and labels
+                                        moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
+                                      }
+//                                      showMapMenu = false;
+                                      if (route['features'] != null) buildRoute();
+                                    }),
+                                  ))
                             ]);
                           }),
                       if (selectedOverlayType != "") // map overlay on/off and radiobuttons
@@ -1402,7 +1478,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 onChanged: (value) => setState(() {
                                       mapOverlay = value!;
                                       prefs.setBool('mapoverlay', mapOverlay);
-                                      showMapMenu = false;
+//                                      showMapMenu = false;
                                     }))
                           ]),
                           ListView.builder(
@@ -1427,7 +1503,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                           onChanged: (value) => setState(() {
                                                 selectedOverlayType = value!;
                                                 prefs.setString('overlaytype', selectedOverlayType);
-                                                if (mapOverlay) showMapMenu = false;
+//                                                if (mapOverlay) showMapMenu = false;
                                               })))
                                 ]);
                               })
@@ -1457,7 +1533,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                         infoWindowMarkerList = [];
                                       }
                                       prefs.setBool('windmarkers', showWindMarkers);
-                                      showMapMenu = false;
+//                                      showMapMenu = false;
                                     }))
                           ])
                         ]),
@@ -1487,7 +1563,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                       buildRoute();
                                       showGPSBuoys(currentReplayTime);
                                       prefs.setBool('showroute', showRoute);
-                                      showMapMenu = false;
+//                                      showMapMenu = false;
                                     }))
                           ]),
                           Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
@@ -1509,7 +1585,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                       gpsBuoyTimeIndex = List.filled(gpsBuoyTimeIndex.length, -1, growable: true);
                                       showGPSBuoys(currentReplayTime);
                                       prefs.setBool('routelabels', showRouteLabels);
-                                      if (showRoute) showMapMenu = false;
+//                                      if (showRoute) showMapMenu = false;
                                     }))
                           ])
                         ]),
@@ -1532,7 +1608,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 onChanged: (value) => setState(() {
                                       showShipLabels = !showShipLabels;
                                       if (eventStatus != EventStatus.preEvent) moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
-                                      showMapMenu = false;
+//                                      showMapMenu = false;
                                       prefs.setBool('shiplabels', showShipLabels);
                                     }))
                           ]),
@@ -1555,16 +1631,16 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                         if (eventStatus != EventStatus.preEvent) {
                                           moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                         }
-                                        if (showShipLabels) showMapMenu = false;
+//                                        if (showShipLabels) showMapMenu = false;
                                         prefs.setBool('shipspeeds', showShipSpeeds);
                                       }))
                             ]),
                           if (eventInfo['showteam'] == 'true')
                             Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                              const Expanded(
+                              Expanded(
                                 child: Padding(
-                                  padding: EdgeInsets.fromLTRB(20, 0, 5, 0),
-                                  child: Text('teamnamen'),
+                                  padding: const EdgeInsets.fromLTRB(20, 0, 5, 0),
+                                  child: Text('Team- ipv ${config['text']['shipNames']}'),
                                 ),
                               ),
                               Checkbox(
@@ -1599,7 +1675,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 value: replayLoop,
                                 onChanged: (value) => setState(() {
                                       replayLoop = !replayLoop;
-                                      showMapMenu = false;
+//                                      showMapMenu = false;
                                     }))
                           ])
                         ])
@@ -1934,6 +2010,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     appIconUrl = await getAppIconUrl(event: eventDomain);
     // get the route.geojson from the server
     route = await getRoute(eventDomain);
+    participants = await getParticipants(eventDomain);
     //
     // set the event status based on the current time. Are we before, during or after the event
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -2069,7 +2146,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           // only whenreplay is not running or replay is pausing (user moves slider during replayrunning)
         }
       }
-      setState(() {});
     } else {
       // the live event is over
       liveTimer.cancel();
@@ -2294,7 +2370,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 : ('${shipTrack['name']}${shipLostSignalIndicators[i]}${showShipSpeeds ? ', $speedString' : ''}'),
             child: InkWell(
                 child: SvgPicture.string(svgString),
-                onSecondaryTap: () => loadAndShowShipDetails(i),
+                onSecondaryTap: () => loadAndShowShipDetails(shipTrack['name']),
                 onDoubleTap: () => setState(() {
                       // zoom in on the ship double tapped
                       followAll = false;
@@ -2312,13 +2388,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                     }),
                 onTap: () => setState(() {
                       infoWindowId = 'ship${shipTrack['name']}';
-                      infoWindowMarkerList = [infoWindowMarker(title: iwTitle, body: iwText, link: '$i', point: calculatedPosition)];
+                      infoWindowMarkerList = [infoWindowMarker(title: iwTitle, body: iwText, link: '', point: calculatedPosition)];
                       moveShipsTo(time, moveMap: false);
                     }))),
       );
       // refresh the infowindow if it was open for this ship
       if (infoWindowId == 'ship${shipTrack['name']}') {
-        infoWindowMarkerList = [infoWindowMarker(title: iwTitle, body: iwText, link: '$i', point: calculatedPosition)];
+        infoWindowMarkerList = [infoWindowMarker(title: iwTitle, body: iwText, link: '', point: calculatedPosition)];
       }
       // build the shipLabel
       shipLabelList[i] = showShipLabels
@@ -2351,7 +2427,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       } else {
         mapController.move(bounds.center, mapController.camera.zoom);
       }
-      setState(() {});
     }
   }
 
@@ -2766,12 +2841,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           child: GestureDetector(
                               onTap: (link == '')
                                   ? null
-                                  : (int.tryParse(link) != null)
-                                      ? () => loadAndShowShipDetails(int.parse(link))
-                                      : () => setState(() {
-                                            showEventMenu = showShipMenu = showMapMenu = showShipInfo = false;
-                                            launchUrl(Uri.parse(link));
-                                          }),
+                                  : () => setState(() {
+                                        showEventMenu = showShipMenu = showMapMenu = showShipInfo = false;
+                                        launchUrl(Uri.parse(link));
+                                      }),
                               child: Text(body, style: const TextStyle(fontSize: 12, color: Colors.black))))
                   ])))
         ]));
@@ -2813,6 +2886,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   Future<Map<String, dynamic>> getEventInfo(domain) async {
     final response = await http.get(Uri.parse('${server}get/?req=eventinfo&dev=$phoneId&event=$domain'));
     return (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : {};
+  }
+
+  //----------------------------------------------------------------------------------------------------------------------------------------
+  // get the list of colorcodes, shipnames and teamnames, for use in the participants menu during pre-event
+  //
+  Future<List<dynamic>> getParticipants(domain) async {
+    final response = await http.get(Uri.parse('${server}get/?req=participants&dev=$phoneId&event=$domain'));
+    return (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : [];
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
@@ -2877,12 +2958,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //----------------------------------------------------------------------------------------------------------------------------------------
   // routine to get shipInfo from the server and show it in a draggable window (see uiShipInfo widget)
   //
-  void loadAndShowShipDetails(ship) async {
-    final response = await http.get(Uri.parse(
-        '${server}get/?req=shipinfo&dev=$phoneId&event=$eventDomain&ship=${Uri.encodeQueryComponent(shipList[ship])}&team=${showTeam ? 'true' : 'false'}'));
+  void loadAndShowShipDetails(shipname) async {
+    bool team = bool.parse(eventInfo['showteam'] ?? 'false');
+    final response = await http.get(Uri.parse('${server}get/?req=shipinfo&dev=$phoneId&event=$eventDomain'
+        '&ship=${Uri.encodeQueryComponent(shipname)}&team=${team ? 'true' : 'false'}'));
     shipInfoHTML = (response.statusCode == 200 && response.body != '') ? response.body : 'Could not load ship info';
     shipInfoHTML = shipInfoHTML.replaceFirst('Schipper:', '${config['text']['skipper'] ?? 'Schipper'}:');
-    if (!showShipInfo) shipInfoPosition = Offset(55, menuOffset + 25);
+    if (!showShipInfo) shipInfoPosition = Offset(55, menuOffset + 50);
     showShipInfo = true;
     setState(() {});
   }
