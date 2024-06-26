@@ -18,6 +18,10 @@ optimalisaties:
 - live en replay verder integreren en ook live door (replay)ticker aansturen
 
 ----------------------------------------------------------------------------------------------------
+Version 3.2.7
+
+- Fix: do not close menus when starting/stopping replay
+- Optimization: minor cosmetic improvements
 
 Version 3.2.6 released on June 24, 2024
 
