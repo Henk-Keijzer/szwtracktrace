@@ -25,8 +25,6 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_html/flutter_html.dart' show Html;
 import 'package:flutter_map/flutter_map.dart';
-
-//import 'package:flutter_map_cancellable_tile_provider/flutter_map_cancellable_tile_provider.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fullscreen_window/fullscreen_window.dart';
 import 'package:http/http.dart' as http;
@@ -38,7 +36,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_html/html.dart' show document, window;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
-//import 'package:vector_map_tiles/vector_map_tiles.dart';
 
 //
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -56,12 +53,13 @@ String server = 'https://tt.zeilvaartwarmond.nl/';
 late PackageInfo packageInfo; // info is picked up at the beginning of mainCommon
 //
 // devicetype / platformtype
-final kIsDesktop = !kIsWeb &&
+final bool kIsDesktop = !kIsWeb &&
     (defaultTargetPlatform == TargetPlatform.windows ||
         defaultTargetPlatform == TargetPlatform.macOS ||
         defaultTargetPlatform == TargetPlatform.linux);
-final kIsWebOnIOS = kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS); // true if the user is running the web app on a mobile device
-final kIsWebOnAndroid = kIsWeb && (defaultTargetPlatform == TargetPlatform.android);
+final bool kIsWebOnIOS =
+    kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS); // true if the user is running the web app on a mobile device
+final bool kIsWebOnAndroid = kIsWeb && (defaultTargetPlatform == TargetPlatform.android);
 //
 String phoneId = "";
 //
@@ -279,6 +277,7 @@ final GlobalKey dropDayKey = GlobalKey();
 //
 DateFormat dtFormat = DateFormat("d MMM y, HH:mm", 'nl');
 DateFormat dtsFormat = DateFormat("d MMM y, HH:mm:ss", 'nl');
+
 //
 //------------------------------------------------------------------------------
 //
@@ -290,7 +289,7 @@ void mainCommon({required String serverUrl}) async {
   WidgetsFlutterBinding.ensureInitialized();
   packageInfo = await PackageInfo.fromPlatform(); // who and where are we
   prefs = await SharedPreferences.getInstance(); // get access to local storage
-  await initializeDateFormatting(); // initialize date formatting
+  await initializeDateFormatting('nl'); // initialize date formatting
   //
   // ----- SERVER
   server = (kIsWeb) ? '/' : serverUrl; // defined in main.dart
@@ -299,6 +298,7 @@ void mainCommon({required String serverUrl}) async {
   //
   // ----- APP VERSION and cookieConsent
   // See if we are running a new version and if so, clear local storage and save the new version number
+  // We dont want the user to give consent each time we issue a new version, so keep the cookieConsent
   String oldAppVersion = prefs.getString('appversion') ?? '';
   cookieConsentGiven = prefs.getBool('cookieconsent') ?? false;
   if (oldAppVersion != packageInfo.buildNumber) {
@@ -310,7 +310,7 @@ void mainCommon({required String serverUrl}) async {
   // ----- PHONE (DEVICE) ID
   // See if we already have a phone id, if not, create one and save it in local storage
   phoneId = prefs.getString('phoneid') ?? const Uuid().v1();
-  prefs.setString('phoneid', phoneId); // and save it (even if it did not change
+  prefs.setString('phoneid', phoneId); // and save it (even if it did not change)
   // add a platform prefix and the appversion in front of the phoneid
   // this phoneId is used in all communication with the server for statistical purposes
   String prefix = kIsWeb
@@ -329,44 +329,40 @@ void mainCommon({required String serverUrl}) async {
   //
   // ----- CONFIG
   // Get the flutter app config items from the flutter_config.json file on the server /config folder
-  // Note that we get the config file through /get/index.php to record statistics on the number of times the app is started
   // The contents is merged with the default config in default_config.dart (but this only works for two levels!!! and only for String keys
-  // and String values)
+  // and String values). The reason for merging is that the keys the app expects may not yet be in the file on the server
   http.Response response = await http.get(Uri.parse('${server}get/?req=config&dev=$phoneId'));
-  Map<String, dynamic> newConfig = (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : null;
+  Map<String, dynamic> newConfig = (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : config;
   for (final String mainEntry in newConfig.keys) {
     for (final subEntry in newConfig[mainEntry].entries) {
       config[mainEntry].addAll({subEntry.key.toString(): subEntry.value.toString()});
     }
   }
-  // decode some color values based on the info in the config file as they are used very often (or use the default as declared)
-  menuBackgroundColor = config['colors']['menuBackgroundColor'] != null
-      ? Color(int.parse(config['colors']['menuBackgroundColor'], radix: 16))
-      : menuBackgroundColor;
-  menuForegroundColor = config['colors']['menuForgroundColor'] != null
-      ? Color(int.parse(config['colors']['menuForegroundColor'], radix: 16))
-      : menuForegroundColor;
-  menuAccentColor =
-      config['colors']['menuAccentColor'] != null ? Color(int.parse(config['colors']['menuAccentColor'], radix: 16)) : menuAccentColor;
+  // decode some color values based on the info in the config file as they are used very often
+  menuBackgroundColor = Color(int.parse(config['colors']['menuBackgroundColor'], radix: 16));
+  menuForegroundColor = Color(int.parse(config['colors']['menuForegroundColor'], radix: 16));
+  menuAccentColor = Color(int.parse(config['colors']['menuAccentColor'], radix: 16));
+  //
   shipSvgPath = config['icons']['boatSVGPath'];
   //
   // ----- APPICON URL
-  response = await http.get(Uri.parse('${server}get?req=appiconurl&dev=$phoneId'));
+  response = await http.get(Uri.parse('${server}get/?req=appiconurl&dev=$phoneId'));
   // the response contains the full servername, but we only want the relative path, remove the server name using this trick
   // (replace the first slash after character position 8 with a vertical bar, split the string at the vertical bar and use the last part)
   // if we did not receive an app icon url, we point to the server location with the defaultAppIcon (assuming there is a webapp there)
   appIconUrl =
       (response.statusCode == 200) ? response.body.replaceFirst('/', '|', 8).split('|').last : 'assets/assets/images/defaultAppIcon.png';
+  //
   // ----- INFOPAGE
   // get the info page contents, and add some package and version info at the bottom
-  response = await http.get(Uri.parse('${server}config/app-info-page.html'));
+  response = await http.get(Uri.parse('${server}get/?req=appinfopage&dev=$phoneId'));
   infoPageHTML = (response.statusCode == 200) ? response.body : '';
   infoPageHTML += '<br><br>appname: ${packageInfo.appName}, version ${packageInfo.version}<br>'
       'package: ${packageInfo.packageName}<br>server: $server</body></html>';
   //
   // ----- MAPS
   // get the complete list of map tile providers from the server, overwriting the default mapdata in default_maptileproviders.dart
-  response = await http.get(Uri.parse('${server}get?req=maptileproviders&dev=$phoneId'));
+  response = await http.get(Uri.parse('${server}get/?req=maptileproviders&dev=$phoneId'));
   Map<String, dynamic> mapdata = (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : defaultMapTileProviders;
   baseMapTileProviders = mapdata['basemaps'] ?? {};
   overlayTileProviders = mapdata['overlays'] ?? {};
@@ -425,7 +421,8 @@ void mainCommon({required String serverUrl}) async {
     // adding two colons ensures a[1|2] are never null
     // handling this info will be done in startLive or startReplay
   }
-  // ----- WINDMARKERS, ROUTE, ROUTELABELS, SHIPLABELS, SHIPSPEEDS and COOKIECONSENT
+  //
+  // ----- WINDMARKERS, ROUTE, ROUTELABELS, SHIPLABELS, and SHIPSPEEDS
   // get/set this info from shared preference (set default if value was not present in prefs)
   showWindMarkers = prefs.getBool('windmarkers') ?? showWindMarkers;
   prefs.setBool('windmarkers', showWindMarkers);
@@ -459,8 +456,9 @@ class MyApp extends StatefulWidget {
 
 //------------------------------------------------------------------------------------------------------------------------------------------
 // The main program (= the "state" belonging to MyApp)
-// The methods dispose() and didChangeAppLifecycleState(..) are called on exit or when we pause or resume
-// The flutter framework calls initState()
+//
+// The methods dispose() and didChangeAppLifecycleState(..) are called by the flutter framework on exit or when we pause or resume
+// The flutter framework calls initState() at the start of the app
 // After initState() the build(..) method is called repetitatively each time the ui needs to be rebuild
 //
 class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
@@ -469,7 +467,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
 
   @override
   initState() {
-    super.initState();
+    super.initState(); // call our ancestors initState routine, and than our own initState code
     WidgetsBinding.instance.addObserver(this); // needed to get the MediaQuery for screen size working
     replayTicker = createTicker((elapsed) => replayTickerRoutine(elapsed));
   }
@@ -510,6 +508,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //----------------------------------------------------------------------------
   //
   // After initState, the flutter framework calls build(BuildContext context), which is the flutter UI
+  // The value 'context' is a value the framework gives us, and is used to identify the environment in wich we are running
   //
   // The ui is relatively simple, because our App has only one page, so no navigation to other pages
   // The UI is rebuilt each time the state of the info to be displayed needs to be updated to the screen.
@@ -739,7 +738,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             },
           Scalebar(
               alignment: Alignment.topLeft,
-              padding: EdgeInsets.fromLTRB((showWindMarkers) ? 60 : 15, menuOffset + 15, 0, 0),
+              padding: EdgeInsets.fromLTRB(
+                  (showWindMarkers && replayTracks['windtracks'] != null && replayTracks['windtracks'].length > 0) ? 60 : 15,
+                  menuOffset + 15,
+                  0,
+                  0),
               lineColor: markerBackgroundColor,
               textStyle: TextStyle(color: markerBackgroundColor),
               strokeWidth: 1),
@@ -1044,85 +1047,87 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   SingleChildScrollView uiEventMenu() {
     return SingleChildScrollView(
         child: Container(
-            color: menuBackgroundColor,
             width: 275,
-            padding: EdgeInsets.fromLTRB(10, menuOffset + 5, 0, 10),
+            color: menuBackgroundColor,
+            padding: EdgeInsets.fromLTRB(10, menuOffset, 0, 10),
             child: Column(children: [
               Row(children: [
-                const Text("Kies hieronder een evenement"),
+                const Text('Kies hieronder een evenement'),
                 const Spacer(),
                 IconButton(
                     icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor),
                     onPressed: () => setState(() => showEventMenu = false)),
+                const SizedBox(width: 3)
               ]),
               Container(
                   padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    const Divider(height: 10),
+                  child: Column(children: [
+                    const Divider(),
                     PopupMenuButton(
                       key: dropEventKey,
                       offset: const Offset(15, 35),
-                      itemBuilder: (BuildContext context) {
-                        return eventNameList.map((events) {
-                          return PopupMenuItem(height: 30, value: events, child: Text(events, style: const TextStyle(fontSize: 15)));
-                        }).toList();
+                      itemBuilder: (_) {
+                        return eventNameList
+                            .map((event) =>
+                                PopupMenuItem(height: 25, value: event, child: Text(event, style: const TextStyle(fontSize: 15))))
+                            .toList(growable: false);
                       },
                       onSelected: (selectedEvent) => selectEventYear(event: selectedEvent),
                       tooltip: '',
                       child: Row(children: [
-                        Text('   $eventName '),
+                        const SizedBox(width: 10),
+                        Expanded(child: Container(padding: const EdgeInsets.fromLTRB(0, 5, 0, 5), child: Text(eventName))),
                         Icon(Icons.arrow_drop_down, size: 20, color: menuForegroundColor),
-                        const Text(' \n')
                       ]),
                     ),
                     if (eventYear != '')
                       PopupMenuButton(
                         key: dropYearKey,
                         offset: const Offset(15, 35),
-                        itemBuilder: (BuildContext context) {
-                          return eventYearList.map((years) {
-                            return PopupMenuItem(height: 30, value: years, child: Text(years, style: const TextStyle(fontSize: 15)));
-                          }).toList();
+                        itemBuilder: (_) {
+                          return eventYearList
+                              .map(
+                                  (year) => PopupMenuItem(height: 25, value: year, child: Text(year, style: const TextStyle(fontSize: 15))))
+                              .toList(growable: false);
                         },
                         onSelected: (selectedYear) => selectEventDay(year: selectedYear),
                         tooltip: '',
                         child: Row(children: [
-                          Text('   $eventYear '),
+                          const SizedBox(width: 10),
+                          Expanded(child: Container(padding: const EdgeInsets.fromLTRB(0, 5, 0, 5), child: Text(eventYear))),
                           Icon(Icons.arrow_drop_down, size: 20, color: menuForegroundColor),
-                          const Text(' \n')
                         ]),
                       ),
                     if (eventDay != '')
                       PopupMenuButton(
                         key: dropDayKey,
-                        // dropdown day/race
                         offset: const Offset(15, 35),
-                        itemBuilder: (BuildContext context) {
-                          return eventDayList.map((days) {
-                            return PopupMenuItem(height: 30, value: days, child: Text(days, style: const TextStyle(fontSize: 15)));
-                          }).toList();
+                        itemBuilder: (_) {
+                          return eventDayList
+                              .map((dayRace) =>
+                                  PopupMenuItem(height: 25, value: dayRace, child: Text(dayRace, style: const TextStyle(fontSize: 15))))
+                              .toList(growable: false);
                         },
                         onSelected: (selectedDay) => newEventSelected(day: selectedDay),
                         tooltip: '',
                         child: Row(children: [
-                          Text('   $eventDay'),
+                          const SizedBox(width: 10),
+                          Expanded(child: Container(padding: const EdgeInsets.fromLTRB(0, 5, 0, 5), child: Text(eventDay))),
                           Icon(Icons.arrow_drop_down, size: 20, color: menuForegroundColor),
-                          const Text(' \n')
                         ]),
                       ),
-                    if (selectionMessage != '') Wrap(children: [const Divider(height: 30), Text(selectionMessage)]),
+                    if (selectionMessage != '') Wrap(children: [const Divider(height: 20), Text(selectionMessage)]),
                     if (eventDomain != '')
                       Wrap(children: [
-                        const Divider(height: 30),
+                        const Divider(height: 20),
                         Container(
-                            alignment: Alignment.center,
-                            margin: const EdgeInsets.fromLTRB(0, 10, 0, 10),
+                            alignment: const Alignment(0, 0),
+                            padding: const EdgeInsets.fromLTRB(0, 5, 0, 5),
                             child: InkWell(
-                              onTap: () {
-                                if (socialMediaUrl != '') launchUrl(Uri.parse(socialMediaUrl), mode: LaunchMode.externalApplication);
-                              },
-                              child: Image.network('${server}data/$eventDomain/logo.png'),
-                            )),
+                                child: Image.network('${server}data/$eventDomain/logo.png'),
+                                onTap: () {
+                                  if (socialMediaUrl != '') launchUrl(Uri.parse(socialMediaUrl), mode: LaunchMode.externalApplication);
+                                })),
                         Text((socialMediaUrl == '') ? '' : 'Klik op het logo voor de laatste info over deze wedstrijd.')
                       ]),
                     if (kIsWebOnAndroid && ((config['options']['playstorelink'] ?? '') != ''))
@@ -1133,10 +1138,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                               'telefoon sneller dan de web-versie en verbruikt minder data. '
                               'Klik hier om de gratis Android app op uw telefoon installeren.'),
                           InkWell(
-                              child: Image.asset('assets/images/googleplaystoreicon.png'),
-                              onTap: () {
-                                launchUrl(Uri.parse(config['options']['playstorelink']), mode: LaunchMode.externalApplication);
-                              }),
+                            child: Image.asset('assets/images/googleplaystoreicon.png'),
+                            onTap: () => launchUrl(Uri.parse(config['options']['playstorelink']), mode: LaunchMode.externalApplication),
+                          ),
                         ],
                       ),
                     if (kIsWebOnIOS && ((config['options']['applestorelink'] ?? '') != ''))
@@ -1146,10 +1150,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                             'telefoon sneller dan de web-versie en verbruikt minder data. '
                             'Klik hier om de gratis iOS app op uw telefoon installeren.'),
                         InkWell(
-                            child: Image.asset('assets/images/appleappstoreicon.png'),
-                            onTap: () {
-                              launchUrl(Uri.parse(config['options']['applestorelink']), mode: LaunchMode.externalApplication);
-                            }),
+                          child: Image.asset('assets/images/appleappstoreicon.png'),
+                          onTap: () => launchUrl(Uri.parse(config['options']['applestorelink']), mode: LaunchMode.externalApplication),
+                        ),
                       ])
                   ]))
             ])));
@@ -1175,13 +1178,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                     padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
                     child: Column(children: [
                       const Divider(),
-                      Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                        Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.fromLTRB(5, 5, 5, 12),
-                            child: Text('Alle ${config['text']['participants']} volgen aan/uit'),
-                          ),
-                        ),
+                      Row(children: [
+                        const SizedBox(width: 5),
+                        Text('Alle ${config['text']['participants']} volgen aan/uit'),
+                        const Spacer(),
                         Checkbox(
                             visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                             activeColor: menuForegroundColor,
@@ -1194,24 +1194,24 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                   moveShipsBuoysAndWindTo(currentReplayTime);
                                 })),
                       ]),
+                      const Divider(),
                       ListView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
                         padding: const EdgeInsets.all(0),
                         itemCount: shipList.length,
-                        itemBuilder: (BuildContext context, index) {
-                          return Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                            Icon(Icons.square, color: shipColors[index], size: 20),
-                            Expanded(
-                              child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(5, 0, 5, 0),
-                                  child: InkWell(
-                                    child: (showTeam)
-                                        ? Text('${teamList[index]}${shipLostSignalIndicators[index]}')
-                                        : Text('${shipList[index]}${shipLostSignalIndicators[index]}'),
-                                    onTap: () => loadAndShowShipDetails(shipList[index]),
-                                  )),
+                        itemBuilder: (_, index) {
+                          return Row(children: [
+                            Icon(Icons.square, color: shipColors[index], size: 18),
+                            const SizedBox(width: 5),
+                            InkWell(
+                              child: (showTeam)
+                                  ? Text('${teamList[index]}${shipLostSignalIndicators[index]}')
+                                  : Text('${shipList[index]}${shipLostSignalIndicators[index]}'),
+                              onTap: () => loadAndShowShipDetails(shipList[index]),
                             ),
+                            const Spacer(),
+                            const SizedBox(width: 5),
                             Checkbox(
                                 visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                 activeColor: menuForegroundColor,
@@ -1224,48 +1224,43 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                   following.forEach((_, val) {
                                     if (val) autoFollow = autoZoom = true;
                                   });
+                                  if (value && showShipInfo) loadAndShowShipDetails(shipList[index]);
                                   moveShipsBuoysAndWindTo(currentReplayTime);
                                 }),
                           ]);
                         },
                       ),
-                      if (replayTracks['shiptracks'] != null) // shipnames and speeds
+                      if (replayTracks['shiptracks'] != null)
                         Wrap(children: [
                           const Divider(),
-                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                            Expanded(
-                              child: Padding(
-                                padding: const EdgeInsets.fromLTRB(5, 0, 5, 0),
-                                child: Text(config['text']['shipNames']),
-                              ),
-                            ),
+                          Row(children: [
+                            const SizedBox(width: 5),
+                            Text('${config['text']['shipNames']} op de kaart'),
+                            const Spacer(),
                             Checkbox(
                                 visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                 activeColor: menuForegroundColor,
                                 checkColor: menuBackgroundColor,
                                 side: BorderSide(color: menuForegroundColor),
                                 value: showShipLabels,
-                                onChanged: (value) => setState(() {
+                                onChanged: (_) => setState(() {
                                       showShipLabels = !showShipLabels;
                                       if (eventStatus != EventStatus.preEvent) moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                       prefs.setBool('shiplabels', showShipLabels);
                                     }))
                           ]),
                           if (allowShowSpeed)
-                            Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                              const Expanded(
-                                child: Padding(
-                                  padding: EdgeInsets.fromLTRB(20, 0, 5, 0),
-                                  child: Text('met snelheden'),
-                                ),
-                              ),
+                            Row(children: [
+                              const SizedBox(width: 20),
+                              const Text('met snelheden'),
+                              const Spacer(),
                               Checkbox(
                                   visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                   activeColor: menuForegroundColor,
                                   checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
                                   side: BorderSide(color: menuForegroundColor),
                                   value: showShipSpeeds,
-                                  onChanged: (value) => setState(() {
+                                  onChanged: (_) => setState(() {
                                         showShipSpeeds = !showShipSpeeds;
                                         if (eventStatus != EventStatus.preEvent) {
                                           moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
@@ -1274,20 +1269,17 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                       }))
                             ]),
                           if (eventInfo['showteam'] == 'true')
-                            Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(20, 0, 5, 0),
-                                  child: Text('Team- ipv ${config['text']['shipNames']}'),
-                                ),
-                              ),
+                            Row(children: [
+                              const SizedBox(width: 20),
+                              Text('Team- ipv ${config['text']['shipNames']}'),
+                              const Spacer(),
                               Checkbox(
                                   visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                   activeColor: menuForegroundColor,
                                   checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
                                   side: BorderSide(color: menuForegroundColor),
                                   value: showTeam,
-                                  onChanged: (value) => setState(() {
+                                  onChanged: (_) => setState(() {
                                         showTeam = !showTeam;
                                         if (eventStatus != EventStatus.preEvent) {
                                           moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
@@ -1296,23 +1288,31 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                             ]),
                         ]),
                       const Divider(),
-                      Text("' achter de naam geeft aan dat de laatst doorgegeven positie ouder is dan $signalLostTimeText"),
+                      Row(children: [
+                        const SizedBox(width: 5),
+                        Expanded(
+                            child: Text("' achter de naam geeft aan dat de laatst doorgegeven positie ouder is dan $signalLostTimeText"))
+                      ]),
                       const Divider(),
-                      InkWell(
-                          child: Text('Het spoor achter de ${config['text']['participants']} is $actualTrailLength '
-                              '${actualTrailLength == 1 ? 'minuut' : 'minuten'}'),
-                          onTap: () {
-                            if (actualTrailLength == eventTrailLength) {
-                              if (maxReplay == 0) {
-                                actualTrailLength = (eventEnd - eventStart) / 1000 ~/ 60;
-                              } else {
-                                actualTrailLength = maxReplay * 60; // minuten
-                              }
-                            } else {
-                              actualTrailLength = eventTrailLength;
-                            }
-                            moveShipsBuoysAndWindTo(currentReplayTime);
-                          }),
+                      Row(children: [
+                        const SizedBox(width: 5),
+                        Expanded(
+                            child: InkWell(
+                                child: Text('Het spoor achter de ${config['text']['participants']} is $actualTrailLength '
+                                    '${actualTrailLength == 1 ? 'minuut' : 'minuten'}'),
+                                onTap: () {
+                                  if (actualTrailLength == eventTrailLength) {
+                                    if (maxReplay == 0) {
+                                      actualTrailLength = (eventEnd - eventStart) / 1000 ~/ 60;
+                                    } else {
+                                      actualTrailLength = maxReplay * 60; // minuten
+                                    }
+                                  } else {
+                                    actualTrailLength = eventTrailLength;
+                                  }
+                                  moveShipsBuoysAndWindTo(currentReplayTime);
+                                }))
+                      ]),
                       if (testing)
                         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           const Divider(),
@@ -1359,40 +1359,34 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                               physics: const NeverScrollableScrollPhysics(),
                               padding: const EdgeInsets.all(0),
                               itemCount: participants.length,
-                              itemBuilder: (BuildContext context, index) {
-                                return Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                              itemBuilder: (_, index) {
+                                return Row(children: [
                                   Icon(Icons.square,
-                                      color: Color(shipMarkerColorTable[int.parse(participants[index]['colorcode']) % 32]), size: 20),
-                                  Expanded(
-                                    child: Padding(
-                                        padding: const EdgeInsets.fromLTRB(5, 0, 5, 0),
-                                        child: InkWell(
-                                          child: (showTeam)
-                                              ? Text('${participants[index]['teamname']}')
-                                              : Text('${participants[index]['shipname']}'),
-                                          onTap: () => loadAndShowShipDetails(participants[index]['shipname']),
-                                        )),
-                                  ),
+                                      color: Color(shipMarkerColorTable[int.parse(participants[index]['colorcode']) % 32]), size: 18),
+                                  const SizedBox(width: 5),
+                                  InkWell(
+                                    child: (showTeam)
+                                        ? Text('${participants[index]['teamname']}')
+                                        : Text('${participants[index]['shipname']}'),
+                                    onTap: () => loadAndShowShipDetails(participants[index]['shipname']),
+                                  )
                                 ]);
                               },
                             ),
                             if (eventInfo['showteam'] == 'true')
                               Wrap(children: [
                                 const Divider(),
-                                Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                                  Expanded(
-                                    child: Padding(
-                                      padding: const EdgeInsets.fromLTRB(20, 0, 5, 0),
-                                      child: Text('Team- ipv ${config['text']['shipNames']}'),
-                                    ),
-                                  ),
+                                Row(children: [
+                                  const SizedBox(width: 20),
+                                  Text('Team- ipv ${config['text']['shipNames']}'),
+                                  const Spacer(),
                                   Checkbox(
                                       visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                       activeColor: menuForegroundColor,
                                       checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
                                       side: BorderSide(color: menuForegroundColor),
                                       value: showTeam,
-                                      onChanged: (value) => setState(() {
+                                      onChanged: (_) => setState(() {
                                             showTeam = !showTeam;
                                             if (eventStatus != EventStatus.preEvent) {
                                               moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
@@ -1426,21 +1420,18 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                     padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
                     child: Column(children: [
                       const Divider(),
-                      const Row(children: [SizedBox(width: 4), Text('Basiskaarten:'), Spacer()]),
+                      const Row(children: [SizedBox(width: 4), Text('Basiskaarten:')]),
                       ListView.builder(
                           // radiobuttons for maptype
                           physics: const NeverScrollableScrollPhysics(),
                           padding: EdgeInsets.zero,
                           shrinkWrap: true,
                           itemCount: baseMapTileProviders.keys.toList().length,
-                          itemBuilder: (BuildContext context, index) {
-                            return Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(20, 0, 5, 0),
-                                  child: Text(baseMapTileProviders.keys.toList()[index]),
-                                ),
-                              ),
+                          itemBuilder: (_, index) {
+                            return Row(children: [
+                              const SizedBox(width: 20),
+                              Text(baseMapTileProviders.keys.toList()[index]),
+                              const Spacer(),
                               Theme(
                                   data: ThemeData.dark(),
                                   child: Radio(
@@ -1468,21 +1459,18 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                       if (selectedOverlayType != "") // map overlay on/off and radiobuttons
                         Wrap(children: [
                           const Divider(),
-                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                            const Expanded(
-                              child: Padding(
-                                padding: EdgeInsets.fromLTRB(5, 0, 5, 0),
-                                child: Text('Kaart overlay'),
-                              ),
-                            ),
+                          Row(children: [
+                            const SizedBox(width: 5),
+                            const Text('Kaart overlay'),
+                            const Spacer(),
                             Checkbox(
                                 visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                 activeColor: menuForegroundColor,
                                 checkColor: menuBackgroundColor,
                                 side: BorderSide(color: menuForegroundColor),
                                 value: mapOverlay,
-                                onChanged: (value) => setState(() {
-                                      mapOverlay = value!;
+                                onChanged: (_) => setState(() {
+                                      mapOverlay = !mapOverlay;
                                       prefs.setBool('mapoverlay', mapOverlay);
                                     }))
                           ]),
@@ -1491,13 +1479,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
                               itemCount: overlayTileProviders.keys.toList().length,
-                              itemBuilder: (BuildContext context, index) {
-                                return Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                                  Expanded(
-                                    child: Padding(
-                                        padding: const EdgeInsets.fromLTRB(20, 0, 5, 0),
-                                        child: Text(overlayTileProviders.keys.toList()[index])),
-                                  ),
+                              itemBuilder: (_, index) {
+                                return Row(children: [
+                                  const SizedBox(width: 20),
+                                  Text(overlayTileProviders.keys.toList()[index]),
+                                  const Spacer(),
                                   Theme(
                                       data: ThemeData.dark(),
                                       child: Radio(
@@ -1515,13 +1501,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                       if (replayTracks['windtracks'] != null && replayTracks['windtracks'].length > 0 && allowShowWind)
                         Wrap(children: [
                           const Divider(),
-                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                            const Expanded(
-                              child: Padding(
-                                padding: EdgeInsets.fromLTRB(5, 0, 5, 0),
-                                child: Text('Windpijlen'),
-                              ),
-                            ),
+                          Row(children: [
+                            const SizedBox(width: 5),
+                            const Text('Windpijlen'),
+                            const Spacer(),
                             Checkbox(
                                 visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                 activeColor: menuForegroundColor,
@@ -1544,20 +1527,17 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           (replayTracks['gpsbuoy'] != null && replayTracks['gpsbuoy'].length != 0)) // route and routelabels
                         Wrap(children: [
                           const Divider(),
-                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                            const Expanded(
-                              child: Padding(
-                                padding: EdgeInsets.fromLTRB(5, 0, 5, 0),
-                                child: Text('Route, havens, boeien'),
-                              ),
-                            ),
+                          Row(children: [
+                            const SizedBox(width: 5),
+                            const Text('Route, havens, boeien'),
+                            const Spacer(),
                             Checkbox(
                                 visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                 activeColor: menuForegroundColor,
                                 checkColor: menuBackgroundColor,
                                 side: BorderSide(color: menuForegroundColor),
                                 value: showRoute,
-                                onChanged: (value) => setState(() {
+                                onChanged: (_) => setState(() {
                                       showRoute = !showRoute;
                                       if (infoWindowId != '' && infoWindowId.substring(0, 4) == 'rout') {
                                         infoWindowId = '';
@@ -1568,13 +1548,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                       prefs.setBool('showroute', showRoute);
                                     }))
                           ]),
-                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                            const Expanded(
-                              child: Padding(
-                                padding: EdgeInsets.fromLTRB(20, 0, 5, 0),
-                                child: Text('met namen'),
-                              ),
-                            ),
+                          Row(children: [
+                            const SizedBox(width: 20),
+                            const Text('met namen'),
+                            const Spacer(),
                             Checkbox(
                                 visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                 activeColor: menuForegroundColor,
@@ -1593,7 +1570,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                       if (replayTracks['shiptracks'] != null) // shipnames and speeds
                         Wrap(children: [
                           const Divider(),
-                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
+                          Row(children: [
                             Expanded(
                               child: Padding(
                                 padding: const EdgeInsets.fromLTRB(5, 0, 5, 0),
@@ -1613,20 +1590,17 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                     }))
                           ]),
                           if (allowShowSpeed)
-                            Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                              const Expanded(
-                                child: Padding(
-                                  padding: EdgeInsets.fromLTRB(20, 0, 5, 0),
-                                  child: Text('met snelheden'),
-                                ),
-                              ),
+                            Row(children: [
+                              const SizedBox(width: 20),
+                              const Text('met snelheden'),
+                              const Spacer(),
                               Checkbox(
                                   visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                   activeColor: menuForegroundColor,
                                   checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
                                   side: BorderSide(color: menuForegroundColor),
                                   value: showShipSpeeds,
-                                  onChanged: (value) => setState(() {
+                                  onChanged: (_) => setState(() {
                                         showShipSpeeds = !showShipSpeeds;
                                         if (eventStatus != EventStatus.preEvent) {
                                           moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
@@ -1635,20 +1609,17 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                       }))
                             ]),
                           if (eventInfo['showteam'] == 'true')
-                            Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                              Expanded(
-                                child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(20, 0, 5, 0),
-                                  child: Text('Team- ipv ${config['text']['shipNames']}'),
-                                ),
-                              ),
+                            Row(children: [
+                              const SizedBox(width: 20),
+                              Text('Team- ipv ${config['text']['shipNames']}'),
+                              const Spacer(),
                               Checkbox(
                                   visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                   activeColor: menuForegroundColor,
                                   checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
                                   side: BorderSide(color: menuForegroundColor),
                                   value: showTeam,
-                                  onChanged: (value) => setState(() {
+                                  onChanged: (_) => setState(() {
                                         showTeam = !showTeam;
                                         if (eventStatus != EventStatus.preEvent) {
                                           moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
@@ -1659,20 +1630,17 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                       if (eventStatus == EventStatus.replay) // replay loop checkbox
                         Wrap(children: [
                           const Divider(),
-                          Row(mainAxisAlignment: MainAxisAlignment.start, mainAxisSize: MainAxisSize.max, children: [
-                            const Expanded(
-                              child: Padding(
-                                padding: EdgeInsets.fromLTRB(5, 0, 5, 0),
-                                child: Text('Replay loop'),
-                              ),
-                            ),
+                          Row(children: [
+                            const SizedBox(width: 5),
+                            const Text('Replay loop'),
+                            const Spacer(),
                             Checkbox(
                                 visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                 activeColor: menuForegroundColor,
                                 checkColor: menuBackgroundColor,
                                 side: BorderSide(color: menuForegroundColor),
                                 value: replayLoop,
-                                onChanged: (value) => setState(() => replayLoop = !replayLoop))
+                                onChanged: (_) => setState(() => replayLoop = !replayLoop))
                           ])
                         ])
                     ]))
@@ -1953,7 +1921,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     replayTracks = {};
     shipList = []; // list of patricipting shipnames
     teamList = []; // teams
-    showTeam = false;
     shipColors = []; // and their corresponding colors
     shipColorsSvg = []; // same but in svg format
     shipMarkerList = [];
@@ -1998,7 +1965,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     appIconUrl = await getAppIconUrl(event: eventDomain);
     // get the route.geojson from the server
     route = await getRoute(eventDomain);
-    participants = await getParticipants(eventDomain);
     //
     // set the event status based on the current time. Are we before, during or after the event
     final now = DateTime.now().millisecondsSinceEpoch;
@@ -2015,10 +1981,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //----------------------------------------------------------------------------------------------------------------------------------------
   // Two routines for an event that has not started yet
   //
-  void startPreEvent() {
+  void startPreEvent() async {
     eventStatus = EventStatus.preEvent;
     selectionMessage = 'Het evenement is nog niet begonnen.\n\nKies een ander evenement of wacht rustig af. '
         'De Track & Trace begint op ${dtFormat.format(DateTime.fromMillisecondsSinceEpoch(eventStart))}';
+    participants = await getParticipants(eventDomain);
     if (route['features'] != null) {
       selectionMessage += '\n\nBekijk intussen de route / havens / boeien op de kaart';
       showRoute = true;
@@ -2946,11 +2913,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     track['starttime'] *= 1000;
     track['endtime'] *= 1000;
     track['shiptracks'] ??= [];
-    track['shiptracks'].forEach((ship) => ship['stamp'] = ship['stamp'].map((val) => val * 1000).toList());
+    track['shiptracks'].forEach((ship) => ship['stamp'] = ship['stamp'].map((timeStamp) => timeStamp * 1000).toList());
     track['buoytracks'] ??= [];
-    track['buoytracks'].forEach((buoy) => buoy['stamp'] = buoy['stamp'].map((val) => val * 1000).toList());
+    track['buoytracks'].forEach((buoy) => buoy['stamp'] = buoy['stamp'].map((timeStamp) => timeStamp * 1000).toList());
     track['windtracks'] ??= [];
-    track['windtracks'].forEach((station) => station['stamp'] = station['stamp'].map((val) => val * 1000).toList());
+    track['windtracks'].forEach((station) => station['stamp'] = station['stamp'].map((timeStamp) => timeStamp * 1000).toList());
     return track;
   }
 

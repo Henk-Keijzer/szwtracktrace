@@ -10,7 +10,6 @@ feature requests:
   van het wattage van roeisloepen, dit natuurlijk ook verwerken in de admin me pagina, get/index.php
   en de database (participans tabel), selectievakje om ipv de snelheid het wattage te tonen, maar
   dit wel in event.json optioneel te maken
-- optie om in de deelnemenrslijst in plaats van scheepsnaam de naam van de schipper te tonen
 - toegang tot testmodus dmv username password, met name voor toegang tot underscored events
 
 optimalisaties:
@@ -21,7 +20,9 @@ optimalisaties:
 Version 3.2.7
 
 - Fix: do not close menus when starting/stopping replay
-- Optimization: minor cosmetic improvements
+- Optimization: minor cosmetic improvements and code optimizations
+- Fix: move scalebar to the left if no centerwindmarker to show (not allowed or no wind data
+  available)
 
 Version 3.2.6 released on June 24, 2024
 
