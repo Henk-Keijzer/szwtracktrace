@@ -17,12 +17,13 @@ optimalisaties:
 - live en replay verder integreren en ook live door (replay)ticker aansturen
 
 ----------------------------------------------------------------------------------------------------
-Version 3.2.7
+Version 3.2.7 released on July 9, 2024
 
 - Fix: do not close menus when starting/stopping replay
 - Optimization: minor cosmetic improvements and code optimizations
 - Fix: move scalebar to the left if no centerwindmarker to show (not allowed or no wind data
   available)
+- Fi: new version of flutter_map, causing no flickering on trails anymore
 
 Version 3.2.6 released on June 24, 2024
 
