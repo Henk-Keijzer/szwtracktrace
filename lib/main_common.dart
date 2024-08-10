@@ -14,17 +14,21 @@ import 'dart:async';
 import 'dart:core';
 import 'dart:convert';
 import 'dart:math';
+import 'dart:io';
 
 //
 import 'package:auto_size_text/auto_size_text.dart';
 import 'package:bordered_text/bordered_text.dart';
 import 'package:collection/collection.dart';
+import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
+import 'package:dio_cache_interceptor_file_store/dio_cache_interceptor_file_store.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_html/flutter_html.dart' show Html;
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:fullscreen_window/fullscreen_window.dart';
 import 'package:http/http.dart' as http;
@@ -32,6 +36,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:intl/intl.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_html/html.dart' show document, window;
 import 'package:url_launcher/url_launcher.dart';
@@ -64,9 +69,9 @@ final bool kIsWebOnAndroid = kIsWeb && (defaultTargetPlatform == TargetPlatform.
 String phoneId = "";
 //
 // Colors (menu colors are overruled by colors in config/flutter_config.json
+Color menuAccentColor = const Color(0xffffffff); // pure white
 Color menuBackgroundColor = const Color(0xffd32f2f); // Colors.red[700] setting it as hex means we don't need a null check in the code
 Color menuForegroundColor = const Color(0xb3ffffff); // Colors.white70;
-Color menuAccentColor = const Color(0xffffffff); // pure white
 //
 const String hexBlack = '#000000'; // marker and label outline colors depending on background black or white
 const String hexWhite = '#ffffff';
@@ -115,6 +120,7 @@ double menuOffset = 0; // used to calculate the offset of the menutext from the 
 //
 // variable and constants for the flutter_map
 final MapController mapController = MapController();
+CacheStore cacheStore = FileCacheStore('');
 const LatLng initialMapPosition = LatLng(52.5, 5.0);
 const double initialMapZoom = 9;
 //
@@ -339,9 +345,9 @@ void mainCommon({required String serverUrl}) async {
     }
   }
   // decode some color values based on the info in the config file as they are used very often
+  menuAccentColor = Color(int.parse(config['colors']['menuAccentColor'], radix: 16));
   menuBackgroundColor = Color(int.parse(config['colors']['menuBackgroundColor'], radix: 16));
   menuForegroundColor = Color(int.parse(config['colors']['menuForegroundColor'], radix: 16));
-  menuAccentColor = Color(int.parse(config['colors']['menuAccentColor'], radix: 16));
   //
   shipSvgPath = config['icons']['boatSVGPath'];
   //
@@ -361,6 +367,11 @@ void mainCommon({required String serverUrl}) async {
       'package: ${packageInfo.packageName}<br>server: $server</body></html>';
   //
   // ----- MAPS
+  // set up the cacheStore for caching maptiles for everything except web
+  if (!kIsWeb) {
+    var dir = await getTemporaryDirectory();
+    cacheStore = FileCacheStore('${dir.path}${Platform.pathSeparator}MapTiles');
+  }
   // get the complete list of map tile providers from the server, overwriting the default mapdata in default_maptileproviders.dart
   response = await http.get(Uri.parse('${server}get/?req=maptileproviders&dev=$phoneId'));
   Map<String, dynamic> mapdata = (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : defaultMapTileProviders;
@@ -509,6 +520,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //
   // After initState, the flutter framework calls build(BuildContext context), which is the flutter UI
   // The value 'context' is a value the framework gives us, and is used to identify the environment in wich we are running
+  // The method build is also called each time we call setState((){})
   //
   // The ui is relatively simple, because our App has only one page, so no navigation to other pages
   // The UI is rebuilt each time the state of the info to be displayed needs to be updated to the screen.
@@ -526,7 +538,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     AppBar myAppBar = uiAppBar();
     menuOffset = MediaQuery.of(context).viewPadding.top + myAppBar.preferredSize.height;
     // menuOffset is the heigth of the appBar + the notification area above the appbar on mobile devices
-    // we need to calculate this because we extend the map behind the appBar and the notification area (viewpadding.top)
+    // we need to calculate this because in the Scaffold below, we extend the map behind the appBar and the notification area (viewpadding
+    // .top)
     // On Windows and web the height of the notification area = 0
     // Now return the UI as a MaterialApp with title, theme and a (single) homepage (with a SafeArea and a Scaffold)
     return MaterialApp(
@@ -566,7 +579,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
 
   //----------------------------------------------------------------------------
   //
-  // the UI elements called above. The names speak for themselves (I hope)
+  // the UI elements listed above. The names speak for themselves (I hope)
   //
   AppBar uiAppBar() {
     return AppBar(
@@ -615,13 +628,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 } else {
                   FullScreenWindow.setFullScreen(fullScreen);
                   if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
-                    // give the ui some time to settle and redraw the markers (especially the centerwind arrow and it's infowindow)
+                    // give the ui some time to settle and redraw the wind markers (especially the centerwind arrow and it's infowindow)
                     Timer(const Duration(milliseconds: 500), () => setState(() => rotateWindTo(currentReplayTime)));
                   }
                 }
               }),
             ),
-          // button to open/close the menubuttobar
+          // button to open/close the AppBar extension: uiMenuButtonBar
           IconButton(
             icon: showMenuButtonBar ? const Icon(Icons.expand_less) : const Icon(Icons.menu),
             onPressed: () => setState(() {
@@ -632,338 +645,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         ]);
   }
 
-  FlutterMap uiFlutterMap() {
-    return FlutterMap(
-        mapController: mapController,
-        options: MapOptions(
-            onMapReady: () => onMapCreated(),
-            // when the map is ready, the onMapCreated routine starts the rest of the initialization
-            initialCenter: initialMapPosition,
-            initialZoom: initialMapZoom,
-            maxZoom: baseMapTileProviders[selectedMapType]['maxZoom'],
-            backgroundColor: Colors.blueGrey,
-            interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
-            onPositionChanged: (_, gesture) {
-              // only do this when the map position or zoom changed due to human interaction (gesture == true)
-              if (gesture) {
-                setState(() {
-                  // stop autozoom and autofollow, close all menu's and update wind markers, in order to update the "center wind marker"
-                  autoFollow = showEventMenu = showInfoPage = showMapMenu = showShipMenu = false;
-                  if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
-                    rotateWindTo(currentReplayTime);
-                  }
-                });
-              }
-            },
-            onTap: (_, __) => setState(() {
-                  // on tapping the map: close all popups and menu's, and show the follow/zoom switches again
-                  infoWindowId = '';
-                  infoWindowMarkerList = [];
-                  showEventMenu = showMapMenu = showShipMenu = showInfoPage = showAttribution = false;
-                })),
-        children: [
-          // seven children: the base map, the optional labeloverlay for base (satellite) maps,
-          // the (optional) overlay map, the scale bar, the route polylines and polygons, and all markers/textlabels
-          //
-          // the selected base map layer with three options, WMS, WMTS or vector (once available for web)
-          switch (baseMapTileProviders[selectedMapType]['service']) {
-            "WMS" => TileLayer(
-                wmsOptions: WMSTileLayerOptions(
-                  baseUrl: baseMapTileProviders[selectedMapType]['wmsbaseURL'],
-                  layers: baseMapTileProviders[selectedMapType]['wmslayers'].cast<String>(),
-                ),
-                tileProvider: NetworkTileProvider(),
-                retinaMode: RetinaMode.isHighDensity(context),
-                tileDisplay: const TileDisplay.instantaneous(),
-                userAgentPackageName: packageInfo.packageName,
-              ),
-            "WMTS" => TileLayer(
-                urlTemplate: baseMapTileProviders[selectedMapType]['URL'],
-                subdomains: List<String>.from(baseMapTileProviders[selectedMapType]['subDomains']),
-                tileProvider: NetworkTileProvider(),
-                retinaMode: baseMapTileProviders[selectedMapType]['URL'].contains('{r}') ? RetinaMode.isHighDensity(context) : false,
-                tileDisplay: const TileDisplay.instantaneous(),
-                userAgentPackageName: packageInfo.packageName,
-              ),
-            _ => const SizedBox.shrink()
-          },
-          // the tile layer for the streetlabels (only when the selected basemap indicates a labels layer
-          if (baseMapTileProviders[selectedMapType]['labels'] != '')
-            switch (labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['service']) {
-              'WMS' => TileLayer(
-                  wmsOptions: WMSTileLayerOptions(
-                    baseUrl: labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['wmsbaseURL'],
-                    layers: labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['wmslayers'].cast<String>(),
-                  ),
-                  tileProvider: NetworkTileProvider(),
-                  retinaMode: RetinaMode.isHighDensity(context),
-                  tileDisplay: const TileDisplay.instantaneous(),
-                  userAgentPackageName: packageInfo.packageName,
-                ),
-              'WMTS' => TileLayer(
-                  urlTemplate: labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['URL'],
-                  subdomains: List<String>.from(labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['subDomains']),
-                  tileProvider: NetworkTileProvider(),
-                  retinaMode: labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['URL'].contains('{r}')
-                      ? RetinaMode.isHighDensity(context)
-                      : false,
-                  tileDisplay: const TileDisplay.instantaneous(),
-                  userAgentPackageName: packageInfo.packageName,
-                ),
-              _ => const SizedBox.shrink()
-            },
-          // the tilelayer for the selecatble overlays, showing waterways, etc
-          if (mapOverlay && overlayTileProviders.isNotEmpty)
-            switch (overlayTileProviders[selectedOverlayType]['service']) {
-              'WMS' => TileLayer(
-                  wmsOptions: WMSTileLayerOptions(
-                    baseUrl: overlayTileProviders[selectedOverlayType]['wmsbaseURL'],
-                    layers: overlayTileProviders[selectedOverlayType]['wmslayers'].cast<String>(),
-                  ),
-                  tileProvider: NetworkTileProvider(),
-                  retinaMode: false,
-                  //RetinaMode.isHighDensity(context),
-                  tileDisplay: const TileDisplay.instantaneous(),
-                  userAgentPackageName: packageInfo.packageName,
-                ),
-              'WMTS' => TileLayer(
-                  urlTemplate: overlayTileProviders[selectedOverlayType]['URL'],
-                  subdomains: List<String>.from(overlayTileProviders[selectedOverlayType]['subDomains']),
-                  tileProvider: NetworkTileProvider(),
-                  retinaMode: overlayTileProviders[selectedOverlayType]['URL'].contains('{r}') ? RetinaMode.isHighDensity(context) : false,
-                  tileDisplay: const TileDisplay.instantaneous(),
-                  userAgentPackageName: packageInfo.packageName,
-                ),
-              _ => const SizedBox.shrink()
-            },
-          Scalebar(
-              alignment: Alignment.topLeft,
-              padding: EdgeInsets.fromLTRB(
-                  (showWindMarkers && replayTracks['windtracks'] != null && replayTracks['windtracks'].length > 0) ? 60 : 15,
-                  menuOffset + 15,
-                  0,
-                  0),
-              lineColor: markerBackgroundColor,
-              textStyle: TextStyle(color: markerBackgroundColor),
-              strokeWidth: 1),
-          //
-          // three more layers: the lines of the route and trails, and the markers
-          PolylineLayer(polylines: routeLineList + shipTrailList),
-          if (testing) PolygonLayer(polygons: routePolygons),
-          MarkerLayer(
-              markers: routeLabelList + // in this order from bottom to top
-                  gpsBuoyLabelList +
-                  routeMarkerList +
-                  gpsBuoyMarkerList +
-                  windMarkerList +
-                  shipLabelList +
-                  shipMarkerList +
-                  infoWindowMarkerList),
-        ]);
-  }
-
   //
-  // on top of the map the slider area with the two sliders, the actionbuttons and the speed, date/time and live update timers
-  Column uiSliderArea() {
-    Color textColor = (bgColor == hexBlack) ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
-    return Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
-      // a column with 4 children:
-      // 1. Row with timeslider and actionbuttons,
-      // 2. Container with the start/stop button and the timeslider,
-      // 3. a Row with texts
-      // first 1. a row with the speedslider, a spacer, the actionbuttons and 15px wide sizedbox
-      Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-        const SizedBox(width: 8),
-        if (eventStatus == EventStatus.replay || currentReplayTime != sliderEnd) uiSpeedSlider(),
-        const Spacer(),
-        uiZoomFollowButtons(),
-        const SizedBox(width: 4),
-      ]),
-      // under this row 2. the start/stop button and the timeslider
-      uiTimeSlider(),
-      // 3. a container showing the selected speed, the currentreplaytime and the livetimer
-      Container(
-          padding: const EdgeInsets.fromLTRB(20, 0, 50, 15),
-          color: Colors.transparent, // set a color so that the area does not allow click-through to the map
-          child: Row(
-              // row with some texts
-              mainAxisAlignment: MainAxisAlignment.start,
-              mainAxisSize: MainAxisSize.max,
-              children: [
-                Text(
-                    (eventStatus == EventStatus.live && currentReplayTime == sliderEnd)
-                        ? '1 sec/sec${(testing) ? ' | $debugString' : ''}'
-                        : '${speedTextTable[speedIndex]}${(testing) ? ' | $debugString' : ''}',
-                    style: TextStyle(color: textColor)),
-                const Spacer(),
-                if (eventStatus != EventStatus.preEvent)
-                  AutoSizeText(
-                    ((currentReplayTime == sliderEnd) && (sliderEnd != eventEnd) ? 'Live ' : 'Replay ') +
-                        dtsFormat.format(DateTime.fromMillisecondsSinceEpoch(
-                            currentReplayTime - ((currentReplayTime == sliderEnd && hfUpdate) ? displayDelay : 0))),
-                    style: TextStyle(color: textColor),
-                    minFontSize: 8,
-                    maxLines: 1,
-                  ),
-                const Spacer(),
-                if (eventStatus == EventStatus.live)
-                  SizedBox(
-                      width: 45,
-                      child: InkWell(
-                          onTap: () => setState(() => liveSecondsTimer = 0),
-                          child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                            Text((liveSecondsTimer * hfUpdateInterval / 1000).ceil().toString(),
-                                textAlign: TextAlign.right, style: TextStyle(color: textColor)),
-                            const SizedBox(width: 2),
-                            Icon(Icons.refresh, color: textColor, size: 15),
-                          ]))),
-              ]))
-    ]);
-  }
-
-  Container uiSpeedSlider() {
-    Color sliderColor = (bgColor == hexBlack) ? Colors.black54 : Colors.white60;
-    Color thumbColor = (bgColor == hexBlack) ? Colors.black54 : Colors.white;
-    return Container(
-        color: Colors.transparent,
-        child: Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.center, children: [
-          IconButton(
-              icon: Icon(Icons.speed_outlined, color: thumbColor),
-              visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-              tooltip: "sneller",
-              onPressed: () => setState(() => speedIndex = (speedIndex == speedTable.length - 1) ? speedTable.length - 1 : speedIndex + 1)),
-          RotatedBox(
-            quarterTurns: 3,
-            child: SliderTheme(
-              data: SliderThemeData(
-                trackHeight: 3,
-                overlayShape: SliderComponentShape.noOverlay,
-                activeTrackColor: sliderColor,
-                inactiveTrackColor: sliderColor,
-                trackShape: const RectangularSliderTrackShape(),
-                thumbColor: thumbColor,
-              ),
-              child: Slider(
-                value: speedIndex.toDouble(),
-                min: 0,
-                max: speedTable.length - 1,
-                divisions: speedTable.length - 1,
-                onChanged: (newValue) => setState(() => speedIndex = newValue.toInt()),
-              ),
-            ),
-          ),
-          IconButton(
-              icon: Transform.flip(flipX: true, child: Icon(Icons.speed, color: thumbColor)),
-              visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-              tooltip: "langzamer",
-              onPressed: () => setState(() => speedIndex = (speedIndex == 0) ? 0 : speedIndex - 1)),
-          const SizedBox(height: 10),
-        ]));
-  }
-
-  Column uiZoomFollowButtons() {
-    return Column(mainAxisAlignment: MainAxisAlignment.end, children: [
-      if (autoFollow)
-        Transform.scale(
-            scale: 0.8,
-            child: Switch(
-                activeTrackColor: menuBackgroundColor.withOpacity(0.5),
-                inactiveTrackColor: menuForegroundColor.withOpacity(0.5),
-                trackOutlineWidth: const WidgetStatePropertyAll(0.0),
-                thumbIcon: autoZoom ? const WidgetStatePropertyAll(Icon(Icons.check)) : null,
-                value: autoZoom,
-                onChanged: (value) {
-                  autoZoom = value;
-                  moveShipsBuoysAndWindTo(currentReplayTime);
-                })),
-      if (autoFollow)
-        Text('zoom',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, height: 0.01, color: bgColor == hexBlack ? Colors.black : Colors.white)),
-      const SizedBox(width: 0, height: 10),
-      Transform.scale(
-        scale: 0.8,
-        child: Switch(
-          activeTrackColor: menuBackgroundColor.withOpacity(0.5),
-          inactiveTrackColor: menuForegroundColor.withOpacity(0.5),
-          trackOutlineWidth: const WidgetStatePropertyAll(0),
-          thumbIcon: autoFollow ? const WidgetStatePropertyAll(Icon(Icons.check)) : null,
-          value: autoFollow,
-          onChanged: (value) {
-            var temp = false;
-            following.forEach((_, val) {
-              if (val) temp = true;
-            }); // set temp to true if there are ships to follow
-            autoFollow = temp ? value : false; // dont allow autoFollow on when no ship to follow
-            showShipMenu = temp ? showShipMenu : true; // show shipmenu if no ships to follow
-            moveShipsBuoysAndWindTo(currentReplayTime);
-          },
-        ),
-      ),
-      Text('volgen',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontSize: 13, height: 0.01, color: bgColor == hexBlack ? Colors.black : Colors.white)),
-      const SizedBox(height: 10),
-    ]);
-  }
-
-  Container uiTimeSlider() {
-    Color sliderColor = (bgColor == hexBlack) ? Colors.black54 : Colors.white60;
-    Color thumbColor = (bgColor == hexBlack) ? Colors.black54 : Colors.white;
-    return Container(
-        color: Colors.transparent,
-        child: Row(children: [
-          const SizedBox(width: 3),
-          IconButton(
-              icon: replayRunning
-                  ? const Icon(Icons.pause, color: Colors.red, size: 35)
-                  : const Icon(Icons.play_arrow, color: Colors.green, size: 35),
-              visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-              tooltip: replayRunning ? 'stop replay' : 'start replay',
-              onPressed: startStopRunning),
-          Expanded(
-              // and the time slider, expanding it to the rest of the row
-              child: SliderTheme(
-                  data: SliderThemeData(
-                    trackHeight: 3,
-                    overlayShape: SliderComponentShape.noOverlay,
-                    activeTrackColor: sliderColor,
-                    inactiveTrackColor: sliderColor,
-                    trackShape: const RectangularSliderTrackShape(),
-                    thumbColor: thumbColor,
-                  ),
-                  child: Slider(
-                    min: eventStart.toDouble(),
-                    max: sliderEnd.toDouble(),
-                    value: (currentReplayTime < eventStart || currentReplayTime > sliderEnd)
-                        ? eventStart.toDouble()
-                        : currentReplayTime.toDouble(),
-                    onChangeStart: (_) => replayPause = true,
-                    // pause the replay
-                    onChanged: (time) => setState(() {
-                      currentReplayTime = time.toInt();
-                      if (time == sliderEnd) {
-                        replayRunning = false;
-                      }
-                      moveShipsBuoysAndWindTo(currentReplayTime);
-                    }),
-                    onChangeEnd: (time) => setState(() {
-                      // resume play, but stop at end
-                      currentReplayTime = time.toInt();
-                      replayPause = false;
-                      if (sliderEnd - time < 60 * 1000) {
-                        // within one minute of sliderEnd
-                        currentReplayTime = sliderEnd;
-                        replayRunning = false;
-                      }
-                      moveShipsBuoysAndWindTo(currentReplayTime);
-                    }),
-                  ))),
-          const SizedBox(width: 17),
-        ]));
-  }
-
-  // the vertical menu button bar (now vertical to leave more space for the title on narrow screens)
+  // The vertical menu button bar (AppBar extention)
+  //
   Row uiMenuButtonBar() {
     return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
       Column(children: [
@@ -1043,7 +727,343 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     ]);
   }
 
-  // the menus: event menu, shipmenu, mapmenu and infopage
+  //
+  // the map
+  //
+  FlutterMap uiFlutterMap() {
+    return FlutterMap(
+        mapController: mapController,
+        options: MapOptions(
+            onMapReady: () => onMapCreated(),
+            // when the map is ready, the onMapCreated routine starts the rest of the initialization
+            initialCenter: initialMapPosition,
+            initialZoom: initialMapZoom,
+            maxZoom: baseMapTileProviders[selectedMapType]['maxZoom'],
+            backgroundColor: Colors.blueGrey,
+            interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+            onPositionChanged: (_, gesture) {
+              // only do this when the map position or zoom changed due to human interaction (gesture == true)
+              if (gesture) {
+                setState(() {
+                  // stop autozoom and autofollow, close all menu's and update wind markers (in order to update the "center wind marker")
+                  autoFollow = showEventMenu = showInfoPage = showMapMenu = showShipMenu = false;
+                  if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
+                    rotateWindTo(currentReplayTime);
+                  }
+                });
+              }
+            },
+            onTap: (_, __) => setState(() {
+                  // on tapping the map: close all popups and menu's
+                  infoWindowId = '';
+                  infoWindowMarkerList = [];
+                  showEventMenu = showMapMenu = showShipMenu = showInfoPage = showAttribution = false;
+                })),
+        children: [
+          // seven children: the base map, the optional labeloverlay for base (satellite) maps,
+          // the (optional) overlay map, the scale bar, the route polylines and polygons, and all markers/textlabels
+          //
+          // 1. the selected base map layer with three options, WMS, WMTS or vector (once available for web)
+          switch (baseMapTileProviders[selectedMapType]['service']) {
+            "WMS" => TileLayer(
+                wmsOptions: WMSTileLayerOptions(
+                  baseUrl: baseMapTileProviders[selectedMapType]['wmsbaseURL'],
+                  layers: baseMapTileProviders[selectedMapType]['wmslayers'].cast<String>(),
+                ),
+                tileProvider: CachedTileProvider(store: cacheStore),
+                retinaMode: RetinaMode.isHighDensity(context),
+                tileDisplay: const TileDisplay.instantaneous(),
+                userAgentPackageName: packageInfo.packageName,
+              ),
+            "WMTS" => TileLayer(
+                urlTemplate: baseMapTileProviders[selectedMapType]['URL'],
+                subdomains: List<String>.from(baseMapTileProviders[selectedMapType]['subDomains']),
+                tileProvider: CachedTileProvider(store: cacheStore),
+                retinaMode: baseMapTileProviders[selectedMapType]['URL'].contains('{r}') ? RetinaMode.isHighDensity(context) : false,
+                tileDisplay: const TileDisplay.instantaneous(),
+                userAgentPackageName: packageInfo.packageName,
+              ),
+            _ => const SizedBox.shrink()
+          },
+          // 2. the tile layer for the streetlabels (only when the selected basemap indicates a labels layer
+          if (baseMapTileProviders[selectedMapType]['labels'] != '')
+            switch (labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['service']) {
+              'WMS' => TileLayer(
+                  wmsOptions: WMSTileLayerOptions(
+                    baseUrl: labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['wmsbaseURL'],
+                    layers: labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['wmslayers'].cast<String>(),
+                  ),
+                  tileProvider: CachedTileProvider(store: cacheStore),
+                  retinaMode: RetinaMode.isHighDensity(context),
+                  tileDisplay: const TileDisplay.instantaneous(),
+                  userAgentPackageName: packageInfo.packageName,
+                ),
+              'WMTS' => TileLayer(
+                  urlTemplate: labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['URL'],
+                  subdomains: List<String>.from(labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['subDomains']),
+                  tileProvider: CachedTileProvider(store: cacheStore),
+                  retinaMode: labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['URL'].contains('{r}')
+                      ? RetinaMode.isHighDensity(context)
+                      : false,
+                  tileDisplay: const TileDisplay.instantaneous(),
+                  userAgentPackageName: packageInfo.packageName,
+                ),
+              _ => const SizedBox.shrink()
+            },
+          // 3. the tilelayer for the selecatble overlays, showing waterways, etc
+          if (mapOverlay && overlayTileProviders.isNotEmpty)
+            switch (overlayTileProviders[selectedOverlayType]['service']) {
+              'WMS' => TileLayer(
+                  wmsOptions: WMSTileLayerOptions(
+                    baseUrl: overlayTileProviders[selectedOverlayType]['wmsbaseURL'],
+                    layers: overlayTileProviders[selectedOverlayType]['wmslayers'].cast<String>(),
+                  ),
+                  tileProvider: CachedTileProvider(store: cacheStore),
+                  retinaMode: false,
+                  //RetinaMode.isHighDensity(context),
+                  tileDisplay: const TileDisplay.instantaneous(),
+                  userAgentPackageName: packageInfo.packageName,
+                ),
+              'WMTS' => TileLayer(
+                  urlTemplate: overlayTileProviders[selectedOverlayType]['URL'],
+                  subdomains: List<String>.from(overlayTileProviders[selectedOverlayType]['subDomains']),
+                  tileProvider: CachedTileProvider(store: cacheStore),
+                  retinaMode: overlayTileProviders[selectedOverlayType]['URL'].contains('{r}') ? RetinaMode.isHighDensity(context) : false,
+                  tileDisplay: const TileDisplay.instantaneous(),
+                  userAgentPackageName: packageInfo.packageName,
+                ),
+              _ => const SizedBox.shrink()
+            },
+          Scalebar(
+              alignment: Alignment.topLeft,
+              padding: EdgeInsets.fromLTRB(
+                  (showWindMarkers && replayTracks['windtracks'] != null && replayTracks['windtracks'].length > 0) ? 60 : 15,
+                  menuOffset + 15,
+                  0,
+                  0),
+              lineColor: markerBackgroundColor,
+              textStyle: TextStyle(color: markerBackgroundColor),
+              strokeWidth: 1),
+          //
+          // three more layers: the 5. lines of the route and trails, 6. the fences and 7. the markers
+          PolylineLayer(polylines: routeLineList + shipTrailList),
+          if (testing) PolygonLayer(polygons: routePolygons),
+          MarkerLayer(
+              markers: routeLabelList + // in this order from bottom to top
+                  gpsBuoyLabelList +
+                  routeMarkerList +
+                  gpsBuoyMarkerList +
+                  windMarkerList +
+                  shipLabelList +
+                  shipMarkerList +
+                  infoWindowMarkerList),
+        ]);
+  }
+
+  //
+  // on top of the map the slider area with the two sliders, the actionbuttons and the speed, date/time and live update timers
+  //
+  Column uiSliderArea() {
+    Color textColor = (bgColor == hexBlack) ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
+    return Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
+      // a column with 3 children:
+      // 1. Row with timeslider and actionbuttons,
+      // 2. Container with the start/stop button and the timeslider,
+      // 3. a Row with texts
+      //
+      // first 1. a row with the speedslider, a spacer and the actionbuttons
+      Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+        const SizedBox(width: 8),
+        if (eventStatus == EventStatus.replay || currentReplayTime != sliderEnd) uiSpeedSlider(),
+        const Spacer(),
+        uiZoomFollowButtons(),
+        const SizedBox(width: 4),
+      ]),
+      // under this row 2. the start/stop button and the timeslider
+      uiTimeSlider(),
+      // 3. a container showing the selected speed, the currentreplaytime and the livetimer
+      Container(
+          padding: const EdgeInsets.fromLTRB(20, 0, 50, 15),
+          color: Colors.transparent, // set a color so that the area does not allow click-through to the map
+          child: Row(
+              // row with some texts
+              mainAxisAlignment: MainAxisAlignment.start,
+              mainAxisSize: MainAxisSize.max,
+              children: [
+                Text(
+                    (eventStatus == EventStatus.live && currentReplayTime == sliderEnd)
+                        ? '1 sec/sec${(testing) ? ' | $debugString' : ''}'
+                        : '${speedTextTable[speedIndex]}${(testing) ? ' | $debugString' : ''}',
+                    style: TextStyle(color: textColor)),
+                const Spacer(),
+                if (eventStatus != EventStatus.preEvent)
+                  AutoSizeText(
+                    ((currentReplayTime == sliderEnd) && (sliderEnd != eventEnd) ? 'Live ' : 'Replay ') +
+                        dtsFormat.format(
+                            DateTime.fromMillisecondsSinceEpoch(currentReplayTime - ((currentReplayTime == sliderEnd) ? displayDelay : 0))),
+                    style: TextStyle(color: textColor),
+                    minFontSize: 8,
+                    maxLines: 1,
+                  ),
+                const Spacer(),
+                if (eventStatus == EventStatus.live)
+                  SizedBox(
+                      width: 45,
+                      child: InkWell(
+                          onTap: () => setState(() => liveSecondsTimer = 0),
+                          child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                            Text((liveSecondsTimer * hfUpdateInterval / 1000).ceil().toString(),
+                                textAlign: TextAlign.right, style: TextStyle(color: textColor)),
+                            const SizedBox(width: 2),
+                            Icon(Icons.refresh, color: textColor, size: 15),
+                          ]))),
+              ]))
+    ]);
+  }
+
+  Container uiSpeedSlider() {
+    Color sliderColor = (bgColor == hexBlack) ? Colors.black54 : Colors.white60;
+    Color thumbColor = (bgColor == hexBlack) ? Colors.black54 : Colors.white;
+    return Container(
+        color: Colors.transparent,
+        child: Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.center, children: [
+          IconButton(
+              icon: Icon(Icons.speed_outlined, color: thumbColor),
+              visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+              tooltip: "sneller",
+              onPressed: () => setState(() => speedIndex = (speedIndex == speedTable.length - 1) ? speedTable.length - 1 : speedIndex + 1)),
+          RotatedBox(
+            quarterTurns: 3,
+            child: SliderTheme(
+              data: SliderThemeData(
+                trackHeight: 3,
+                overlayShape: SliderComponentShape.noOverlay,
+                activeTrackColor: sliderColor,
+                inactiveTrackColor: sliderColor,
+                trackShape: const RectangularSliderTrackShape(),
+                thumbColor: thumbColor,
+              ),
+              child: Slider(
+                value: speedIndex.toDouble(),
+                min: 0,
+                max: speedTable.length - 1,
+                divisions: speedTable.length - 1,
+                onChanged: (newValue) => setState(() => speedIndex = newValue.toInt()),
+              ),
+            ),
+          ),
+          IconButton(
+              icon: Transform.flip(flipX: true, child: Icon(Icons.speed, color: thumbColor)),
+              visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+              tooltip: "langzamer",
+              onPressed: () => setState(() => speedIndex = (speedIndex == 0) ? 0 : speedIndex - 1)),
+          const SizedBox(height: 10),
+        ]));
+  }
+
+  Column uiZoomFollowButtons() {
+    return Column(mainAxisAlignment: MainAxisAlignment.end, children: [
+      if (autoFollow)
+        Transform.scale(
+            scale: 0.8,
+            child: Switch(
+                activeTrackColor: menuBackgroundColor.withOpacity(0.5),
+                inactiveTrackColor: menuForegroundColor.withOpacity(0.5),
+                trackOutlineWidth: const WidgetStatePropertyAll(0.0),
+                thumbIcon: autoZoom ? const WidgetStatePropertyAll(Icon(Icons.check)) : null,
+                value: autoZoom,
+                onChanged: (value) => setState(() {
+                      autoZoom = value;
+                      if (sliderEnd != currentReplayTime) moveShipsBuoysAndWindTo(currentReplayTime);
+                    }))),
+      if (autoFollow)
+        Text('zoom',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, height: 0.01, color: bgColor == hexBlack ? Colors.black : Colors.white)),
+      const SizedBox(width: 0, height: 10),
+      Transform.scale(
+          scale: 0.8,
+          child: Switch(
+              activeTrackColor: menuBackgroundColor.withOpacity(0.5),
+              inactiveTrackColor: menuForegroundColor.withOpacity(0.5),
+              trackOutlineWidth: const WidgetStatePropertyAll(0),
+              thumbIcon: autoFollow ? const WidgetStatePropertyAll(Icon(Icons.check)) : null,
+              value: autoFollow,
+              onChanged: (value) => setState(() {
+                    var temp = false;
+                    following.forEach((_, val) {
+                      if (val) temp = true;
+                    }); // set temp to true if there are ships to follow
+                    autoFollow = temp ? value : false; // dont allow autoFollow on when no ship to follow
+                    showShipMenu = temp ? showShipMenu : true; // show shipmenu if no ships to follow
+                    if (sliderEnd != currentReplayTime) moveShipsBuoysAndWindTo(currentReplayTime);
+                  }))),
+      Text('volgen',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, height: 0.01, color: bgColor == hexBlack ? Colors.black : Colors.white)),
+      const SizedBox(height: 10),
+    ]);
+  }
+
+  Container uiTimeSlider() {
+    Color sliderColor = (bgColor == hexBlack) ? Colors.black54 : Colors.white60;
+    Color thumbColor = (bgColor == hexBlack) ? Colors.black54 : Colors.white;
+    return Container(
+        color: Colors.transparent,
+        child: Row(children: [
+          const SizedBox(width: 3),
+          IconButton(
+              icon: replayRunning
+                  ? const Icon(Icons.pause, color: Colors.red, size: 35)
+                  : const Icon(Icons.play_arrow, color: Colors.green, size: 35),
+              visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+              tooltip: replayRunning ? 'stop replay' : 'start replay',
+              onPressed: startStopRunning),
+          Expanded(
+              // and the time slider, expanding it to the rest of the row
+              child: SliderTheme(
+                  data: SliderThemeData(
+                    trackHeight: 3,
+                    overlayShape: SliderComponentShape.noOverlay,
+                    activeTrackColor: sliderColor,
+                    inactiveTrackColor: sliderColor,
+                    trackShape: const RectangularSliderTrackShape(),
+                    thumbColor: thumbColor,
+                  ),
+                  child: Slider(
+                    min: eventStart.toDouble(),
+                    max: sliderEnd.toDouble(),
+                    value: (currentReplayTime < eventStart || currentReplayTime > sliderEnd)
+                        ? eventStart.toDouble()
+                        : currentReplayTime.toDouble(),
+                    onChangeStart: (_) => replayPause = true,
+                    // pause the replay
+                    onChanged: (time) => setState(() {
+                      currentReplayTime = time.toInt();
+                      if (time == sliderEnd) {
+                        replayRunning = false;
+                      }
+                      moveShipsBuoysAndWindTo(currentReplayTime);
+                    }),
+                    onChangeEnd: (time) => setState(() {
+                      // resume play, but stop at end
+                      currentReplayTime = time.toInt();
+                      replayPause = false;
+                      if (sliderEnd - time < 60 * 1000) {
+                        // within one minute of sliderEnd
+                        currentReplayTime = sliderEnd;
+                        replayRunning = false;
+                      }
+                      moveShipsBuoysAndWindTo(currentReplayTime);
+                    }),
+                  ))),
+          const SizedBox(width: 17),
+        ]));
+  }
+
+  //
+  // the menus: uiEventMenu, uiShipMenu/uiPreEventParticipants, uiMapMenu and uiInfoPage
+  //
   SingleChildScrollView uiEventMenu() {
     return SingleChildScrollView(
         child: Container(
@@ -1191,7 +1211,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                             onChanged: (value) => setState(() {
                                   following.forEach((k, v) => following[k] = value!);
                                   followAll = autoZoom = autoFollow = value!;
-                                  moveShipsBuoysAndWindTo(currentReplayTime);
+                                  if (sliderEnd != currentReplayTime) moveShipsBuoysAndWindTo(currentReplayTime);
                                 })),
                       ]),
                       const Divider(),
@@ -1225,7 +1245,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                     if (val) autoFollow = autoZoom = true;
                                   });
                                   if (value && showShipInfo) loadAndShowShipDetails(shipList[index]);
-                                  moveShipsBuoysAndWindTo(currentReplayTime);
+                                  if (sliderEnd != currentReplayTime) moveShipsBuoysAndWindTo(currentReplayTime);
                                 }),
                           ]);
                         },
@@ -1245,7 +1265,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 value: showShipLabels,
                                 onChanged: (_) => setState(() {
                                       showShipLabels = !showShipLabels;
-                                      if (eventStatus != EventStatus.preEvent) moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
+                                      if (eventStatus != EventStatus.preEvent && currentReplayTime != sliderEnd) {
+                                        moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
+                                      }
                                       prefs.setBool('shiplabels', showShipLabels);
                                     }))
                           ]),
@@ -1262,7 +1284,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                   value: showShipSpeeds,
                                   onChanged: (_) => setState(() {
                                         showShipSpeeds = !showShipSpeeds;
-                                        if (eventStatus != EventStatus.preEvent) {
+                                        if (eventStatus != EventStatus.preEvent && currentReplayTime != sliderEnd) {
                                           moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                         }
                                         prefs.setBool('shipspeeds', showShipSpeeds);
@@ -1281,7 +1303,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                   value: showTeam,
                                   onChanged: (_) => setState(() {
                                         showTeam = !showTeam;
-                                        if (eventStatus != EventStatus.preEvent) {
+                                        if (eventStatus != EventStatus.preEvent && currentReplayTime != sliderEnd) {
                                           moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                         }
                                       }))
@@ -1310,7 +1332,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                   } else {
                                     actualTrailLength = eventTrailLength;
                                   }
-                                  moveShipsBuoysAndWindTo(currentReplayTime);
+                                  if (currentReplayTime != sliderEnd) moveShipsBuoysAndWindTo(currentReplayTime);
                                 }))
                       ]),
                       if (testing)
@@ -1388,7 +1410,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                       value: showTeam,
                                       onChanged: (_) => setState(() {
                                             showTeam = !showTeam;
-                                            if (eventStatus != EventStatus.preEvent) {
+                                            if (eventStatus != EventStatus.preEvent && currentReplayTime != sliderEnd) {
                                               moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                             }
                                           }))
@@ -1449,7 +1471,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                         // force windTimeIndexes to beginning of the timestamp tables to ensure redrawing of the windmarkers
                                         windTimeIndex = List.filled(replayTracks['windtracks'].length, -1, growable: true);
                                         // and redraw all markers and labels
-                                        moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
+                                        if (currentReplayTime != sliderEnd) moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                       }
                                       if (route['features'] != null) buildRoute();
                                     }),
@@ -1585,7 +1607,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 value: showShipLabels,
                                 onChanged: (value) => setState(() {
                                       showShipLabels = !showShipLabels;
-                                      if (eventStatus != EventStatus.preEvent) moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
+                                      if (eventStatus != EventStatus.preEvent && currentReplayTime != sliderEnd) {
+                                        moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
+                                      }
                                       prefs.setBool('shiplabels', showShipLabels);
                                     }))
                           ]),
@@ -1602,7 +1626,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                   value: showShipSpeeds,
                                   onChanged: (_) => setState(() {
                                         showShipSpeeds = !showShipSpeeds;
-                                        if (eventStatus != EventStatus.preEvent) {
+                                        if (eventStatus != EventStatus.preEvent && currentReplayTime != sliderEnd) {
                                           moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                         }
                                         prefs.setBool('shipspeeds', showShipSpeeds);
@@ -1621,7 +1645,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                   value: showTeam,
                                   onChanged: (_) => setState(() {
                                         showTeam = !showTeam;
-                                        if (eventStatus != EventStatus.preEvent) {
+                                        if (eventStatus != EventStatus.preEvent && currentReplayTime != sliderEnd) {
                                           moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                         }
                                       }))
@@ -1678,6 +1702,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     ]);
   }
 
+  //
+  // The ship info draggable container
+  //
   Positioned uiShipInfo() {
     return Positioned(
         left: shipInfoPosition.dx,
@@ -1702,6 +1729,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 ]))));
   }
 
+  //
+  // the popup window with map contributor attributions
+  //
   Row uiAttribution() {
     var attributeStyle = const TextStyle(color: Colors.black87, fontSize: 12);
     return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
@@ -1945,13 +1975,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     trailsUpdateInterval = int.parse(eventInfo['trailsupdateinterval'] ?? '15');
     trailsUpdateInterval = trailsUpdateInterval < 5 ? 5 : trailsUpdateInterval;
     hfUpdate = bool.parse(eventInfo['hfupdate'] ?? 'false');
-    displayDelay = (int.parse(eventInfo['displaydelay'] ?? '25')) * 1000;
+    displayDelay = hfUpdate ? (int.parse(eventInfo['displaydelay'] ?? '25')) * 1000 : 0;
     predictTime = (int.parse(eventInfo['predicttime'] ?? '15')) * 1000;
     signalLostTime = int.parse(eventInfo['signallosttime'] ?? '60');
     signalLostTimeText = signalLostTime ~/ 60 == 0 ? '' : '${signalLostTime ~/ 60} ${signalLostTime ~/ 60 == 1 ? ' minuut' : ' minuten'}';
     signalLostTimeText += signalLostTime % 60 == 0 ? '' : '${signalLostTime ~/ 60 == 0 ? '' : ' en '}${signalLostTime % 60} seconden';
     signalLostTime *= 1000;
-    showTeam = bool.parse(eventInfo['showteam'] ?? 'false');
+    showTeam = bool.parse(eventInfo['showteamdefault'] ?? 'false');
     eventInfo['mediaframe'] ??= '';
     socialMediaUrl = switch (eventInfo['mediaframe'].split(':').first) {
       'facebook' => 'https://www.facebook.com/${eventInfo['mediaframe'].split(':').last}',
@@ -2054,7 +2084,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     }
     autoFollow = true;
     autoZoom = true; // zoom to all ships at the start
-    moveShipsBuoysAndWindTo(currentReplayTime - (hfUpdate ? displayDelay : 0));
+    moveShipsBuoysAndWindTo(currentReplayTime - displayDelay);
     //autoZoom = false; // but turn of autozoom when running
     liveSecondsTimer = trailsUpdateInterval * 1000 ~/ hfUpdateInterval;
     liveTimer = Timer.periodic(const Duration(milliseconds: hfUpdateInterval), (_) => liveTimerRoutine());
@@ -2092,7 +2122,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       if (currentReplayTime == sliderEnd) {
         // slider is at the end
         sliderEnd = currentReplayTime = now; // extend the slider and move the handle to the new end
-        moveShipsBuoysAndWindTo(currentReplayTime - (hfUpdate ? displayDelay : 0));
+        moveShipsBuoysAndWindTo(currentReplayTime - displayDelay);
       } else {
         // slider is not at the end, the slider has been moved back in time by the user
         sliderEnd = now; // just make the slider a second longer
@@ -2354,8 +2384,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       //
       // build the shipLabel
       shipLabelList[i] = showShipLabels
-          ? mapTextLabel(calculatedPosition,
-              '${showTeam ? teamList[i] : shipList[i]}${shipLostSignalIndicators[i]}${(showShipSpeeds ? ', $speedString' : '')}')
+          ? mapTextLabel(
+              calculatedPosition,
+              '${showTeam ? teamList[i] : shipList[i]}${shipLostSignalIndicators[i]}${(showShipSpeeds ? ', '
+                  '$speedString' : '')}')
           : const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
       //
       // build the shipTrail (note we reuse/destroy the timeIndex here...)
@@ -2905,9 +2937,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
-  // All stamps in the file we receive from the server are in seconds. In the app we work with milliseconds so after getting the jsonfile
-  // into a map, we need to multiply all stamps with 1000. To save us some null-checking lateron, we also add empty ship-, buoy- and
-  // windtracks just in case they were not in the file
+  // All timestamps in the file we receive from the server are in seconds. In the app we work with milliseconds so after getting the
+  // jsonfile into a map, we need to multiply all stamps with 1000. To save us some null-checking lateron, we also add empty ship-, buoy-
+  // and windtracks just in case they were not in the file
   //
   Map<String, dynamic> convertTimes(track) {
     track['starttime'] *= 1000;
