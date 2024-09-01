@@ -525,9 +525,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // The value 'context' is a value the framework gives us, and is used to identify the environment in wich we are running
   // The method build is also called each time we call setState((){})
   //
-  // The ui is relatively simple, because our App has only one page, so no navigation to other pages
+  // The UI is relatively simple, because our App has only one page, so no navigation to other pages
   // The UI is rebuilt each time the state of the info to be displayed needs to be updated to the screen.
-  // this is not done automatically but only after calling setState. The info to be displayed is in
+  // This is not done automatically but only after calling setState. The info to be displayed is in
   // variables manipulated by the routines of the app
   //
   // The main element of the UI is the flutterMap. The flutterMap has a callback onMapReady. We use that to continue the initialization by
@@ -609,7 +609,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             showShipMenu = showMapMenu = showInfoPage = showAttribution = showPreEventParticipants = false;
             showEventMenu = !showEventMenu;
           }),
-          child: Row(children: [
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
             Tooltip(message: 'evenementmenu', child: Text(eventTitle)),
             Icon(Icons.arrow_drop_down, size: 40, color: menuForegroundColor)
           ]),
