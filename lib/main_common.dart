@@ -68,9 +68,10 @@ final bool kIsWebOnAndroid = kIsWeb && (defaultTargetPlatform == TargetPlatform.
 //
 String phoneId = "";
 //
-// Colors (menu colors are overruled by colors in config/flutter_config.json
+// Colors (menu colors are overruled by colors in config/flutter_config.json, but we define them here in case we cannot reach the server)
+// setting it as hex means we don't need a null check in the code
 Color menuAccentColor = const Color(0xffffffff); // pure white
-Color menuBackgroundColor = const Color(0xffd32f2f); // Colors.red[700] setting it as hex means we don't need a null check in the code
+Color menuBackgroundColor = const Color(0xffd32f2f); // Colors.red[700]
 Color menuForegroundColor = const Color(0xb3ffffff); // Colors.white70;
 //
 const String hexBlack = '#000000'; // marker and label outline colors depending on background black or white
@@ -312,6 +313,8 @@ void mainCommon({required String serverUrl}) async {
     prefs.setString('appversion', packageInfo.buildNumber); // and set the new appversion
   }
   prefs.setBool('cookieconsent', cookieConsentGiven);
+  // overrule cookieConsent in case we are running embedded in an iframe of another website
+  if (kIsWeb && (document.referrer != '')) cookieConsentGiven = true;
   //
   // ----- PHONE (DEVICE) ID
   // See if we already have a phone id, if not, create one and save it in local storage
@@ -606,7 +609,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             showShipMenu = showMapMenu = showInfoPage = showAttribution = showPreEventParticipants = false;
             showEventMenu = !showEventMenu;
           }),
-          child: Tooltip(message: 'evenementmenu', child: Text(eventTitle)),
+          child: Row(children: [
+            Tooltip(message: 'evenementmenu', child: Text(eventTitle)),
+            Icon(Icons.arrow_drop_down, size: 40, color: menuForegroundColor)
+          ]),
         ),
         actions: [
           // button for fullscreen on web and desktop
@@ -636,7 +642,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             ),
           // button to open/close the AppBar extension: uiMenuButtonBar
           IconButton(
-            icon: showMenuButtonBar ? const Icon(Icons.expand_less) : const Icon(Icons.menu),
+            icon: showMenuButtonBar ? const Icon(Icons.expand_less) : const Icon(Icons.more_vert),
             onPressed: () => setState(() {
               showMenuButtonBar = !showMenuButtonBar;
               if (!showMenuButtonBar) showInfoPage = showMapMenu = showShipMenu = showPreEventParticipants = false;
@@ -2023,6 +2029,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       buildRoute(move: true); // and move the map to the bounds of the route
     }
     showProgress = false;
+    // hide the menu when we are running in a web iframe
+    if (kIsWeb && (document.referrer != '')) Timer(const Duration(milliseconds: 1500), () => setState(() => showEventMenu = false));
     preEventTimer = Timer.periodic(const Duration(seconds: 5), (_) => preEventTimerRoutine());
   }
 

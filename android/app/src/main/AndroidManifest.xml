@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="SZW Track Trace"
+        android:label="Sportvolgen TT"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
