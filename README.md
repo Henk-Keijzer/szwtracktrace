@@ -17,6 +17,12 @@ optimalisaties:
 - live en replay verder integreren en ook live door (replay)ticker aansturen
 
 ----------------------------------------------------------------------------------------------------
+Version 3.2.8
+
+- Feature: switch between team/shipname with default setting added
+- Feature: added downarrow after eventtitle in appbar to indicate that there is a menu when clicking the eventtitle
+- Bugfix & optimizations: displaydelay simplified, prevent jumping during live when changing settings
+
 Version 3.2.7 released on July 9, 2024
 
 - Fix: do not close menus when starting/stopping replay
