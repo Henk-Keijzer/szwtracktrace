@@ -170,7 +170,7 @@ EventStatus eventStatus = EventStatus.initial;
 Map<String, dynamic> replayTracks = {}; // see get-replay.php on the server
 Map<String, dynamic> liveTrails = {}; // see get-trails.php on the server
 Map<String, dynamic> route = {}; // geoJSON structure with the route
-List<dynamic> participants = []; // list of colorcodes, shipnames and teamnames
+//List<dynamic> participants = []; // list of colorcodes, shipnames and teamnames
 //
 // extract from the live/replaytracks above to make addressing the info a bit simpler
 List<String> shipList = []; // list with ship names
@@ -501,14 +501,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           }
           if (replayRunning && !replayTicker.isTicking) replayTicker.start();
         });
-        break;
       case AppLifecycleState.inactive || AppLifecycleState.hidden || AppLifecycleState.paused || AppLifecycleState.detached:
         setState(() {
           if (eventStatus == EventStatus.preEvent) preEventTimer.cancel();
           if (eventStatus == EventStatus.live) liveTimer.cancel();
           if (replayTicker.isTicking) replayTicker.stop();
         });
-        break;
     }
   }
 
@@ -565,14 +563,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 body: Stack(
                   children: [
                     uiFlutterMap(),
-                    if (eventStatus != EventStatus.preEvent && shipList.isNotEmpty) uiSliderArea(),
+                    if (eventStatus == EventStatus.live || eventStatus == EventStatus.replay) uiSliderArea(),
                     uiAttribution(),
                     if (showMenuButtonBar) uiMenuButtonBar().animate().slide(),
                     if (showEventMenu) uiEventMenu().animate().slide(),
                     if (showInfoPage) uiInfoPage().animate().slide(),
                     if (showMapMenu) uiMapMenu().animate().slide(),
-                    if (showShipMenu) uiShipMenu().animate().slide(),
-                    if (showPreEventParticipants) uiPreEventParticipants().animate().slide(),
+                    if (showShipMenu) uiParticipantsMenu().animate().slide(),
+                    if (showPreEventParticipants) uiPreEventParticipantsMenu().animate().slide(),
                     if (showShipInfo) uiShipInfo().animate().slide(),
                     if (!cookieConsentGiven) uiCookieConsent(),
                     if (showProgress) uiProgressIndicator(),
@@ -1184,7 +1182,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             ])));
   }
 
-  Row uiShipMenu() {
+  Row uiParticipantsMenu() {
     return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
       SingleChildScrollView(
           child: Container(
@@ -1353,14 +1351,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     ]);
   }
 
-  Row uiPreEventParticipants() {
+  Row uiPreEventParticipantsMenu() {
     return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
       SingleChildScrollView(
           child: Container(
               width: 275,
               color: menuBackgroundColor,
               padding: EdgeInsets.fromLTRB(10, menuOffset, 0, 10),
-              child: participants.isEmpty
+              child: shipList.isEmpty
                   ? Row(children: [
                       const Text('Deelnemers nog niet bekend'),
                       const Spacer(),
@@ -1386,17 +1384,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
                               padding: const EdgeInsets.all(0),
-                              itemCount: participants.length,
+                              itemCount: shipList.length,
                               itemBuilder: (_, index) {
                                 return Row(children: [
-                                  Icon(Icons.square,
-                                      color: Color(shipMarkerColorTable[int.parse(participants[index]['colorcode']) % 32]), size: 18),
+                                  Icon(Icons.square, color: shipColors[index], size: 18),
                                   const SizedBox(width: 5),
                                   InkWell(
-                                    child: (showTeam)
-                                        ? Text('${participants[index]['teamname']}')
-                                        : Text('${participants[index]['shipname']}'),
-                                    onTap: () => loadAndShowShipDetails(participants[index]['shipname']),
+                                    child: (showTeam) ? Text(teamList[index]) : Text(shipList[index]),
+                                    onTap: () => loadAndShowShipDetails(shipList[index]),
                                   )
                                 ]);
                               },
@@ -1766,16 +1761,16 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           GestureDetector(
                               child: Text('• Windpijlen: © buienradar.nl', style: attributeStyle),
                               onTap: () => launchUrl(Uri.parse('https://www.buienradar.nl'))),
+                        if (eventInfo.isNotEmpty && eventInfo['MarineTraffic'] == 'true')
+                          GestureDetector(
+                            child: Text('• AIS tracking door www.MarineTraffic.com', style: attributeStyle),
+                            onTap: () => launchUrl(Uri.parse('https://www.marinetraffic.com')),
+                          ),
                         if (eventInfo.isNotEmpty && eventInfo['AISHub'] == 'true')
                           GestureDetector(
                             child: Text('• AIS tracking door www.AISHub.net', style: attributeStyle),
                             onTap: () => launchUrl(Uri.parse('https://www.aishub.net')),
                           ),
-                        if (eventInfo.isNotEmpty && eventInfo['MarineTraffic'] == 'true')
-                          GestureDetector(
-                            child: Text('• AIS tracking door www.MarineTraffic.com', style: attributeStyle),
-                            onTap: () => launchUrl(Uri.parse('https://www.marinetraffic.com')),
-                          )
                       ])))),
         IconButton(
           icon: (showAttribution)
@@ -1956,7 +1951,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     showShipInfo = false;
     replayTracks = {};
     shipList = []; // list of patricipting shipnames
-    teamList = []; // teams
+    teamList = []; // list of corresponding teamnames
     shipColors = []; // and their corresponding colors
     shipColorsSvg = []; // same but in svg format
     shipMarkerList = [];
@@ -2021,7 +2016,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     eventStatus = EventStatus.preEvent;
     selectionMessage = 'Het evenement is nog niet begonnen.\n\nKies een ander evenement of wacht rustig af. '
         'De Track & Trace begint op ${dtFormat.format(DateTime.fromMillisecondsSinceEpoch(eventStart))}';
-    participants = await getParticipants(eventDomain);
+    await getParticipants(eventDomain);
     if (route['features'] != null) {
       selectionMessage += '\n\nBekijk intussen de route / havens / boeien op de kaart';
       showRoute = true;
@@ -2268,148 +2263,150 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     // loop through the ships in replayTracks
     for (int i = 0; i < replayTracks['shiptracks'].length; i++) {
       var shipTrack = replayTracks['shiptracks'][i];
-      // see where we are in the time track of the ship
-      if (time <= shipTrack['stamp'].first) {
-        // before the first timestamp
-        timeIndex = 0; // set the track's timeIndex to the first entry
-        calculatedPosition = LatLng(shipTrack['lat'].first.toDouble(), shipTrack['lon'].first.toDouble());
-        calculatedRotation = shipTrack['course'].first;
-      } else if (time >= shipTrack['stamp'].last) {
-        // we are at or beyond the last timestamp
-        timeIndex = shipTrack['stamp'].length - 1; // set the track timeIndex to point to the last entry
-        calculatedRotation = shipTrack['course'].last;
-        if (hfUpdate &&
-            (eventStatus == EventStatus.live) &&
-            (currentReplayTime == sliderEnd) &&
-            (time - shipTrack['stamp'].last) < predictTime) {
-          // we are allowed to predict AND we are live AND at the end of the slider AND the last stamp is less then predictTime old:
-          // in this situation we make a prediction where the ship could be, based on the last known location, speed, time since the last
-          // location and the heading
-          calculatedPosition = predictPosition(LatLng(shipTrack['lat'].last.toDouble(), shipTrack['lon'].last.toDouble()),
-              shipTrack['speed'].last / 10, time - shipTrack['stamp'].last, calculatedRotation);
-        } else {
-          calculatedPosition = LatLng(shipTrack['lat'].last.toDouble(), shipTrack['lon'].last.toDouble());
-        }
-      } else {
-        // we are somewhere between two stamps:
-        // travel along the track from the previous index forth (or back) to find out where we are
-        timeIndex = shipTimeIndex[i]; // get the timeindex of this ship from a previous run
-        var stamps = shipTrack['stamp']; // make a ref to the list of stamps, in an effort to speedup the search
-        if (time > stamps[timeIndex]) {
-          while (stamps[timeIndex] < time) {
-            timeIndex++; // move forward in the track
+      if (shipTrack['stamp'].length > 0) {
+        // see where we are in the time track of the ship
+        if (time <= shipTrack['stamp'].first) {
+          // before the first timestamp
+          timeIndex = 0; // set the track's timeIndex to the first entry
+          calculatedPosition = LatLng(shipTrack['lat'].first.toDouble(), shipTrack['lon'].first.toDouble());
+          calculatedRotation = shipTrack['course'].first;
+        } else if (time >= shipTrack['stamp'].last) {
+          // we are at or beyond the last timestamp
+          timeIndex = shipTrack['stamp'].length - 1; // set the track timeIndex to point to the last entry
+          calculatedRotation = shipTrack['course'].last;
+          if (hfUpdate &&
+              (eventStatus == EventStatus.live) &&
+              (currentReplayTime == sliderEnd) &&
+              (time - shipTrack['stamp'].last) < predictTime) {
+            // we are allowed to predict AND we are live AND at the end of the slider AND the last stamp is less then predictTime old:
+            // in this situation we make a prediction where the ship could be, based on the last known location, speed, time since the last
+            // location and the heading
+            calculatedPosition = predictPosition(LatLng(shipTrack['lat'].last.toDouble(), shipTrack['lon'].last.toDouble()),
+                shipTrack['speed'].last / 10, time - shipTrack['stamp'].last, calculatedRotation);
+          } else {
+            calculatedPosition = LatLng(shipTrack['lat'].last.toDouble(), shipTrack['lon'].last.toDouble());
           }
-          timeIndex--; // we went one entry too far
         } else {
-          while (stamps[timeIndex] > time) {
-            timeIndex--; // else move backward in the track
+          // we are somewhere between two stamps:
+          // travel along the track from the previous index forth (or back) to find out where we are
+          timeIndex = shipTimeIndex[i]; // get the timeindex of this ship from a previous run
+          var stamps = shipTrack['stamp']; // make a ref to the list of stamps, in an effort to speedup the search
+          if (time > stamps[timeIndex]) {
+            while (stamps[timeIndex] < time) {
+              timeIndex++; // move forward in the track
+            }
+            timeIndex--; // we went one entry too far
+          } else {
+            while (stamps[timeIndex] > time) {
+              timeIndex--; // else move backward in the track
+            }
           }
+          // we are in between stamps, calculate the ratio of time since last stamp and next stamp
+          double ratio = (time - stamps[timeIndex]) / (stamps[timeIndex + 1] - stamps[timeIndex]);
+          // and set the ship position and rotation at that ratio between last and next positions/rotations
+          calculatedPosition = LatLngTween(
+                  begin: LatLng(shipTrack['lat'][timeIndex].toDouble(), shipTrack['lon'][timeIndex].toDouble()),
+                  end: LatLng(shipTrack['lat'][timeIndex + 1].toDouble(), shipTrack['lon'][timeIndex + 1].toDouble()))
+              .transform(ratio);
+          // calculate the rotation
+          // tried this with a conversion to vectors, but the sin, cos and atan2 functions require too much time
+          int diff = shipTrack['course'][timeIndex + 1] - shipTrack['course'][timeIndex];
+          if (diff >= 180) {
+            calculatedRotation = (shipTrack['course'][timeIndex] + (ratio * (diff - 360)).floor()); // anticlockwise through north (360 dg)
+          } else if (diff <= -180) {
+            calculatedRotation = (shipTrack['course'][timeIndex] + (ratio * (diff + 360)).floor()); // clockwise through north (360 dg)
+          } else {
+            calculatedRotation = (shipTrack['course'][timeIndex] + (ratio * diff).floor()); // clockwise or anti clockwise less then 180 dg
+          }
+          calculatedRotation = (calculatedRotation + 720) % 360; // ensures a value between 0 and 359
         }
-        // we are in between stamps, calculate the ratio of time since last stamp and next stamp
-        double ratio = (time - stamps[timeIndex]) / (stamps[timeIndex + 1] - stamps[timeIndex]);
-        // and set the ship position and rotation at that ratio between last and next positions/rotations
-        calculatedPosition = LatLngTween(
-                begin: LatLng(shipTrack['lat'][timeIndex].toDouble(), shipTrack['lon'][timeIndex].toDouble()),
-                end: LatLng(shipTrack['lat'][timeIndex + 1].toDouble(), shipTrack['lon'][timeIndex + 1].toDouble()))
-            .transform(ratio);
-        // calculate the rotation
-        // tried this with a conversion to vectors, but the sin, cos and atan2 functions require too much time
-        int diff = shipTrack['course'][timeIndex + 1] - shipTrack['course'][timeIndex];
-        if (diff >= 180) {
-          calculatedRotation = (shipTrack['course'][timeIndex] + (ratio * (diff - 360)).floor()); // anticlockwise through north (360 dg)
-        } else if (diff <= -180) {
-          calculatedRotation = (shipTrack['course'][timeIndex] + (ratio * (diff + 360)).floor()); // clockwise through north (360 dg)
-        } else {
-          calculatedRotation = (shipTrack['course'][timeIndex] + (ratio * diff).floor()); // clockwise or anti clockwise less then 180 dg
+        shipTimeIndex[i] = timeIndex; // save the timeindex in the list of timeindices for the next run
+        //
+        // Update the bounds with the calculated position of this ship (but only if we are supposed to follow this ship)
+        if (following[shipTrack['name']] ?? false) {
+          followBounds.add(calculatedPosition);
         }
-        calculatedRotation = (calculatedRotation + 720) % 360; // ensures a value between 0 and 359
+        //
+        // make a string with the ship's speed for the infowindow and the shiplabel
+        var speedString = '${(shipTrack['speed'][timeIndex] / 18.52).toStringAsFixed(1)}kn ('
+            '${(shipTrack['speed'][timeIndex] / 10).toStringAsFixed(1)}km/h)';
+        //
+        // make a new infowindow text with the name of the ship, the lostsignalindicator and the speed
+        shipLostSignalIndicators[i] =
+            ((time - (replayRunning ? shipTrack['stamp'][timeIndex] : shipTrack['stamp'].last)) > signalLostTime) ? "'" : '';
+        //
+        String infoWindowTitle = '${shipTrack['name']}${shipLostSignalIndicators[i]}';
+        String infoWindowText = (allowShowSpeed) ? 'Snelheid: $speedString' : '';
+        // only during live AND lost signal we add a line with info when this 'more-then-3-minutes-old' position was received
+        infoWindowText += (shipLostSignalIndicators[i] != '' && eventStatus == EventStatus.live && !replayRunning)
+            ? '\nPositie op ${dtsFormat.format(DateTime.fromMillisecondsSinceEpoch(shipTrack['stamp'][timeIndex]))}'
+            : '';
+        // create the shipmarker's icon with the correct color and rotation
+        var svgString = '<svg width="22" height="22"><polygon points="$shipSvgPath" '
+            'style="fill:${shipColorsSvg[i]};stroke:$bgColor;stroke-width:1" '
+            'transform="rotate($calculatedRotation,11,11)" /></svg>';
+        // create / replace the ship marker
+        shipMarkerList[i] = Marker(
+          point: calculatedPosition,
+          width: 22,
+          height: 22,
+          child: Tooltip(
+              message: showShipLabels
+                  ? (showShipSpeeds ? '' : speedString)
+                  : ('${shipTrack['name']}${shipLostSignalIndicators[i]}${showShipSpeeds ? ', $speedString' : ''}'),
+              child: InkWell(
+                  child: SvgPicture.string(svgString),
+                  onSecondaryTap: () => loadAndShowShipDetails(shipTrack['name']),
+                  onDoubleTap: () => setState(() {
+                        // zoom in on the ship double tapped
+                        followAll = false;
+                        following.forEach((k, v) => following[k] = false);
+                        autoFollow = following[shipTrack['name']] = true;
+                        var saveZoom = autoZoom;
+                        autoZoom = true;
+                        moveShipsBuoysAndWindTo(currentReplayTime);
+                        autoZoom = saveZoom;
+                        // show the ship menu and hide any info window and ship info
+                        showShipMenu = true;
+                        infoWindowId = '';
+                        infoWindowMarkerList = [];
+                        showShipInfo = false;
+                      }),
+                  onTap: () => setState(() {
+                        infoWindowId = 'ship${shipTrack['name']}';
+                        infoWindowMarkerList = [
+                          infoWindowMarker(title: infoWindowTitle, body: infoWindowText, link: '', point: calculatedPosition)
+                        ];
+                        moveShipsTo(time, moveMap: false);
+                      }))),
+        );
+        //
+        // refresh the infowindow if it was open for this ship
+        if (infoWindowId == 'ship${shipTrack['name']}') {
+          infoWindowMarkerList = [infoWindowMarker(title: infoWindowTitle, body: infoWindowText, link: '', point: calculatedPosition)];
+        }
+        //
+        // build the shipLabel
+        shipLabelList[i] = showShipLabels
+            ? mapTextLabel(
+                calculatedPosition,
+                '${showTeam ? teamList[i] : shipList[i]}${shipLostSignalIndicators[i]}${(showShipSpeeds ? ', '
+                    '$speedString' : '')}')
+            : const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
+        //
+        // build the shipTrail (note we reuse/destroy the timeIndex here...)
+        List<LatLng> trail = [calculatedPosition];
+        while ((timeIndex >= 0) && (shipTrack['stamp'][timeIndex] > (time - actualTrailLength * 60 * 1000))) {
+          trail.add(LatLng(shipTrack['lat'][timeIndex].toDouble(), shipTrack['lon'][timeIndex].toDouble()));
+          timeIndex--;
+        }
+        shipTrailList[i] = Polyline(
+          points: trail,
+          color: shipColors[i],
+          // thick line in case of short trails, thin line when we display full eventlong trails
+          strokeWidth: eventTrailLength == actualTrailLength ? 2 : 1,
+        );
       }
-      shipTimeIndex[i] = timeIndex; // save the timeindex in the list of timeindices for the next run
-      //
-      // Update the bounds with the calculated position of this ship (but only if we are supposed to follow this ship)
-      if (following[shipTrack['name']] ?? false) {
-        followBounds.add(calculatedPosition);
-      }
-      //
-      // make a string with the ship's speed for the infowindow and the shiplabel
-      var speedString = '${(shipTrack['speed'][timeIndex] / 18.52).toStringAsFixed(1)}kn ('
-          '${(shipTrack['speed'][timeIndex] / 10).toStringAsFixed(1)}km/h)';
-      //
-      // make a new infowindow text with the name of the ship, the lostsignalindicator and the speed
-      shipLostSignalIndicators[i] =
-          ((time - (replayRunning ? shipTrack['stamp'][timeIndex] : shipTrack['stamp'].last)) > signalLostTime) ? "'" : '';
-      //
-      String infoWindowTitle = '${shipTrack['name']}${shipLostSignalIndicators[i]}';
-      String infoWindowText = (allowShowSpeed) ? 'Snelheid: $speedString' : '';
-      // only during live AND lost signal we add a line with info when this 'more-then-3-minutes-old' position was received
-      infoWindowText += (shipLostSignalIndicators[i] != '' && eventStatus == EventStatus.live && !replayRunning)
-          ? '\nPositie op ${dtsFormat.format(DateTime.fromMillisecondsSinceEpoch(shipTrack['stamp'][timeIndex]))}'
-          : '';
-      // create the shipmarker's icon with the correct color and rotation
-      var svgString = '<svg width="22" height="22"><polygon points="$shipSvgPath" '
-          'style="fill:${shipColorsSvg[i]};stroke:$bgColor;stroke-width:1" '
-          'transform="rotate($calculatedRotation,11,11)" /></svg>';
-      // create / replace the ship marker
-      shipMarkerList[i] = Marker(
-        point: calculatedPosition,
-        width: 22,
-        height: 22,
-        child: Tooltip(
-            message: showShipLabels
-                ? (showShipSpeeds ? '' : speedString)
-                : ('${shipTrack['name']}${shipLostSignalIndicators[i]}${showShipSpeeds ? ', $speedString' : ''}'),
-            child: InkWell(
-                child: SvgPicture.string(svgString),
-                onSecondaryTap: () => loadAndShowShipDetails(shipTrack['name']),
-                onDoubleTap: () => setState(() {
-                      // zoom in on the ship double tapped
-                      followAll = false;
-                      following.forEach((k, v) => following[k] = false);
-                      autoFollow = following[shipTrack['name']] = true;
-                      var saveZoom = autoZoom;
-                      autoZoom = true;
-                      moveShipsBuoysAndWindTo(currentReplayTime);
-                      autoZoom = saveZoom;
-                      // show the ship menu and hide any info window and ship info
-                      showShipMenu = true;
-                      infoWindowId = '';
-                      infoWindowMarkerList = [];
-                      showShipInfo = false;
-                    }),
-                onTap: () => setState(() {
-                      infoWindowId = 'ship${shipTrack['name']}';
-                      infoWindowMarkerList = [
-                        infoWindowMarker(title: infoWindowTitle, body: infoWindowText, link: '', point: calculatedPosition)
-                      ];
-                      moveShipsTo(time, moveMap: false);
-                    }))),
-      );
-      //
-      // refresh the infowindow if it was open for this ship
-      if (infoWindowId == 'ship${shipTrack['name']}') {
-        infoWindowMarkerList = [infoWindowMarker(title: infoWindowTitle, body: infoWindowText, link: '', point: calculatedPosition)];
-      }
-      //
-      // build the shipLabel
-      shipLabelList[i] = showShipLabels
-          ? mapTextLabel(
-              calculatedPosition,
-              '${showTeam ? teamList[i] : shipList[i]}${shipLostSignalIndicators[i]}${(showShipSpeeds ? ', '
-                  '$speedString' : '')}')
-          : const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
-      //
-      // build the shipTrail (note we reuse/destroy the timeIndex here...)
-      List<LatLng> trail = [calculatedPosition];
-      while ((timeIndex >= 0) && (shipTrack['stamp'][timeIndex] > (time - actualTrailLength * 60 * 1000))) {
-        trail.add(LatLng(shipTrack['lat'][timeIndex].toDouble(), shipTrack['lon'][timeIndex].toDouble()));
-        timeIndex--;
-      }
-      shipTrailList[i] = Polyline(
-        points: trail,
-        color: shipColors[i],
-        // thick line in case of short trails, thin line when we display full eventlong trails
-        strokeWidth: eventTrailLength == actualTrailLength ? 2 : 1,
-      );
     }
     //
     // finally after all ships were moved, see if we need to move/zoom the camera to the ships
@@ -2437,57 +2434,59 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         gpsBuoyLabelList[i] = const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
       } else {
         var gpsBuoy = replayTracks['buoytracks'][i];
-        if (time <= gpsBuoy['stamp'].first) {
-          timeIndex = 0;
-        } else if (time >= gpsBuoy['stamp'].last) {
-          timeIndex = gpsBuoy['stamp'].length - 1;
-        } else {
-          // travel along the track from the previous index back or forth to find out where we are
-          timeIndex = gpsBuoyTimeIndex[i] == -1 ? 0 : gpsBuoyTimeIndex[i];
-          var stamps = gpsBuoy['stamp'];
-          if (time > stamps[timeIndex]) {
-            while (stamps[timeIndex] < time) {
-              timeIndex++;
-            }
-            timeIndex--;
+        if (gpsBuoy['stamp'].length > 0) {
+          if (time <= gpsBuoy['stamp'].first) {
+            timeIndex = 0;
+          } else if (time >= gpsBuoy['stamp'].last) {
+            timeIndex = gpsBuoy['stamp'].length - 1;
           } else {
-            while (stamps[timeIndex] > time) {
+            // travel along the track from the previous index back or forth to find out where we are
+            timeIndex = gpsBuoyTimeIndex[i] == -1 ? 0 : gpsBuoyTimeIndex[i];
+            var stamps = gpsBuoy['stamp'];
+            if (time > stamps[timeIndex]) {
+              while (stamps[timeIndex] < time) {
+                timeIndex++;
+              }
               timeIndex--;
+            } else {
+              while (stamps[timeIndex] > time) {
+                timeIndex--;
+              }
             }
           }
-        }
-        if (gpsBuoyTimeIndex[i] != timeIndex) {
-          // only update when we moved into a different timeframe
-          gpsBuoyTimeIndex[i] = timeIndex;
-          // no interpolation to the next position, as the position of a GPS buoy should be relatively constant
-          // add the buoy marker
-          String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="4" '
-              'fill="${gpsBuoy['color']}" stroke="$bgColor" stroke-width="1"/></svg>';
-          LatLng gpsBuoyPosition = LatLng(gpsBuoy['lat'][timeIndex].toDouble(), gpsBuoy['lon'][timeIndex].toDouble());
-          gpsBuoyMarkerList[i] = Marker(
-              point: gpsBuoyPosition,
-              width: 22,
-              height: 22,
-              child: Tooltip(
-                  message: showRouteLabels ? '' : gpsBuoy['name'],
-                  child: InkWell(
-                    child: SvgPicture.string(svgString),
-                    onTap: () => setState(() {
-                      infoWindowId = 'buoy${gpsBuoy['name']}';
-                      infoWindowMarkerList = [
-                        infoWindowMarker(title: gpsBuoy['name'], body: gpsBuoy['description'], link: '', point: gpsBuoyPosition)
-                      ];
-                    }),
-                  )));
-          // refresh the infowindow if it was open for this buoy
-          if (infoWindowId == 'buoy${gpsBuoy['name']}') {
-            infoWindowMarkerList = [
-              infoWindowMarker(title: gpsBuoy['name'], body: gpsBuoy['description'], link: '', point: gpsBuoyPosition)
-            ];
+          if (gpsBuoyTimeIndex[i] != timeIndex) {
+            // only update when we moved into a different timeframe
+            gpsBuoyTimeIndex[i] = timeIndex;
+            // no interpolation to the next position, as the position of a GPS buoy should be relatively constant
+            // add the buoy marker
+            String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="4" '
+                'fill="${gpsBuoy['color']}" stroke="$bgColor" stroke-width="1"/></svg>';
+            LatLng gpsBuoyPosition = LatLng(gpsBuoy['lat'][timeIndex].toDouble(), gpsBuoy['lon'][timeIndex].toDouble());
+            gpsBuoyMarkerList[i] = Marker(
+                point: gpsBuoyPosition,
+                width: 22,
+                height: 22,
+                child: Tooltip(
+                    message: showRouteLabels ? '' : gpsBuoy['name'],
+                    child: InkWell(
+                      child: SvgPicture.string(svgString),
+                      onTap: () => setState(() {
+                        infoWindowId = 'buoy${gpsBuoy['name']}';
+                        infoWindowMarkerList = [
+                          infoWindowMarker(title: gpsBuoy['name'], body: gpsBuoy['description'], link: '', point: gpsBuoyPosition)
+                        ];
+                      }),
+                    )));
+            // refresh the infowindow if it was open for this buoy
+            if (infoWindowId == 'buoy${gpsBuoy['name']}') {
+              infoWindowMarkerList = [
+                infoWindowMarker(title: gpsBuoy['name'], body: gpsBuoy['description'], link: '', point: gpsBuoyPosition)
+              ];
+            }
+            gpsBuoyLabelList[i] = showRouteLabels
+                ? mapTextLabel(gpsBuoyPosition, gpsBuoy['name'])
+                : const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
           }
-          gpsBuoyLabelList[i] = showRouteLabels
-              ? mapTextLabel(gpsBuoyPosition, gpsBuoy['name'])
-              : const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
         }
       }
       // no need to refresh the infowindow that may be open for this floating buoy, because for gps buoys it does not contain
@@ -2506,60 +2505,62 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         windMarkerList[i] = const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
       } else {
         var windStation = replayTracks['windtracks'][i];
-        if (time <= windStation['stamp'].first) {
-          // before the first time stamp
-          timeIndex = 0;
-          rotation = windStation['course'].first;
-        } else if (time >= windStation['stamp'].last) {
-          // after the last timestamp
-          timeIndex = windStation['stamp'].length - 1;
-          rotation = windStation['course'].last;
-        } else {
-          // somewhere between two stamps
-          // travel along the track back or forth to find out where we are, starting from the previously saved timeIndex
-          timeIndex = windTimeIndex[i] == -1 ? 0 : windTimeIndex[i];
-          var stamps = windStation['stamp'];
-          if (time > stamps[timeIndex]) {
-            while (stamps[timeIndex] < time) {
-              timeIndex++;
-            }
-            timeIndex--;
+        if (windStation['stamp'].length > 0) {
+          if (time <= windStation['stamp'].first) {
+            // before the first time stamp
+            timeIndex = 0;
+            rotation = windStation['course'].first;
+          } else if (time >= windStation['stamp'].last) {
+            // after the last timestamp
+            timeIndex = windStation['stamp'].length - 1;
+            rotation = windStation['course'].last;
           } else {
-            while (stamps[timeIndex] > time) {
+            // somewhere between two stamps
+            // travel along the track back or forth to find out where we are, starting from the previously saved timeIndex
+            timeIndex = windTimeIndex[i] == -1 ? 0 : windTimeIndex[i];
+            var stamps = windStation['stamp'];
+            if (time > stamps[timeIndex]) {
+              while (stamps[timeIndex] < time) {
+                timeIndex++;
+              }
               timeIndex--;
+            } else {
+              while (stamps[timeIndex] > time) {
+                timeIndex--;
+              }
             }
+            rotation = windStation['course'][timeIndex];
           }
-          rotation = windStation['course'][timeIndex];
-        }
-        if (windTimeIndex[i] != timeIndex) {
-          // only update when we moved into a different timeframe or when we are here at the start of the race
-          windTimeIndex[i] = timeIndex;
-          // add the wind markers
-          String iwText = '${windStation['speed'][timeIndex]} knopen, ${knotsToBft(windStation['speed'][timeIndex])} Bft';
-          String fillColor = knotsToColor(windStation['speed'][timeIndex]);
-          String svgString = '<svg width="22" height="22"><polygon points="7,1 11,20 15,1 11,6" '
-              'style="fill:$fillColor;stroke:$bgColor;stroke-width:1" transform="rotate($rotation,11,11)" /></svg>';
-          // windstation positions do not change over time, so use the first position of the track
-          LatLng windStationPosition = LatLng(windStation['lat'].first.toDouble(), windStation['lon'].first.toDouble());
-          windMarkerList[i] = Marker(
-              point: windStationPosition,
-              width: 22,
-              height: 22,
-              child: Tooltip(
-                  message: iwText,
-                  child: InkWell(
-                    child: SvgPicture.string(svgString),
-                    onTap: () => setState(() {
-                      infoWindowId = 'wind${windStation['name']}';
-                      infoWindowMarkerList = [
-                        infoWindowMarker(title: windStation['name'], body: iwText, link: '', point: windStationPosition)
-                      ];
-                    }),
-                  )));
-          //
-          // refresh the infowindow if it was open for this windstation
-          if (infoWindowId == 'wind-${windStation['name']}') {
-            infoWindowMarkerList = [infoWindowMarker(title: windStation['name'], body: iwText, link: '', point: windStationPosition)];
+          if (windTimeIndex[i] != timeIndex) {
+            // only update when we moved into a different timeframe or when we are here at the start of the race
+            windTimeIndex[i] = timeIndex;
+            // add the wind markers
+            String iwText = '${windStation['speed'][timeIndex]} knopen, ${knotsToBft(windStation['speed'][timeIndex])} Bft';
+            String fillColor = knotsToColor(windStation['speed'][timeIndex]);
+            String svgString = '<svg width="22" height="22"><polygon points="7,1 11,20 15,1 11,6" '
+                'style="fill:$fillColor;stroke:$bgColor;stroke-width:1" transform="rotate($rotation,11,11)" /></svg>';
+            // windstation positions do not change over time, so use the first position of the track
+            LatLng windStationPosition = LatLng(windStation['lat'].first.toDouble(), windStation['lon'].first.toDouble());
+            windMarkerList[i] = Marker(
+                point: windStationPosition,
+                width: 22,
+                height: 22,
+                child: Tooltip(
+                    message: iwText,
+                    child: InkWell(
+                      child: SvgPicture.string(svgString),
+                      onTap: () => setState(() {
+                        infoWindowId = 'wind${windStation['name']}';
+                        infoWindowMarkerList = [
+                          infoWindowMarker(title: windStation['name'], body: iwText, link: '', point: windStationPosition)
+                        ];
+                      }),
+                    )));
+            //
+            // refresh the infowindow if it was open for this windstation
+            if (infoWindowId == 'wind-${windStation['name']}') {
+              infoWindowMarkerList = [infoWindowMarker(title: windStation['name'], body: iwText, link: '', point: windStationPosition)];
+            }
           }
         }
       }
@@ -2714,8 +2715,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         // we found a ship with this name, now add the 'live' info to the 'replay' track info
         var replayShip = replayTracks['shiptracks'][index];
         replayShip['colorcode'] = liveShip['colorcode']; // copy possible new colorcode
-        int laststamp =
-            replayShip['stamp'].last; // there may be overlapping data, so make sure we start with data newer then our last stamp
+        int laststamp = (replayShip['stamp'].length > 0) ? replayShip['stamp'].last : 0; // there may be overlapping data, so make sure we
+        // start with data newer then our last stamp
         for (int k = 0; k < liveShip['stamp'].length; k++) {
           // add stamps, lats, lons, speeds and courses
           if (liveShip['stamp'][k] > laststamp) {
@@ -2897,9 +2898,17 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //----------------------------------------------------------------------------------------------------------------------------------------
   // get the list of colorcodes, shipnames and teamnames, for use in the participants menu during pre-event
   //
-  Future<List<dynamic>> getParticipants(domain) async {
+  getParticipants(domain) async {
+    shipList = [];
+    teamList = [];
+    shipColors = [];
     final response = await http.get(Uri.parse('${server}get/?req=participants&dev=$phoneId&event=$domain'));
-    return (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : [];
+    final participants = (response.statusCode == 200 && response.body != '') ? jsonDecode(response.body) : [];
+    for (int i = 0; i < participants.length; i++) {
+      shipColors.add(Color(shipMarkerColorTable[int.parse(participants[i]['colorcode']) % 32]));
+      shipList.add(participants[i]['shipname']);
+      teamList.add(participants[i]['teamname'] != '' ? participants[i]['teamname'] : 'Team ${participants[i]['shipname']}');
+    }
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
