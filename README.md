@@ -17,7 +17,12 @@ optimalisaties:
 - live en replay verder integreren en ook live door (replay)ticker aansturen
 
 ----------------------------------------------------------------------------------------------------
+Version 3.3.0
+
+- Bugfix: transition from pre-event to live gave some problems in case no positions were received yet
+
 Version 3.2.9
+
 - Optimization: optimize and correct participants ship/team names in pre-event
 
 Version 3.2.8
