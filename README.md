@@ -17,6 +17,9 @@ optimalisaties:
 - live en replay verder integreren en ook live door (replay)ticker aansturen
 
 ----------------------------------------------------------------------------------------------------
+Version 3.2.9
+- Optimization: optimize and correct participants ship/team names in pre-event
+
 Version 3.2.8
 
 - Feature: switch between team/shipname with default setting added
