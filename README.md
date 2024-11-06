@@ -17,7 +17,12 @@ optimalisaties:
 - live en replay verder integreren en ook live door (replay)ticker aansturen
 
 ----------------------------------------------------------------------------------------------------
-Version 3.3.0
+Version 3.3.1
+
+- Feature: downarrow in appbar turned off when eventmenu is shown
+- Feature: (eventInfo) Option to show full trails of selected participants
+
+Version 3.3.0 released on October 15, 2024
 
 - Bugfix: transition from pre-event to live gave some problems in case no positions were received yet
 

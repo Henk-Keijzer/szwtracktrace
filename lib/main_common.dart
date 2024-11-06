@@ -158,7 +158,9 @@ int trailsUpdateInterval = 30; // eventInfo['trailsupdateinterval'], in seconds 
 int signalLostTime = 180; // eventInfo['signallosttime'] in seconds
 String signalLostTimeText = ' 1 minuut';
 int eventTrailLength = 30; // eventInfo['traillength'] in minutes
-int actualTrailLength = 30;
+int maxTrailLength = 30; // just to give it a value
+bool showMaxTrailLength = false;
+bool allowMaxTrailLengths = false;
 String socialMediaUrl = ''; // eventInfo['mediaframe']
 
 //
@@ -609,7 +611,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           }),
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             Tooltip(message: 'evenementmenu', child: Text(eventTitle)),
-            Icon(Icons.arrow_drop_down, size: 40, color: menuForegroundColor)
+            if (!showEventMenu) Icon(Icons.arrow_drop_down, size: 40, color: menuForegroundColor)
           ]),
         ),
         actions: [
@@ -1214,7 +1216,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                             value: followAll,
                             onChanged: (value) => setState(() {
                                   following.forEach((k, v) => following[k] = value!);
-                                  followAll = autoZoom = autoFollow = value!;
+                                  followAll = value!;
+                                  autoZoom = autoFollow = !showMaxTrailLength ? value : false;
                                   if (sliderEnd != currentReplayTime) moveShipsBuoysAndWindTo(currentReplayTime);
                                 })),
                       ]),
@@ -1245,9 +1248,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 onChanged: (value) {
                                   following[shipList[index]] = value!;
                                   autoFollow = autoZoom = false;
-                                  following.forEach((_, val) {
-                                    if (val) autoFollow = autoZoom = true;
-                                  });
+                                  if (!showMaxTrailLength) {
+                                    following.forEach((_, val) {
+                                      if (val) autoFollow = autoZoom = true;
+                                    });
+                                  }
                                   if (value && showShipInfo) loadAndShowShipDetails(shipList[index]);
                                   if (sliderEnd != currentReplayTime) moveShipsBuoysAndWindTo(currentReplayTime);
                                 }),
@@ -1323,22 +1328,29 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                       Row(children: [
                         const SizedBox(width: 5),
                         Expanded(
-                            child: InkWell(
-                                child: Text('Het spoor achter de ${config['text']['participants']} is $actualTrailLength '
-                                    '${actualTrailLength == 1 ? 'minuut' : 'minuten'}'),
-                                onTap: () {
-                                  if (actualTrailLength == eventTrailLength) {
-                                    if (maxReplay == 0) {
-                                      actualTrailLength = (eventEnd - eventStart) / 1000 ~/ 60;
-                                    } else {
-                                      actualTrailLength = maxReplay * 60; // minuten
-                                    }
-                                  } else {
-                                    actualTrailLength = eventTrailLength;
-                                  }
-                                  if (currentReplayTime != sliderEnd) moveShipsBuoysAndWindTo(currentReplayTime);
-                                }))
+                          child: Text('Het ${allowMaxTrailLengths ? 'standaard ' : ''}spoor achter de ${config['text']['participants']} is '
+                              '$eventTrailLength ${(eventTrailLength) == 1 ? 'minuut' : 'minuten'}'),
+                        )
                       ]),
+                      if (allowMaxTrailLengths)
+                        Row(children: [
+                          const SizedBox(width: 5),
+                          Expanded(child: Text('Toon maximale spoorlengte achter geselecteerde ${config['text']['participants']}')),
+                          Checkbox(
+                              visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                              activeColor: menuForegroundColor,
+                              checkColor: menuBackgroundColor,
+                              side: BorderSide(color: menuForegroundColor),
+                              value: showMaxTrailLength,
+                              onChanged: (_) => setState(() {
+                                    showMaxTrailLength = !showMaxTrailLength;
+                                    if (showMaxTrailLength) {
+                                      maxTrailLength = (maxReplay == 0) ? (currentReplayTime - eventStart) / 1000 ~/ 60 : maxReplay * 60;
+                                    }
+                                    //if (currentReplayTime != sliderEnd)
+                                    moveShipsBuoysAndWindTo(currentReplayTime);
+                                  }))
+                        ]),
                       if (testing)
                         Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           const Divider(),
@@ -1971,7 +1983,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     eventStart = int.parse(eventInfo['eventstartstamp'] ?? '0') * 1000;
     eventEnd = int.parse(eventInfo['eventendstamp'] ?? '0') * 1000;
     sliderEnd = eventEnd;
-    eventTrailLength = actualTrailLength = int.parse(eventInfo['traillength'] ?? '30');
+    eventTrailLength = int.parse(eventInfo['traillength'] ?? '30');
+    allowMaxTrailLengths = bool.parse(eventInfo['allowmaxtraillengths'] ?? 'false');
+    showMaxTrailLength = false;
     maxReplay = int.parse(eventInfo['maxreplay'] ?? '0');
     trailsUpdateInterval = int.parse(eventInfo['trailsupdateinterval'] ?? '15');
     trailsUpdateInterval = trailsUpdateInterval < 5 ? 5 : trailsUpdateInterval;
@@ -2395,8 +2409,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             : const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
         //
         // build the shipTrail (note we reuse/destroy the timeIndex here...)
+        var maxTrailLength = (maxReplay == 0) ? (currentReplayTime - eventStart) / 1000 ~/ 60 : maxReplay * 60;
+        var displayTrailLength = (showMaxTrailLength && following[shipTrack['name']] == true) ? maxTrailLength : eventTrailLength;
         List<LatLng> trail = [calculatedPosition];
-        while ((timeIndex >= 0) && (shipTrack['stamp'][timeIndex] > (time - actualTrailLength * 60 * 1000))) {
+        while ((timeIndex >= 0) && (shipTrack['stamp'][timeIndex] > (time - displayTrailLength * 60 * 1000))) {
           trail.add(LatLng(shipTrack['lat'][timeIndex].toDouble(), shipTrack['lon'][timeIndex].toDouble()));
           timeIndex--;
         }
@@ -2404,7 +2420,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           points: trail,
           color: shipColors[i],
           // thick line in case of short trails, thin line when we display full eventlong trails
-          strokeWidth: eventTrailLength == actualTrailLength ? 2 : 1,
+          strokeWidth: 2,
         );
       }
     }
