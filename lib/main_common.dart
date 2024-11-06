@@ -1254,7 +1254,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                     });
                                   }
                                   if (value && showShipInfo) loadAndShowShipDetails(shipList[index]);
-                                  if (sliderEnd != currentReplayTime) moveShipsBuoysAndWindTo(currentReplayTime);
+                                  moveShipsBuoysAndWindTo(currentReplayTime);
+                                  setState(() {});
                                 }),
                           ]);
                         },
