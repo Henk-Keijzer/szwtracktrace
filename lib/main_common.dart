@@ -1218,7 +1218,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                   following.forEach((k, v) => following[k] = value!);
                                   followAll = value!;
                                   autoZoom = autoFollow = !showMaxTrailLength ? value : false;
-                                  if (sliderEnd != currentReplayTime) moveShipsBuoysAndWindTo(currentReplayTime);
+                                  moveShipsBuoysAndWindTo(currentReplayTime);
                                 })),
                       ]),
                       const Divider(),

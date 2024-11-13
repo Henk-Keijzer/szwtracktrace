@@ -19,7 +19,7 @@ optimalisaties:
 ----------------------------------------------------------------------------------------------------
 Version 3.3.1
 
-- Feature: downarrow in appbar turned off when eventmenu is shown
+- Improvement: downarrow in appbar turned off when eventmenu is shown
 - Feature: (eventInfo) Option to show full trails of selected participants
 
 Version 3.3.0 released on October 15, 2024
