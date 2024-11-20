@@ -77,40 +77,41 @@ Color menuForegroundColor = const Color(0xb3ffffff); // Colors.white70;
 const String hexBlack = '#000000'; // marker and label outline colors depending on background black or white
 const String hexWhite = '#ffffff';
 //
-// the next color table is created using an online program to create 32 distinct colors, for example https://mokole.com/palette.html
+// the next color table was created using an online program to create 32 distinct colors, for example https://mokole.com/palette.html
+// or https://godsnotwheregodsnot.blogspot.com/2012/09/color-distribution-methodology.html
 const List shipMarkerColorTable = [
-  0xFF696969,
-  0xFF556b2f,
-  0xFF8b4513,
-  0xFF483d8b,
-  0xFF008000,
-  0xFF3cb371,
-  0xFFb8860b,
-  0xFF008b8b,
-  0xFF4682b4,
-  0xFF00008b,
-  0xFF32cd32,
-  0xFF8b008b,
-  0xFFff0000,
-  0xFFff8c00,
-  0xFFffd700,
-  0xFF00ff00,
-  0xFF00fa9a,
-  0xFF8a2be2,
-  0xFFdc143c,
-  0xFF00ffff,
-  0xFF0000ff,
-  0xFFadff2f,
-  0xFFda70d6,
-  0xFFff00ff,
-  0xFF1e90ff,
-  0xFFdb7093,
-  0xFFadd8e6,
-  0xFFff1493,
-  0xFF7b68ee,
-  0xFFffa07a,
-  0xFFffe4b5,
-  0xFFffc0cb
+  0xFFFFFF00,
+  0xFF1CE6FF,
+  0xFFFF34FF,
+  0xFFFF4A46,
+  0xFF008941,
+  0xFF006FA6,
+  0xFFA30059,
+  0xFFFFDBE5,
+  0xFF7A4900,
+  0xFF0000A6,
+  0xFF63FFAC,
+  0xFFB79762,
+  0xFF004D43,
+  0xFF8FB0FF,
+  0xFF997D87,
+  0xFF5A0007,
+  0xFF809693,
+  0xFFFEFFE6,
+  0xFF1B4400,
+  0xFF4FC601,
+  0xFF3B5DFF,
+  0xFF4A3B53,
+  0xFFFF2F80,
+  0xFF61615A,
+  0xFFBA0900,
+  0xFF6B7900,
+  0xFF00C2A0,
+  0xFFFFAA92,
+  0xFFFF90C9,
+  0xFFB903AA,
+  0xFFD16100,
+  0xFFDDEFFF,
 ];
 //
 // vars for getting physical device info and the phoneId
@@ -119,19 +120,19 @@ double screenWidth = 0;
 double screenHeight = 0;
 double menuOffset = 0; // used to calculate the offset of the menutext from the top of the screen
 //
-// variable and constants for the flutter_map
+// variables and constants for the flutter_map
 final MapController mapController = MapController();
 CacheStore cacheStore = FileCacheStore('');
 const LatLng initialMapPosition = LatLng(52.5, 5.0);
 const double initialMapZoom = 9;
 //
 // vars for the selection of the event
-late SharedPreferences prefs; // local data storage
-Map<String, dynamic> dirList = {}; // see get-dirlist.php on the server
+late SharedPreferencesWithCache prefs; // local data storage
+Map<String, dynamic> dirList = {}; // see /get?req=dirlist on the server
 List<String> eventNameList = [];
 List<String> eventYearList = [];
 List<String> eventDayList = [];
-Map<String, dynamic> eventInfo = {}; // see get-eventinfo.php on the server
+Map<String, dynamic> eventInfo = {}; // see /get?req=eventinfo&event=event/year/day on the server
 String eventDomain = '';
 String eventId = '';
 String eventName = 'Kies een evenement';
@@ -139,11 +140,11 @@ String eventYear = '';
 String eventDay = '';
 //
 // eventinfo (related) variables
-// appIcon is located in the event folder data/domain/appicon.png or in config/, url is retreived by get?req=appiconurl
+// appIcon is located in the event folder data/domain/appicon.png or in config/, url is retreived by /get?req=appiconurl
 String appIconUrl = '';
 int eventStart = 0; // evenInfo['eventstartstamp']
 int eventEnd = 0; // eventInfo['eventendstamp']
-int sliderEnd = 0; // end of the time slider, during live it is the current time, during replay it is eventend
+int sliderEnd = 0; // end of the time slider, during live it is the current time minud displaydelay, during replay it is eventend
 int maxReplay = 0; // eventInfo['maxreplay'] in hours
 // sets eventbegin xx hours before current time to limit the replay for continuous events (Olympia-charters, _TTTEST)
 bool allowShowSpeed = true; // eventInfo['allowshowspeed']
@@ -156,7 +157,7 @@ const int hfUpdateInterval = 100; // in ms, use these values: 100, 200, 250, 500
 bool allowShowWind = false; // eventInfo['buienradar'] If false, never show wind
 int trailsUpdateInterval = 30; // eventInfo['trailsupdateinterval'], in seconds between two subsequent get-trails requests from the db
 int signalLostTime = 180; // eventInfo['signallosttime'] in seconds
-String signalLostTimeText = ' 1 minuut';
+String signalLostTimeText = ' 3 minuten';
 int eventTrailLength = 30; // eventInfo['traillength'] in minutes
 int maxTrailLength = 30; // just to give it a value
 bool showMaxTrailLength = false;
@@ -172,7 +173,6 @@ EventStatus eventStatus = EventStatus.initial;
 Map<String, dynamic> replayTracks = {}; // see get-replay.php on the server
 Map<String, dynamic> liveTrails = {}; // see get-trails.php on the server
 Map<String, dynamic> route = {}; // geoJSON structure with the route
-//List<dynamic> participants = []; // list of colorcodes, shipnames and teamnames
 //
 // extract from the live/replaytracks above to make addressing the info a bit simpler
 List<String> shipList = []; // list with ship names
@@ -230,7 +230,7 @@ late Ticker replayTicker;
 int liveSecondsTimer = 60;
 int currentReplayTime = 0;
 bool replayRunning = false;
-bool replayPause = false;
+bool replayPause = false; // set to true if user is moving the timeslider
 bool replayLoop = false;
 //
 // UI messages in the EventSelection menu
@@ -246,7 +246,7 @@ bool showPreEventParticipants = false;
 bool showInfoPage = false;
 bool showShipInfo = false;
 bool showAttribution = false;
-bool showProgress = false;
+bool showProgress = false; // this is the loading progress circle
 bool cookieConsentGiven = false;
 bool fullScreen = false;
 //
@@ -291,13 +291,15 @@ DateFormat dtsFormat = DateFormat("d MMM y, HH:mm:ss", 'nl');
 //------------------------------------------------------------------------------
 //
 // The mainCommon function is called from main.dart with the serverUrl as parameter
+// Note that the powershell script build-variant.ps1 copies the main.dart specifically for the variant from the variants folder/xxx
+//
 // Here we initialize the global app vars with data from the server
 // After that we start the flutter framework by calling runApp with the MyApp StatefulWidget class as parameter
 //
 void mainCommon({required String serverUrl}) async {
   WidgetsFlutterBinding.ensureInitialized();
   packageInfo = await PackageInfo.fromPlatform(); // who and where are we
-  prefs = await SharedPreferences.getInstance(); // get access to local storage
+  prefs = await SharedPreferencesWithCache.create(cacheOptions: SharedPreferencesWithCacheOptions()); // get access to local storage
   await initializeDateFormatting('nl'); // initialize date formatting
   //
   // ----- SERVER
@@ -325,7 +327,7 @@ void mainCommon({required String serverUrl}) async {
   // add a platform prefix and the appversion in front of the phoneid
   // this phoneId is used in all communication with the server for statistical purposes
   String prefix = kIsWeb
-      ? "GD"
+      ? "GD" // assume web on desktop
       : switch (defaultTargetPlatform) {
           TargetPlatform.android => 'A',
           TargetPlatform.iOS => 'I',
@@ -582,7 +584,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
 
   //----------------------------------------------------------------------------
   //
-  // the UI elements listed above. The names speak for themselves (I hope)
+  // the UI elements listed in the scaffold above. The names speak for themselves (I hope)
   //
   AppBar uiAppBar() {
     return AppBar(
@@ -709,29 +711,21 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                     }),
               const Divider(),
               // and a + and - button for zoom-in and -out
-              IconButton(
-                  icon: Icon(Icons.add_box, color: menuForegroundColor),
-                  onPressed: () => setState(() {
-                        mapController.move(mapController.camera.center, mapController.camera.zoom + 0.5);
-                        autoZoom = false;
-                        if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
-                          rotateWindTo(currentReplayTime);
-                        }
-                      })),
+              IconButton(icon: Icon(Icons.add_box, color: menuForegroundColor), onPressed: () => zoom(0.5)),
               if (testing) Text(mapController.camera.zoom.toStringAsFixed(1), style: const TextStyle(fontSize: 11)),
-              IconButton(
-                  icon: Icon(Icons.indeterminate_check_box, color: menuForegroundColor),
-                  onPressed: () => setState(() {
-                        mapController.move(mapController.camera.center, mapController.camera.zoom - 0.5);
-                        autoZoom = false;
-                        if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
-                          rotateWindTo(currentReplayTime);
-                        }
-                      })),
+              IconButton(icon: Icon(Icons.indeterminate_check_box, color: menuForegroundColor), onPressed: () => zoom(-0.5)),
             ]))
       ])
     ]);
   }
+
+  void zoom(value) => setState(() {
+        mapController.move(mapController.camera.center, mapController.camera.zoom + value);
+        autoZoom = false;
+        if (allowShowWind && (eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers) {
+          rotateWindTo(currentReplayTime);
+        }
+      });
 
   //
   // the map
@@ -769,7 +763,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           // seven children: the base map, the optional labeloverlay for base (satellite) maps,
           // the (optional) overlay map, the scale bar, the route polylines and polygons, and all markers/textlabels
           //
-          // 1. the selected base map layer with three options, WMS, WMTS or vector (once available for web)
+          // 1. the selected base map layer with three options, WMS, WMTS (or vector once available for web)
           switch (baseMapTileProviders[selectedMapType]['service']) {
             "WMS" => TileLayer(
                 wmsOptions: WMSTileLayerOptions(
@@ -867,17 +861,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   }
 
   //
-  // on top of the map the slider area with the two sliders, the actionbuttons and the speed, date/time and live update timers
+  // on top of the map the slider area with the two sliders, the actionbuttons and the speed, date/time and live timer
   //
   Column uiSliderArea() {
-    Color textColor = (bgColor == hexBlack) ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
     return Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
       // a column with 3 children:
-      // 1. Row with timeslider and actionbuttons,
-      // 2. Container with the start/stop button and the timeslider,
-      // 3. a Row with texts
-      //
-      // first 1. a row with the speedslider, a spacer and the actionbuttons
+      // first 1. a row with the speedslider, a spacer and the zoom/follow buttons
       Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         const SizedBox(width: 8),
         if (eventStatus == EventStatus.replay || currentReplayTime != sliderEnd) uiSpeedSlider(),
@@ -888,42 +877,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       // under this row 2. the start/stop button and the timeslider
       uiTimeSlider(),
       // 3. a container showing the selected speed, the currentreplaytime and the livetimer
-      Container(
-          padding: const EdgeInsets.fromLTRB(20, 0, 50, 15),
-          color: Colors.transparent, // set a color so that the area does not allow click-through to the map
-          child: Row(
-              // row with some texts
-              mainAxisAlignment: MainAxisAlignment.start,
-              mainAxisSize: MainAxisSize.max,
-              children: [
-                Text(
-                    (eventStatus == EventStatus.live && currentReplayTime == sliderEnd)
-                        ? '1 sec/sec${(testing) ? ' | $debugString' : ''}'
-                        : '${speedTextTable[speedIndex]}${(testing) ? ' | $debugString' : ''}',
-                    style: TextStyle(color: textColor)),
-                const Spacer(),
-                if (eventStatus != EventStatus.preEvent)
-                  AutoSizeText(
-                    ((currentReplayTime == sliderEnd) && (sliderEnd != eventEnd) ? 'Live ' : 'Replay ') +
-                        dtsFormat.format(
-                            DateTime.fromMillisecondsSinceEpoch(currentReplayTime - ((currentReplayTime == sliderEnd) ? displayDelay : 0))),
-                    style: TextStyle(color: textColor),
-                    minFontSize: 8,
-                    maxLines: 1,
-                  ),
-                const Spacer(),
-                if (eventStatus == EventStatus.live)
-                  SizedBox(
-                      width: 45,
-                      child: InkWell(
-                          onTap: () => setState(() => liveSecondsTimer = 0),
-                          child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                            Text((liveSecondsTimer * hfUpdateInterval / 1000).ceil().toString(),
-                                textAlign: TextAlign.right, style: TextStyle(color: textColor)),
-                            const SizedBox(width: 2),
-                            Icon(Icons.refresh, color: textColor, size: 15),
-                          ]))),
-              ]))
+      uiSliderText(),
     ]);
   }
 
@@ -1067,6 +1021,44 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         ]));
   }
 
+  Container uiSliderText() {
+    Color textColor = (bgColor == hexBlack) ? Colors.black : Colors.white;
+    return Container(
+        padding: const EdgeInsets.fromLTRB(20, 0, 50, 15),
+        color: Colors.transparent, // set a color so that the area does not allow click-through to the map
+        child: Row(
+            // row with some texts
+            children: [
+              Text(
+                  (eventStatus == EventStatus.live && currentReplayTime == sliderEnd)
+                      ? '1 sec/sec${(testing) ? ' | $debugString' : ''}'
+                      : '${speedTextTable[speedIndex]}${(testing) ? ' | $debugString' : ''}',
+                  style: TextStyle(color: textColor)),
+              const Spacer(),
+              if (eventStatus != EventStatus.preEvent)
+                AutoSizeText(
+                  ((currentReplayTime == sliderEnd) && (sliderEnd != eventEnd) ? 'Live ' : 'Replay ') +
+                      dtsFormat.format(
+                          DateTime.fromMillisecondsSinceEpoch(currentReplayTime - ((currentReplayTime == sliderEnd) ? displayDelay : 0))),
+                  style: TextStyle(color: textColor),
+                  minFontSize: 8,
+                  maxLines: 1,
+                ),
+              const Spacer(),
+              if (eventStatus == EventStatus.live)
+                SizedBox(
+                    width: 45,
+                    child: InkWell(
+                        onTap: () => setState(() => liveSecondsTimer = 0),
+                        child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                          Text((liveSecondsTimer * hfUpdateInterval / 1000).ceil().toString(),
+                              textAlign: TextAlign.right, style: TextStyle(color: textColor)),
+                          const SizedBox(width: 2),
+                          Icon(Icons.refresh, color: textColor, size: 15),
+                        ]))),
+            ]));
+  }
+
   //
   // the menus: uiEventMenu, uiShipMenu/uiPreEventParticipants, uiMapMenu and uiInfoPage
   //
@@ -1083,7 +1075,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 IconButton(
                     icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor),
                     onPressed: () => setState(() => showEventMenu = false)),
-                const SizedBox(width: 3)
               ]),
               Container(
                   padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
@@ -1098,7 +1089,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 PopupMenuItem(height: 25, value: event, child: Text(event, style: const TextStyle(fontSize: 15))))
                             .toList(growable: false);
                       },
-                      onSelected: (selectedEvent) => selectEventYear(event: selectedEvent),
+                      onSelected: (selectedEvent) => selectEventYear(selectedEvent),
                       tooltip: '',
                       child: Row(children: [
                         const SizedBox(width: 10),
@@ -1116,7 +1107,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                   (year) => PopupMenuItem(height: 25, value: year, child: Text(year, style: const TextStyle(fontSize: 15))))
                               .toList(growable: false);
                         },
-                        onSelected: (selectedYear) => selectEventDay(year: selectedYear),
+                        onSelected: (selectedYear) => selectEventDay(selectedYear),
                         tooltip: '',
                         child: Row(children: [
                           const SizedBox(width: 10),
@@ -1134,7 +1125,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                   PopupMenuItem(height: 25, value: dayRace, child: Text(dayRace, style: const TextStyle(fontSize: 15))))
                               .toList(growable: false);
                         },
-                        onSelected: (selectedDay) => newEventSelected(day: selectedDay),
+                        onSelected: (selectedDay) => newEventSelected(selectedDay),
                         tooltip: '',
                         child: Row(children: [
                           const SizedBox(width: 10),
@@ -1198,7 +1189,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   IconButton(
                       icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor),
                       onPressed: () => setState(() => showShipMenu = false)),
-                  const SizedBox(width: 3)
                 ]),
                 Container(
                     padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
@@ -1245,18 +1235,17 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 checkColor: menuBackgroundColor,
                                 side: BorderSide(color: menuForegroundColor),
                                 value: (following[shipList[index]] == null) ? false : following[shipList[index]],
-                                onChanged: (value) {
-                                  following[shipList[index]] = value!;
-                                  autoFollow = autoZoom = false;
-                                  if (!showMaxTrailLength) {
-                                    following.forEach((_, val) {
-                                      if (val) autoFollow = autoZoom = true;
-                                    });
-                                  }
-                                  if (value && showShipInfo) loadAndShowShipDetails(shipList[index]);
-                                  moveShipsBuoysAndWindTo(currentReplayTime);
-                                  setState(() {});
-                                }),
+                                onChanged: (value) => setState(() {
+                                      following[shipList[index]] = value!;
+                                      autoFollow = autoZoom = false;
+                                      if (!showMaxTrailLength) {
+                                        following.forEach((_, val) {
+                                          if (val) autoFollow = autoZoom = true;
+                                        });
+                                      }
+                                      if (value && showShipInfo) loadAndShowShipDetails(shipList[index]);
+                                      moveShipsBuoysAndWindTo(currentReplayTime);
+                                    })),
                           ]);
                         },
                       ),
@@ -1378,7 +1367,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                       IconButton(
                           icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor),
                           onPressed: () => setState(() => showPreEventParticipants = false)),
-                      const SizedBox(width: 3)
                     ])
                   : Column(children: [
                       Row(children: [
@@ -1450,7 +1438,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   IconButton(
                       icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor),
                       onPressed: () => setState(() => showMapMenu = false)),
-                  const SizedBox(width: 3)
                 ]),
                 SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(0, 0, 10, 0),
@@ -1848,23 +1835,23 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         if (eventYearList.contains(eventSubStrings[1])) {
           eventYear = eventSubStrings[1];
           if (dirList[eventName][eventYear].isEmpty) {
-            newEventSelected(day: ''); // no day/races in this year, just go with eventName and eventYear
+            newEventSelected(''); // no day/races in this year, just go with eventName and eventYear
           } else {
             eventDayList = dirList[eventName][eventYear].keys.toList()..sort();
             if (eventDayList.contains(eventSubStrings[2])) {
               eventDay = eventSubStrings[2];
-              newEventSelected(day: eventDay); // go with eventName, eventYear and eventDay
+              newEventSelected(eventDay); // go with eventName, eventYear and eventDay
             } else {
               Timer(const Duration(milliseconds: 600), () {
                 // give the uiEventMenu animation time to settle, otherwise the drop down list shows up at the wrong place
-                selectEventDay(year: eventYear);
+                selectEventDay(eventYear);
               });
             }
           }
         } else {
           Timer(const Duration(milliseconds: 600), () {
             // give the uiEventMenu animation time to settle, otherwise the drop down list shows up at the wrong place
-            selectEventYear(event: eventName);
+            selectEventYear(eventName);
           });
         }
       } else {
@@ -1890,7 +1877,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // Routines to handle the event selections from the UI event selection menu
   // First the routine to handle the selection of the event name and prepare for getting a year
   //
-  selectEventYear({event}) {
+  selectEventYear(event) {
     selectionMessage = '';
     eventName = event;
     eventYearList = [];
@@ -1913,7 +1900,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // (almost) identical routine to handle the selection of an event year and prepare for getting a day
   // unless this event does not have a day, in that case we go to newEventSelected immediately
   //
-  void selectEventDay({year}) {
+  void selectEventDay(year) {
     selectionMessage = '';
     eventYear = year;
     eventDayList = [];
@@ -1929,7 +1916,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       });
       setState(() {});
     } else {
-      newEventSelected(day: '');
+      newEventSelected('');
     }
   }
 
@@ -1938,7 +1925,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // This routine is also called immediately after startup of the app, when we found an eventDomain
   // in local storage from a previous session or in the URL query
   //
-  void newEventSelected({day}) async {
+  void newEventSelected(day) async {
     // set the new eventDomain and save it in local storage
     eventDay = day;
     eventDomain = '$eventName/$eventYear';
@@ -1949,11 +1936,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     // then "kill" whatever was running
     if (replayTicker.isTicking) replayTicker.stop();
     replayRunning = false;
-    if (eventStatus == EventStatus.preEvent) {
-      preEventTimer.cancel();
-    } else if (eventStatus == EventStatus.live) {
-      liveTimer.cancel();
-    }
+    if (eventStatus == EventStatus.preEvent) preEventTimer.cancel();
+    if (eventStatus == EventStatus.live) liveTimer.cancel();
     //
     // new event selected, show progressindicator and reset some variables to their initial/default values
     setState(() => showProgress = true);
@@ -2056,7 +2040,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //----------------------------------------------------------------------------------------------------------------------------------------
   // Two routines for handling a live event
   // 1. startup the live event
-  // 2. the live timer routine, runs every 100 milliseconds
+  // 2. the live timer routine, runs every hfUpdateInterval (=100) milliseconds
   //
   void startLive() async {
     eventStatus = EventStatus.live;
@@ -2125,9 +2109,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       if (liveSecondsTimer <= 0) {
         // we've waited 'trailsUpdateInterval' seconds, so, reset it and get new trails and add them to what we have
         liveSecondsTimer = trailsUpdateInterval * 1000 ~/ hfUpdateInterval; // we run 10 times per second
-        if ((now - replayTracks['endtime']) > (trailsUpdateInterval * 3 * 1000)) {
-          // we must have been asleep for at least two trailsUpdatePeriods, get a complete uopdate since the last fetch
-          liveTrails = await getTrails(eventDomain, fromTime: (replayTracks['endtime'] / 1000).toInt()); // fetch special
+        if ((now - replayTracks['endtime']) > (trailsUpdateInterval * 1000 * 3)) {
+          // we must have been asleep for at least two trailsUpdatePeriods, get a complete update since the last fetch
+          liveTrails = await getTrails(eventDomain, fromTime: replayTracks['endtime'] ~/ 1000); // fetch special
         } else {
           // we have relatively recent data, go get the latest. Note this fetch does not (always) access the database on the server
           // but gets data stored in the trails.json file, which is not older then the trailsUpdateInterval and contains the positions of
@@ -2207,15 +2191,15 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     // reset elapsed time to zero (for next tick)
     replayTicker.stop();
     replayTicker.start();
-    if (replayPause) return; // don't move forward
+    if (replayPause) return; // don't move forward, the user is moving the timeslider
     // use the elapsed since the previous run to calculate the new currentReplayTime
     currentReplayTime = (currentReplayTime + (elapsedTime.inMilliseconds * speedTable[speedIndex]));
     //
     // Now we have different situations:
-    //  1 We moved beyond the end of the event and eventStatus is live: eventStatus becomes 'replay' and we possibly have case 3
+    //  1 We moved beyond the end of the event and eventStatus is live: eventStatus becomes 'replay' and we goto case 3
     //  2 We moved beyond the last trails received from the server and the event is still live: just stop
     //    If we were live, the liveTimerRoutine will take over. If we were in replay, wait for the user to move the timeslider
-    //  3 W moved beyond the last trails in replay and replayLoop is true, move to the beginning of the track and go on
+    //  3 We moved beyond the last trails in replay and replayLoop is true, move to the beginning of the track and go on
     //  4 We are still in replay: just move the ships and windmarkers
     //
     if (currentReplayTime > eventEnd) {
@@ -2256,7 +2240,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //
   // Routines to move ships, shiplabels, redraw shiptrail polylines, rotate windmarkers and plot the GPS buoys
   // It is called in all eventStatus'es every time the markers need to be updated
-  // During replay this routine is called 20 times per second, so in that situation the routine is time critical....
+  // During live with prediction and replay this routine is called 20 times per second, so in that situation the routine is time critical
   //
   // 'move' is default to true.
   // Set it to false when you only want to change the backgroundcolor of the markers or turn on/off the route and or labels
@@ -2420,7 +2404,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         shipTrailList[i] = Polyline(
           points: trail,
           color: shipColors[i],
-          // thick line in case of short trails, thin line when we display full eventlong trails
           strokeWidth: 2,
         );
       }
@@ -2720,8 +2703,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
 
   //----------------------------------------------------------------------------------------------------------------------------------------
   // Routine to merge the latest live ship, gps buoy and wind trails with saved replay trails into an updated replay trails object
-  // Note that there may be more/new ships/buoys/windstations in liveTrails then in replayTracks, because a ship may have joined the race later
-  // (tracker or AIS data only turned on after eventStart, or the admin added a ship).
+  // Note that there may be more/new ships/buoys/windstations in liveTrails then in replayTracks, because a ship may have joined
+  // the race later (tracker or AIS data only turned on after eventStart, or the admin added a ship).
   // At the end of the routine the merged data is saved in local storage (pref)
   //
   void addLiveTrailsToTracks() async {

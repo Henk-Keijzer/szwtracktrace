@@ -20,7 +20,10 @@ optimalisaties:
 Version 3.3.1
 
 - Improvement: downarrow in appbar turned off when eventmenu is shown
-- Feature: (eventInfo) Option to show full trails of selected participants
+- Improvement: new shipColorTable for improved distict colors
+- Feature: added checkbox to show full trails of selected participants (eventInfo option)
+- minor code optimizations
+- upgrade to new version of shared preferences (unfortunately user has to approve cookies again)
 
 Version 3.3.0 released on October 15, 2024
 
