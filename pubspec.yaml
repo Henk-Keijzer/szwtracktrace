@@ -36,7 +36,6 @@ dependencies:
   #  flutter_html: ^2.2.1
   #  flutter_map_cancellable_tile_provider: ^2.0.0
   #  vector_map_tiles: ^7.0.0
-  auto_size_text: ^3.0.0
   bordered_text: ^2.0.0
   collection: ^1.18.0
   flutter_animate: ^4.3.0

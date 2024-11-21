@@ -17,7 +17,6 @@ import 'dart:math';
 import 'dart:io';
 
 //
-import 'package:auto_size_text/auto_size_text.dart';
 import 'package:bordered_text/bordered_text.dart';
 import 'package:collection/collection.dart';
 import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
@@ -605,15 +604,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   testing = !testing;
                   setUnsetTestingActions();
                 },
-                child: Tooltip(message: 'evenementmenu', child: Image.network('$server$appIconUrl')))),
+                child: Image.network('$server$appIconUrl'))),
         title: InkWell(
           onTap: () => setState(() {
             showShipMenu = showMapMenu = showInfoPage = showAttribution = showPreEventParticipants = false;
             showEventMenu = !showEventMenu;
           }),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            Tooltip(message: 'evenementmenu', child: Text(eventTitle)),
-            if (!showEventMenu) Icon(Icons.arrow_drop_down, size: 40, color: menuForegroundColor)
+          child: Flex(direction: Axis.horizontal, mainAxisSize: MainAxisSize.min, children: [
+            Expanded(child: Text('$eventTitle${showEventMenu ? ' \u25B4' : ' \u25BE'}', overflow: TextOverflow.ellipsis)),
           ]),
         ),
         actions: [
@@ -1024,39 +1022,35 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   Container uiSliderText() {
     Color textColor = (bgColor == hexBlack) ? Colors.black : Colors.white;
     return Container(
-        padding: const EdgeInsets.fromLTRB(20, 0, 50, 15),
+        padding: const EdgeInsets.fromLTRB(20, 0, 40, 15),
         color: Colors.transparent, // set a color so that the area does not allow click-through to the map
-        child: Row(
-            // row with some texts
-            children: [
-              Text(
-                  (eventStatus == EventStatus.live && currentReplayTime == sliderEnd)
-                      ? '1 sec/sec${(testing) ? ' | $debugString' : ''}'
-                      : '${speedTextTable[speedIndex]}${(testing) ? ' | $debugString' : ''}',
-                  style: TextStyle(color: textColor)),
-              const Spacer(),
-              if (eventStatus != EventStatus.preEvent)
-                AutoSizeText(
-                  ((currentReplayTime == sliderEnd) && (sliderEnd != eventEnd) ? 'Live ' : 'Replay ') +
-                      dtsFormat.format(
-                          DateTime.fromMillisecondsSinceEpoch(currentReplayTime - ((currentReplayTime == sliderEnd) ? displayDelay : 0))),
-                  style: TextStyle(color: textColor),
-                  minFontSize: 8,
-                  maxLines: 1,
-                ),
-              const Spacer(),
-              if (eventStatus == EventStatus.live)
-                SizedBox(
-                    width: 45,
-                    child: InkWell(
-                        onTap: () => setState(() => liveSecondsTimer = 0),
-                        child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                          Text((liveSecondsTimer * hfUpdateInterval / 1000).ceil().toString(),
-                              textAlign: TextAlign.right, style: TextStyle(color: textColor)),
-                          const SizedBox(width: 2),
-                          Icon(Icons.refresh, color: textColor, size: 15),
-                        ]))),
-            ]));
+        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+          Text(
+              (eventStatus == EventStatus.live && currentReplayTime == sliderEnd)
+                  ? '1 sec/sec${(testing) ? ' | $debugString' : ''}'
+                  : '${speedTextTable[speedIndex]}${(testing) ? ' | $debugString' : ''}',
+              style: TextStyle(color: textColor)),
+          if (eventStatus != EventStatus.preEvent)
+            Expanded(
+                child: Text(
+              ((currentReplayTime == sliderEnd) && (sliderEnd != eventEnd) ? 'Live ' : 'Replay ') +
+                  dtsFormat.format(
+                      DateTime.fromMillisecondsSinceEpoch(currentReplayTime - ((currentReplayTime == sliderEnd) ? displayDelay : 0))),
+              textAlign: TextAlign.center,
+              style: TextStyle(color: textColor),
+//              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            )),
+          if (eventStatus == EventStatus.live)
+            InkWell(
+                onTap: () => setState(() => liveSecondsTimer = 0),
+                child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  Text((liveSecondsTimer * hfUpdateInterval / 1000).ceil().toString(),
+                      textAlign: TextAlign.right, style: TextStyle(color: textColor)),
+                  const SizedBox(width: 2),
+                  Icon(Icons.refresh, color: textColor, size: 15),
+                ])),
+        ]));
   }
 
   //
@@ -1070,8 +1064,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             padding: EdgeInsets.fromLTRB(10, menuOffset, 0, 10),
             child: Column(children: [
               Row(children: [
-                const Text('Kies hieronder een evenement'),
-                const Spacer(),
+                Expanded(child: const Text('Kies hieronder een evenement', softWrap: true)),
                 IconButton(
                     icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor),
                     onPressed: () => setState(() => showEventMenu = false)),

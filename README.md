@@ -19,7 +19,8 @@ optimalisaties:
 ----------------------------------------------------------------------------------------------------
 Version 3.3.1
 
-- Improvement: downarrow in appbar turned off when eventmenu is shown
+- Improvement: small down/up arrow in appbar title for eventmenu, title with ellipsis on narrow screens
+- Improvement: live/replay date-time string with ellipsis on narrow screens
 - Improvement: new shipColorTable for improved distict colors
 - Feature: added checkbox to show full trails of selected participants (eventInfo option)
 - minor code optimizations
