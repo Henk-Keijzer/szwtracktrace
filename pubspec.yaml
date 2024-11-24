@@ -58,6 +58,7 @@ dependencies:
   dio_cache_interceptor_file_store: ^1.2.3
   dio_cache_interceptor: ^3.5.0
   flutter_html: ^3.0.0-beta.2
+  newton_particles: ^0.2.2
 
 dev_dependencies:
   flutter_test:

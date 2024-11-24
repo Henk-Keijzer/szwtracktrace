@@ -642,7 +642,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             ),
           // button to open/close the AppBar extension: uiMenuButtonBar
           IconButton(
-            icon: showMenuButtonBar ? const Icon(Icons.expand_less) : const Icon(Icons.more_vert),
+            icon: showMenuButtonBar ? const Icon(Icons.expand_less) : const Icon(Icons.expand_more),
             onPressed: () => setState(() {
               showMenuButtonBar = !showMenuButtonBar;
               if (!showMenuButtonBar) showInfoPage = showMapMenu = showShipMenu = showPreEventParticipants = false;
@@ -1064,7 +1064,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             padding: EdgeInsets.fromLTRB(10, menuOffset, 0, 10),
             child: Column(children: [
               Row(children: [
-                Expanded(child: const Text('Kies hieronder een evenement', softWrap: true)),
+                Expanded(child: const Text('Wedstrijden', softWrap: true)),
                 IconButton(
                     icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor),
                     onPressed: () => setState(() => showEventMenu = false)),
@@ -1177,7 +1177,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               padding: EdgeInsets.fromLTRB(10, menuOffset, 0, 10),
               child: Column(children: [
                 Row(children: [
-                  const Text('Deelnemersmenu'),
+                  const Text('Deelnemers'),
                   const Spacer(),
                   IconButton(
                       icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor),
@@ -1426,7 +1426,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               padding: EdgeInsets.fromLTRB(10, menuOffset, 0, 10),
               child: Column(mainAxisSize: MainAxisSize.min, children: [
                 Row(children: [
-                  const Text('Kaartmenu'),
+                  const Text('Kaarten'),
                   const Spacer(),
                   IconButton(
                       icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor),
