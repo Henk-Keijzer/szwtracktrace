@@ -46,6 +46,7 @@ import 'package:uuid/uuid.dart';
 // app imports
 import 'default_config.dart';
 import 'default_maptileproviders.dart';
+import 'wind_particles.dart';
 
 //
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -195,6 +196,7 @@ List<Polygon> routePolygons = [];
 List<Marker> infoWindowMarkerList = []; // although there is max 1 infowindow, we have a list to make it easy to add it to the other markers
 String infoWindowId = '';
 const nrWindStationsForCenterWindCalculation = 3; // should we make this a flutter_config or eventInfo constant???
+({int heading, double speed}) centerWindData = (heading: 0, speed: 0);
 //
 // variables used for following ships and zooming
 Map<String, bool> following = {}; // list of shipnames to be followed
@@ -621,7 +623,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               icon: fullScreen
                   ? Icon(Icons.close_fullscreen, color: menuForegroundColor, size: 18)
                   : Icon(Icons.open_in_full, color: menuForegroundColor, size: 18),
-              tooltip: fullScreen ? 'exit fullscreen' : (kIsWeb && (document.referrer == '') ? 'fullscreen' : 'open in een nieuw tabblad'),
+              tooltip: fullScreen
+                  ? 'exit fullscreen'
+                  : ((kIsWeb && (document.referrer == '') || !kIsWeb)
+                      ? 'fullscreen'
+                      : 'open in een '
+                          'nieuw '
+                          'tabblad'),
               onPressed: () => setState(() {
                 fullScreen = !fullScreen;
                 if (kIsWeb && (document.referrer != '')) {
@@ -832,6 +840,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 ),
               _ => const SizedBox.shrink()
             },
+          if (replayTracks['windtracks'] != null && replayTracks['windtracks'].length >= nrWindStationsForCenterWindCalculation)
+            WindParticles(),
           Scalebar(
               alignment: Alignment.topLeft,
               padding: EdgeInsets.fromLTRB(
@@ -2567,6 +2577,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       if (replayTracks['windtracks'].length > nrWindStationsForCenterWindCalculation - 1) {
         // calculate average windspeed and direction at the middle of the screen
         ({int heading, double speed}) center = centerWind(nrWindStationsForCenterWindCalculation);
+        centerWindData = (heading: center.heading, speed: knotsToBft(center.speed).toDouble());
         String infoWindowTitle = 'Wind midden van de kaart\nobv nabije weerstations';
         String infoWindowText = '${center.speed.toStringAsFixed(1)} knopen, ${knotsToBft(center.speed)} Bft';
         String toolTipText = infoWindowText;
