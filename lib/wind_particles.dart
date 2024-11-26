@@ -16,40 +16,21 @@ class WindParticles extends StatefulWidget {
 }
 
 class WindParticlesState extends State<WindParticles> with SingleTickerProviderStateMixin {
-  late Ticker _ticker;
+  late Ticker ticker;
   List<Particle> particles = [];
   Random random = Random();
-
-  WindData windData = WindData(screenWidth / 2, screenHeight / 2, 1.0, pi / 4);
+  double windDirection = 0;
+  double windSpeed = 0;
 
   @override
   void initState() {
     super.initState();
-    _ticker = createTicker(_onTick)..start();
-  }
-
-  void _onTick(Duration elapsed) {
-    if (showWindMarkers) {
-      if (particles.isEmpty) {
-        for (int i = 0; i < (screenHeight * screenWidth) ~/ 6000; i++) {
-          particles.add(Particle(random, windData));
-        }
-      }
-      windData.direction = ((centerWindData.heading + 720 + 90) % 360) * pi / 180;
-      windData.speed = centerWindData.speed;
-      setState(() {
-        for (var particle in particles) {
-          particle.update();
-        }
-      });
-    } else {
-      particles = [];
-    }
+    ticker = createTicker(onTick)..start();
   }
 
   @override
   void dispose() {
-    _ticker.dispose();
+    ticker.dispose();
     super.dispose();
   }
 
@@ -60,42 +41,54 @@ class WindParticlesState extends State<WindParticles> with SingleTickerProviderS
       child: Container(),
     );
   }
-}
 
-class WindData {
-  double x, y, speed, direction;
-
-  WindData(this.x, this.y, this.speed, this.direction);
+  void onTick(Duration elapsed) {
+    if (showWindMarkers) {
+      if (particles.isEmpty) {
+        // just create a number of wind particles
+        for (int i = 0; i < (screenHeight * screenWidth) ~/ 6000; i++) {
+          particles.add(Particle(random)); // create a particle at a random location on the screen
+        }
+      }
+      // get current winddirection and speed from main program
+      windDirection = ((centerWindData.heading + 720 + 90) % 360) * pi / 180;
+      windSpeed = centerWindData.speed;
+      // and update all particles
+      setState(() {
+        for (var particle in particles) {
+          particle.update(windDirection, windSpeed);
+        }
+      });
+    } else {
+      // no need to show anything, clear-out all particles
+      particles = [];
+    }
+  }
 }
 
 class Particle {
-  late double x, y, vx, vy;
+  late double x, y;
   List<Offset> trail = [];
   Random random;
-  WindData windData;
-  int lifespan = 100; // Lifespan of the particle
   int updateCounter = 0;
 
-  Particle(this.random, this.windData) {
+  Particle(this.random) {
     x = random.nextDouble() * screenWidth;
     y = random.nextDouble() * screenHeight;
-    vx = random.nextDouble() * 2 - 1;
-    vy = random.nextDouble() * 2 - 1;
   }
 
-  void update() {
+  void update(windDirection, windSpeed) {
     if (updateCounter-- < 0) {
+      // on web update at half rate
       updateCounter = (kIsWeb) ? 1 : 0;
-
-      x += windData.speed * cos(windData.direction) / 2;
-      y += windData.speed * sin(windData.direction) / 2;
+      x += windSpeed * cos(windDirection) / 2; // divided by 2 is a dempening factor
+      y += windSpeed * sin(windDirection) / 2;
       trail.add(Offset(x, y));
       if (trail.length > 15) {
         trail.removeAt(0);
       }
-
-      // Wrap around the screen edges with random reappearance
-      // first remove the trail
+      // Wrap around the screen edges with random reappearance at the other side of the screen
+      // first remove the trail if we are outside of the screen
       if (x < 0 || x > screenWidth || y < 0 || y > screenHeight) trail = [];
       if (x < 0) {
         x = screenWidth;

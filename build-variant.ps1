@@ -49,6 +49,7 @@ rename setBundleId --value $appbundle --targets android,ios,web,windows,macos
 # volgens de documentatie in dezelfde folder als pubspec.yaml staan...
 Copy-Item -Path "variants\$variant\flutter_launcher_icons.yaml" -Destination "flutter_launcher_icons.yaml"
 dart run flutter_launcher_icons flutter_launcher_icons.yaml
+Remove-Item -Path android/app/src/main/res/mipmap-anydpi-v26 -Recurse
 
 # copy the variant/xxx/main.dart to lib/main.dart (so we always build main.dart)
 Copy-Item -Path "variants\$variant\main.dart" -Destination "lib\main.dart"
