@@ -182,7 +182,7 @@ List<Color> shipColors = []; // corresponding list of ship colors used in the pa
 List<String> shipColorsSvg = []; //same list but as an svg string used as markercolor
 String shipSvgPath = '10,1 11,1 14,4 14,18 13,19 8,19 7,18 7,4'; // outline of the ship, overwritten by config['icons']['boatSVGPath']
 //
-// lists for markers and polylines, maintained in moveShipsTo, updateGpsBuoys and moveWindTo
+// lists for markers and polylines, maintained in moveShipsTo, updateGpsBuoys and rotateWindTo
 List<Marker> shipMarkerList = [];
 List<Marker> shipLabelList = [];
 List<Polyline> shipTrailList = [];
@@ -195,8 +195,11 @@ List<Polyline> routeLineList = [];
 List<Polygon> routePolygons = [];
 List<Marker> infoWindowMarkerList = []; // although there is max 1 infowindow, we have a list to make it easy to add it to the other markers
 String infoWindowId = '';
+// info for the centerwind and windparticles
 const nrWindStationsForCenterWindCalculation = 3; // should we make this a flutter_config or eventInfo constant???
-({int heading, double speed}) centerWindData = (heading: 0, speed: 0);
+WindParticles windParticles = WindParticles();
+double particleWindDirection = 0;
+int particleWindSpeed = 0;
 //
 // variables used for following ships and zooming
 Map<String, bool> following = {}; // list of shipnames to be followed
@@ -228,6 +231,7 @@ List<int> windTimeIndex = []; // for each weather station the time position in t
 late Timer preEventTimer;
 late Timer liveTimer;
 late Ticker replayTicker;
+late Ticker windTicker;
 int liveSecondsTimer = 60;
 int currentReplayTime = 0;
 bool replayRunning = false;
@@ -495,6 +499,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     switch (state) {
+      case AppLifecycleState.inactive || AppLifecycleState.hidden || AppLifecycleState.paused || AppLifecycleState.detached:
+        setState(() {
+          if (eventStatus == EventStatus.preEvent) preEventTimer.cancel();
+          if (eventStatus == EventStatus.live) liveTimer.cancel();
+          if (replayTicker.isTicking) replayTicker.stop();
+          if (windTicker.isTicking) windTicker.stop();
+        });
       case AppLifecycleState.resumed:
         setState(() {
           if (eventStatus == EventStatus.preEvent) {
@@ -505,12 +516,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             liveTimer = Timer.periodic(const Duration(milliseconds: hfUpdateInterval), (_) => liveTimerRoutine());
           }
           if (replayRunning && !replayTicker.isTicking) replayTicker.start();
-        });
-      case AppLifecycleState.inactive || AppLifecycleState.hidden || AppLifecycleState.paused || AppLifecycleState.detached:
-        setState(() {
-          if (eventStatus == EventStatus.preEvent) preEventTimer.cancel();
-          if (eventStatus == EventStatus.live) liveTimer.cancel();
-          if (replayTicker.isTicking) replayTicker.stop();
+          windTicker.start();
         });
     }
   }
@@ -841,7 +847,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               _ => const SizedBox.shrink()
             },
           if (replayTracks['windtracks'] != null && replayTracks['windtracks'].length >= nrWindStationsForCenterWindCalculation)
-            WindParticles(),
+            windParticles,
           Scalebar(
               alignment: Alignment.topLeft,
               padding: EdgeInsets.fromLTRB(
@@ -1529,7 +1535,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           const Divider(),
                           Row(children: [
                             const SizedBox(width: 5),
-                            const Text('Windpijlen'),
+                            const Text('Wind'),
                             const Spacer(),
                             Checkbox(
                                 visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
@@ -2571,52 +2577,51 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     // update the windmarker at the upperleft corner
     // this windmarker represents the average wind speed and direction of
     // nrWindStationsForCenterWindCalculation in the middle of the screen
-    if (!showWindMarkers) {
-      windMarkerList.last = const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
-    } else {
-      if (replayTracks['windtracks'].length > nrWindStationsForCenterWindCalculation - 1) {
-        // calculate average windspeed and direction at the middle of the screen
-        ({int heading, double speed}) center = centerWind(nrWindStationsForCenterWindCalculation);
-        centerWindData = (heading: center.heading, speed: knotsToBft(center.speed).toDouble());
-        String infoWindowTitle = 'Wind midden van de kaart\nobv nabije weerstations';
-        String infoWindowText = '${center.speed.toStringAsFixed(1)} knopen, ${knotsToBft(center.speed)} Bft';
-        String toolTipText = infoWindowText;
-        bool showWindy = ((config['options']['windy'] == 'true') && eventStatus == EventStatus.live);
-        infoWindowText += showWindy ? '\n(www.windy.com)' : '';
-        String fillColor = knotsToColor(center.speed);
-        String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="10" '
-            'fill="none" stroke="$bgColor" stroke-width="1.2"/><polygon points="7,1 11,20 15,1 11,6" '
-            'style="fill:$fillColor;stroke:$bgColor;stroke-width:1" transform="rotate(${center.heading} 11,11)" /></svg>';
-        LatLng arrowPosition = mapController.camera.pointToLatLng(Point(30, menuOffset + 30));
-        // position the infowindow beneath the marker
-        LatLng infoWindowPosition = mapController.camera.pointToLatLng(Point(110, menuOffset + (showWindy ? 145 : 130)));
-        LatLng midMap = mapController.camera.center;
-        String iwLink = 'https://embed.windy.com/embed2.html?lat=${midMap.latitude}&lon=${midMap.longitude}'
-            '&detailLat=${midMap.latitude}&detailLon=${midMap.longitude}&width=$screenWidth&height=$screenHeight'
-            '&zoom=${mapController.camera.zoom}&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker=&calendar=now&pressure='
-            '&type=map&location=coordinates&detail=true&metricWind=bft&metricTemp=%C2%B0C&radarRange=-1';
-        windMarkerList.last = Marker(
-            point: arrowPosition,
-            width: 22,
-            height: 22,
-            child: Tooltip(
-                message: toolTipText,
-                child: InkWell(
-                  child: SvgPicture.string(svgString),
-                  onTap: () => setState(() {
-                    infoWindowId = 'windCenter';
-                    infoWindowMarkerList = [
-                      infoWindowMarker(
-                          title: infoWindowTitle, body: infoWindowText, link: showWindy ? iwLink : '', point: infoWindowPosition)
-                    ];
-                  }),
-                )));
-        // refresh the infowindow if it was open for this windstation
-        if (infoWindowId == 'windCenter') {
-          infoWindowMarkerList = [
-            infoWindowMarker(title: infoWindowTitle, body: infoWindowText, link: showWindy ? iwLink : '', point: infoWindowPosition)
-          ];
-        }
+    windMarkerList.last = const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
+    if (showWindMarkers && replayTracks['windtracks'].length >= nrWindStationsForCenterWindCalculation) {
+      // calculate average windspeed and direction at the middle of the screen
+      ({int heading, double speed}) center = centerWind(nrWindStationsForCenterWindCalculation);
+      // prepare some data for the wind particle widget
+      particleWindDirection = (((center.heading + 90 + 720) % 360) * pi / 180);
+      particleWindSpeed = knotsToBft(center.speed);
+      // create infowindowdata and a marker in the topleftcorner of the screen
+      String infoWindowTitle = 'Wind midden van de kaart\nobv nabije weerstations';
+      String infoWindowText = '${center.speed.toStringAsFixed(1)} knopen, ${knotsToBft(center.speed)} Bft';
+      String toolTipText = infoWindowText;
+      bool showWindy = ((config['options']['windy'] == 'true') && eventStatus == EventStatus.live);
+      infoWindowText += showWindy ? '\n(www.windy.com)' : '';
+      String fillColor = knotsToColor(center.speed);
+      String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="10" '
+          'fill="none" stroke="$bgColor" stroke-width="1.2"/><polygon points="7,1 11,20 15,1 11,6" '
+          'style="fill:$fillColor;stroke:$bgColor;stroke-width:1" transform="rotate(${center.heading} 11,11)" /></svg>';
+      LatLng arrowPosition = mapController.camera.pointToLatLng(Point(30, menuOffset + 30));
+      // position the infowindow beneath the marker
+      LatLng infoWindowPosition = mapController.camera.pointToLatLng(Point(110, menuOffset + (showWindy ? 145 : 130)));
+      LatLng midMap = mapController.camera.center;
+      String iwLink = 'https://embed.windy.com/embed2.html?lat=${midMap.latitude}&lon=${midMap.longitude}'
+          '&detailLat=${midMap.latitude}&detailLon=${midMap.longitude}&width=$screenWidth&height=$screenHeight'
+          '&zoom=${mapController.camera.zoom}&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker=&calendar=now&pressure='
+          '&type=map&location=coordinates&detail=true&metricWind=bft&metricTemp=%C2%B0C&radarRange=-1';
+      windMarkerList.last = Marker(
+          point: arrowPosition,
+          width: 22,
+          height: 22,
+          child: Tooltip(
+              message: toolTipText,
+              child: InkWell(
+                child: SvgPicture.string(svgString),
+                onTap: () => setState(() {
+                  infoWindowId = 'windCenter';
+                  infoWindowMarkerList = [
+                    infoWindowMarker(title: infoWindowTitle, body: infoWindowText, link: showWindy ? iwLink : '', point: infoWindowPosition)
+                  ];
+                }),
+              )));
+      // refresh the infowindow if it was open for this windstation
+      if (infoWindowId == 'windCenter') {
+        infoWindowMarkerList = [
+          infoWindowMarker(title: infoWindowTitle, body: infoWindowText, link: showWindy ? iwLink : '', point: infoWindowPosition)
+        ];
       }
     }
   }
@@ -3049,12 +3054,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       });
     }
     // sort the map from near to far (values)
-    var distanceTable = unsortedDistanceTable.entries.toList()
-      ..sort((e1, e2) {
-        var diff = e1.value.compareTo(e2.value);
-        if (diff == 0) diff = e1.key.compareTo(e2.key);
-        return diff;
-      });
+    var distanceTable = unsortedDistanceTable.entries.toList();
+    distanceTable.sort((e1, e2) {
+      var diff = e1.value.compareTo(e2.value);
+      if (diff == 0) diff = e1.key.compareTo(e2.key);
+      return diff;
+    });
     // get relevant info of the nearest stations in a number of lists
     // first the sum of the distances to the nearest stations
     double sumDistances = distanceTable.take(nrStations).fold(0, (sum, element) => sum + element.value);

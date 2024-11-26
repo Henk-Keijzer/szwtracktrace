@@ -49,6 +49,8 @@ rename setBundleId --value $appbundle --targets android,ios,web,windows,macos
 # volgens de documentatie in dezelfde folder als pubspec.yaml staan...
 Copy-Item -Path "variants\$variant\flutter_launcher_icons.yaml" -Destination "flutter_launcher_icons.yaml"
 dart run flutter_launcher_icons flutter_launcher_icons.yaml
+# flutter_launcher_icons maakt een directory aan die ervoor zorgt dat de app niet goed geinstalleerd kan worden
+# (tijdelijke) oplossing hele directory wissen en het loopt verder goed.
 Remove-Item -Path android/app/src/main/res/mipmap-anydpi-v26 -Recurse
 
 # copy the variant/xxx/main.dart to lib/main.dart (so we always build main.dart)
