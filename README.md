@@ -26,6 +26,7 @@ Version 3.3.1
 - Minor code optimizations
 - Upgrade to new version of shared preferences (unfortunately user has to approve cookies again)
 - Feature: show wind-particles
+- Feature: share button
 
 Version 3.3.0 released on October 15, 2024
 

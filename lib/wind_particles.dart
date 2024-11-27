@@ -49,7 +49,7 @@ class WindParticlesState extends State<WindParticles> with WidgetsBindingObserve
       // and update all particles using data prepared by the rotateWindTo(time) routine in main_common
       setState(() {
         for (var particle in particles) {
-          particle.update(particleWindDirection, particleWindSpeed);
+          particle.update(windParticleDirection, windParticleSpeed);
         }
       });
     } else {
@@ -71,16 +71,16 @@ class Particle {
     y = random.nextDouble() * screenHeight;
   }
 
-  void update(windDirection, windSpeed) {
-    x += windSpeed * cos(windDirection) / 2; // 2 is a dempening factor
-    y += windSpeed * sin(windDirection) / 2;
+  void update(direction, speed) {
+    x += speed * cos(direction) / 2; // 2 is a dempening factor
+    y += speed * sin(direction) / 2;
     trail.add(Offset(x, y));
     if (trail.length > 15) {
       trail.removeAt(0);
     }
-    // Wrap around the screen edges with random reappearance at the other side of the screen
     // first remove the trail if we are outside of the screen
     if (x < 0 || x > screenWidth || y < 0 || y > screenHeight) trail = [];
+    // thyen wrap around the screen edges with random reappearance at the other side of the screen
     if (x < 0) {
       x = screenWidth;
       y = random.nextDouble() * screenHeight;

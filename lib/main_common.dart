@@ -40,6 +40,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:universal_html/html.dart' show document, window;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
+import 'package:share_plus/share_plus.dart';
 
 //
 //------------------------------------------------------------------------------------------------------------------------------------------
@@ -55,6 +56,7 @@ import 'wind_particles.dart';
 // default server and package info
 String debugString = '';
 String server = 'https://tt.zeilvaartwarmond.nl/';
+String serverForSharing = server;
 late PackageInfo packageInfo; // info is picked up at the beginning of mainCommon
 //
 // devicetype / platformtype
@@ -198,8 +200,8 @@ String infoWindowId = '';
 // info for the centerwind and windparticles
 const nrWindStationsForCenterWindCalculation = 3; // should we make this a flutter_config or eventInfo constant???
 WindParticles windParticles = WindParticles();
-double particleWindDirection = 0;
-int particleWindSpeed = 0;
+double windParticleDirection = 0;
+int windParticleSpeed = 0;
 //
 // variables used for following ships and zooming
 Map<String, bool> following = {}; // list of shipnames to be followed
@@ -309,6 +311,7 @@ void mainCommon({required String serverUrl}) async {
   //
   // ----- SERVER
   server = (kIsWeb) ? '/' : serverUrl; // defined in main.dart
+  serverForSharing = serverUrl;
   // Using a simple '/' on web allows for redirection, for eaxample sv.zeilvaartwarmond.nl -> replay.sportvolgen.nl
   // for other platforms we need the full server url
   //
@@ -516,7 +519,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             liveTimer = Timer.periodic(const Duration(milliseconds: hfUpdateInterval), (_) => liveTimerRoutine());
           }
           if (replayRunning && !replayTicker.isTicking) replayTicker.start();
-          windTicker.start();
+          if (!windTicker.isTicking) windTicker.start();
         });
     }
   }
@@ -721,6 +724,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           '&zoom=$zoom&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker=&calendar=now&pressure='
                           '&type=map&location=coordinates&detail=true&metricWind=bft&metricTemp=%C2%B0C&radarRange=-1'));
                     }),
+              IconButton(
+                  onPressed: () async {
+                    await Share.share('Link naar de Track&Tace website: $serverForSharing?event=${eventDomain.replaceAll(' ', '%20')}');
+                  },
+                  icon: Icon(Icons.share, color: showInfoPage ? menuAccentColor : menuForegroundColor)),
               const Divider(),
               // and a + and - button for zoom-in and -out
               IconButton(icon: Icon(Icons.add_box, color: menuForegroundColor), onPressed: () => zoom(0.5)),
@@ -2582,26 +2590,19 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       // calculate average windspeed and direction at the middle of the screen
       ({int heading, double speed}) center = centerWind(nrWindStationsForCenterWindCalculation);
       // prepare some data for the wind particle widget
-      particleWindDirection = (((center.heading + 90 + 720) % 360) * pi / 180);
-      particleWindSpeed = knotsToBft(center.speed);
+      windParticleDirection = (((center.heading + 90 + 720) % 360) * pi / 180);
+      windParticleSpeed = knotsToBft(center.speed);
       // create infowindowdata and a marker in the topleftcorner of the screen
       String infoWindowTitle = 'Wind midden van de kaart\nobv nabije weerstations';
       String infoWindowText = '${center.speed.toStringAsFixed(1)} knopen, ${knotsToBft(center.speed)} Bft';
       String toolTipText = infoWindowText;
-      bool showWindy = ((config['options']['windy'] == 'true') && eventStatus == EventStatus.live);
-      infoWindowText += showWindy ? '\n(www.windy.com)' : '';
       String fillColor = knotsToColor(center.speed);
       String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="10" '
           'fill="none" stroke="$bgColor" stroke-width="1.2"/><polygon points="7,1 11,20 15,1 11,6" '
           'style="fill:$fillColor;stroke:$bgColor;stroke-width:1" transform="rotate(${center.heading} 11,11)" /></svg>';
       LatLng arrowPosition = mapController.camera.pointToLatLng(Point(30, menuOffset + 30));
       // position the infowindow beneath the marker
-      LatLng infoWindowPosition = mapController.camera.pointToLatLng(Point(110, menuOffset + (showWindy ? 145 : 130)));
-      LatLng midMap = mapController.camera.center;
-      String iwLink = 'https://embed.windy.com/embed2.html?lat=${midMap.latitude}&lon=${midMap.longitude}'
-          '&detailLat=${midMap.latitude}&detailLon=${midMap.longitude}&width=$screenWidth&height=$screenHeight'
-          '&zoom=${mapController.camera.zoom}&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker=&calendar=now&pressure='
-          '&type=map&location=coordinates&detail=true&metricWind=bft&metricTemp=%C2%B0C&radarRange=-1';
+      LatLng infoWindowPosition = mapController.camera.pointToLatLng(Point(110, menuOffset + 130));
       windMarkerList.last = Marker(
           point: arrowPosition,
           width: 22,
@@ -2613,15 +2614,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 onTap: () => setState(() {
                   infoWindowId = 'windCenter';
                   infoWindowMarkerList = [
-                    infoWindowMarker(title: infoWindowTitle, body: infoWindowText, link: showWindy ? iwLink : '', point: infoWindowPosition)
+                    infoWindowMarker(title: infoWindowTitle, body: infoWindowText, link: '', point: infoWindowPosition)
                   ];
                 }),
               )));
       // refresh the infowindow if it was open for this windstation
       if (infoWindowId == 'windCenter') {
-        infoWindowMarkerList = [
-          infoWindowMarker(title: infoWindowTitle, body: infoWindowText, link: showWindy ? iwLink : '', point: infoWindowPosition)
-        ];
+        infoWindowMarkerList = [infoWindowMarker(title: infoWindowTitle, body: infoWindowText, link: '', point: infoWindowPosition)];
       }
     }
   }
