@@ -208,6 +208,7 @@ Map<String, bool> following = {}; // list of shipnames to be followed
 bool followAll = true;
 bool autoZoom = true;
 bool autoFollow = true;
+bool moveWhileNotInFocus = false;
 //
 // vars and constants for the movement of ships and wind markers in time
 const int speedIndexInitialValue = 4;
@@ -501,26 +502,28 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   @override
   didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-    switch (state) {
-      case AppLifecycleState.inactive || AppLifecycleState.hidden || AppLifecycleState.paused || AppLifecycleState.detached:
-        setState(() {
-          if (eventStatus == EventStatus.preEvent) preEventTimer.cancel();
-          if (eventStatus == EventStatus.live) liveTimer.cancel();
-          if (replayTicker.isTicking) replayTicker.stop();
-          if (windTicker.isTicking) windTicker.stop();
-        });
-      case AppLifecycleState.resumed:
-        setState(() {
-          if (eventStatus == EventStatus.preEvent) {
-            preEventTimer = Timer.periodic(const Duration(seconds: 5), (_) => preEventTimerRoutine());
-          }
-          if (eventStatus == EventStatus.live) {
-            liveSecondsTimer = 1;
-            liveTimer = Timer.periodic(const Duration(milliseconds: hfUpdateInterval), (_) => liveTimerRoutine());
-          }
-          if (replayRunning && !replayTicker.isTicking) replayTicker.start();
-          if (!windTicker.isTicking) windTicker.start();
-        });
+    if (!moveWhileNotInFocus) {
+      switch (state) {
+        case AppLifecycleState.inactive || AppLifecycleState.hidden || AppLifecycleState.paused || AppLifecycleState.detached:
+          setState(() {
+            if (eventStatus == EventStatus.preEvent) preEventTimer.cancel();
+            if (eventStatus == EventStatus.live) liveTimer.cancel();
+            if (replayTicker.isTicking) replayTicker.stop();
+            if (windTicker.isTicking) windTicker.stop();
+          });
+        case AppLifecycleState.resumed:
+          setState(() {
+            if (eventStatus == EventStatus.preEvent) {
+              preEventTimer = Timer.periodic(const Duration(seconds: 5), (_) => preEventTimerRoutine());
+            }
+            if (eventStatus == EventStatus.live) {
+              liveSecondsTimer = 1;
+              liveTimer = Timer.periodic(const Duration(milliseconds: hfUpdateInterval), (_) => liveTimerRoutine());
+            }
+            if (replayRunning && !replayTicker.isTicking) replayTicker.start();
+            if (!windTicker.isTicking) windTicker.start();
+          });
+      }
     }
   }
 
@@ -728,7 +731,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   onPressed: () async {
                     await Share.share('Link naar de Track&Tace website: $serverForSharing?event=${eventDomain.replaceAll(' ', '%20')}');
                   },
-                  icon: Icon(Icons.share, color: showInfoPage ? menuAccentColor : menuForegroundColor)),
+                  icon: Icon(Icons.share, color: menuForegroundColor)),
               const Divider(),
               // and a + and - button for zoom-in and -out
               IconButton(icon: Icon(Icons.add_box, color: menuForegroundColor), onPressed: () => zoom(0.5)),
@@ -1683,6 +1686,22 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 side: BorderSide(color: menuForegroundColor),
                                 value: replayLoop,
                                 onChanged: (_) => setState(() => replayLoop = !replayLoop))
+                          ])
+                        ]),
+                      if (testing)
+                        Wrap(children: [
+                          const Divider(),
+                          Row(children: [
+                            const SizedBox(width: 5),
+                            const Text('Move while not in focus'),
+                            const Spacer(),
+                            Checkbox(
+                                visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                                activeColor: menuForegroundColor,
+                                checkColor: menuBackgroundColor,
+                                side: BorderSide(color: menuForegroundColor),
+                                value: moveWhileNotInFocus,
+                                onChanged: (_) => setState(() => moveWhileNotInFocus = !moveWhileNotInFocus))
                           ])
                         ])
                     ]))

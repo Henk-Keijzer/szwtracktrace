@@ -27,6 +27,7 @@ Version 3.3.1
 - Upgrade to new version of shared preferences (unfortunately user has to approve cookies again)
 - Feature: show wind-particles
 - Feature: share button
+- Feature: testing option: moveWhileNotInFocus
 
 Version 3.3.0 released on October 15, 2024
 
