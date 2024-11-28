@@ -127,6 +127,7 @@ final MapController mapController = MapController();
 CacheStore cacheStore = FileCacheStore('');
 const LatLng initialMapPosition = LatLng(52.5, 5.0);
 const double initialMapZoom = 9;
+bool mapReady = false;
 //
 // vars for the selection of the event
 late SharedPreferencesWithCache prefs; // local data storage
@@ -252,6 +253,7 @@ bool showMapMenu = false;
 bool showShipMenu = false;
 bool showPreEventParticipants = false;
 bool showInfoPage = false;
+bool showTestingMenu = false;
 bool showShipInfo = false;
 bool showAttribution = false;
 bool showProgress = false; // this is the loading progress circle
@@ -274,6 +276,7 @@ String labelOverlayType = '';
 //
 // default values for some booleans, selectable from the mapmenu
 bool showWindMarkers = false;
+bool showWindParticles = false;
 bool showRoute = true;
 bool showRouteLabels = false;
 bool showShipLabels = true;
@@ -454,6 +457,9 @@ void mainCommon({required String serverUrl}) async {
   showWindMarkers = prefs.getBool('windmarkers') ?? showWindMarkers;
   prefs.setBool('windmarkers', showWindMarkers);
   //
+  showWindParticles = prefs.getBool('windparticles') ?? showWindParticles;
+  prefs.setBool('windmarkers', showWindParticles);
+  //
   showRoute = prefs.getBool('showroute') ?? showRoute;
   prefs.setBool('showroute', showRoute);
   //
@@ -508,8 +514,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           setState(() {
             if (eventStatus == EventStatus.preEvent) preEventTimer.cancel();
             if (eventStatus == EventStatus.live) liveTimer.cancel();
-            if (replayTicker.isTicking) replayTicker.stop();
-            if (windTicker.isTicking) windTicker.stop();
+            if (replayTicker.isActive) replayTicker.stop();
+            if (windTicker.isActive) windTicker.stop();
           });
         case AppLifecycleState.resumed:
           setState(() {
@@ -520,8 +526,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               liveSecondsTimer = 1;
               liveTimer = Timer.periodic(const Duration(milliseconds: hfUpdateInterval), (_) => liveTimerRoutine());
             }
-            if (replayRunning && !replayTicker.isTicking) replayTicker.start();
-            if (!windTicker.isTicking) windTicker.start();
+            if (replayRunning && !replayTicker.isActive) replayTicker.start();
+            if (showWindMarkers && showWindParticles && replayTracks['windtracks'].isNotEmpty && !windTicker.isActive) windTicker.start();
           });
       }
     }
@@ -588,6 +594,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                     if (showMapMenu) uiMapMenu().animate().slide(),
                     if (showShipMenu) uiParticipantsMenu().animate().slide(),
                     if (showPreEventParticipants) uiPreEventParticipantsMenu().animate().slide(),
+                    if (showTestingMenu) uiTestingMenu().animate().slide(),
                     if (showShipInfo) uiShipInfo().animate().slide(),
                     if (!cookieConsentGiven) uiCookieConsent(),
                     if (showProgress) uiProgressIndicator(),
@@ -601,8 +608,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //
   AppBar uiAppBar() {
     return AppBar(
-        backgroundColor: menuBackgroundColor
-            .withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu || showPreEventParticipants) ? 1 : 0.5),
+        backgroundColor: menuBackgroundColor.withOpacity(
+            (showShipMenu || showInfoPage || showEventMenu || showMapMenu || showPreEventParticipants || showTestingMenu) ? 1 : 0.5),
         foregroundColor: menuForegroundColor,
         elevation: 0,
         toolbarHeight: 40,
@@ -611,7 +618,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             child: InkWell(
                 // appIcon of the T&T organization. single tap opens event menu, double tap enters testing mode (without redrawing the ui)
                 onTap: () => setState(() {
-                      showShipMenu = showMapMenu = showInfoPage = showAttribution = showPreEventParticipants = false;
+                      showShipMenu = showMapMenu = showInfoPage = showAttribution = showPreEventParticipants = showTestingMenu = false;
                       showEventMenu = !showEventMenu;
                     }),
                 onDoubleTap: () {
@@ -621,7 +628,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 child: Image.network('$server$appIconUrl'))),
         title: InkWell(
           onTap: () => setState(() {
-            showShipMenu = showMapMenu = showInfoPage = showAttribution = showPreEventParticipants = false;
+            showShipMenu = showMapMenu = showInfoPage = showAttribution = showPreEventParticipants = showTestingMenu = false;
             showEventMenu = !showEventMenu;
           }),
           child: Flex(direction: Axis.horizontal, mainAxisSize: MainAxisSize.min, children: [
@@ -665,7 +672,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             icon: showMenuButtonBar ? const Icon(Icons.expand_less) : const Icon(Icons.expand_more),
             onPressed: () => setState(() {
               showMenuButtonBar = !showMenuButtonBar;
-              if (!showMenuButtonBar) showInfoPage = showMapMenu = showShipMenu = showPreEventParticipants = false;
+              if (!showMenuButtonBar) showInfoPage = showMapMenu = showShipMenu = showPreEventParticipants = showTestingMenu = false;
             }),
           ),
         ]);
@@ -680,8 +687,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         SizedBox(height: menuOffset),
         Container(
             width: 40,
-            color: menuBackgroundColor
-                .withOpacity((showShipMenu || showInfoPage || showEventMenu || showMapMenu || showPreEventParticipants) ? 1 : 0.5),
+            color: menuBackgroundColor.withOpacity(
+                (showShipMenu || showInfoPage || showEventMenu || showMapMenu || showPreEventParticipants || showTestingMenu) ? 1 : 0.5),
             child: Column(children: [
               IconButton(
                 // button for the shipList
@@ -689,7 +696,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                     color: (showShipMenu || showPreEventParticipants) ? menuAccentColor : menuForegroundColor),
                 onPressed: () => setState(() {
                   if (eventStatus != EventStatus.preEvent && shipList.isNotEmpty) {
-                    showEventMenu = showMapMenu = showInfoPage = showAttribution = showPreEventParticipants = false;
+                    showEventMenu = showMapMenu = showInfoPage = showAttribution = showPreEventParticipants = showTestingMenu = false;
                     showShipMenu = !showShipMenu;
                   } else {
                     showEventMenu = showMapMenu = showInfoPage = showAttribution = showShipMenu = false;
@@ -701,7 +708,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 // button for the mapMenu
                 icon: Icon(Icons.map, color: showMapMenu ? menuAccentColor : menuForegroundColor),
                 onPressed: () => setState(() {
-                  showEventMenu = showShipMenu = showInfoPage = showAttribution = showPreEventParticipants = false;
+                  showEventMenu = showShipMenu = showInfoPage = showAttribution = showPreEventParticipants = showTestingMenu = false;
                   showMapMenu = !showMapMenu;
                 }),
               ),
@@ -709,7 +716,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 // button for the infoPage
                 icon: Icon(Icons.info, color: showInfoPage ? menuAccentColor : menuForegroundColor),
                 onPressed: () => setState(() {
-                  showEventMenu = showShipMenu = showMapMenu = showAttribution = showPreEventParticipants = false;
+                  showEventMenu = showShipMenu = showMapMenu = showAttribution = showPreEventParticipants = showTestingMenu = false;
                   showInfoPage = !showInfoPage;
                 }),
               ),
@@ -735,8 +742,18 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               const Divider(),
               // and a + and - button for zoom-in and -out
               IconButton(icon: Icon(Icons.add_box, color: menuForegroundColor), onPressed: () => zoom(0.5)),
-              if (testing) Text(mapController.camera.zoom.toStringAsFixed(1), style: const TextStyle(fontSize: 11)),
+              if (mapReady) Text(mapController.camera.zoom.toStringAsFixed(1), style: const TextStyle(fontSize: 11)),
               IconButton(icon: Icon(Icons.indeterminate_check_box, color: menuForegroundColor), onPressed: () => zoom(-0.5)),
+              if (testing)
+                Wrap(children: [
+                  const Divider(),
+                  IconButton(
+                      icon: Icon(Icons.ac_unit, color: showTestingMenu ? menuAccentColor : menuForegroundColor),
+                      onPressed: () => setState(() {
+                            showEventMenu = showShipMenu = showMapMenu = showAttribution = showPreEventParticipants = showInfoPage = false;
+                            showTestingMenu = !showTestingMenu;
+                          }))
+                ])
             ]))
       ])
     ]);
@@ -769,7 +786,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               if (gesture) {
                 setState(() {
                   // stop autozoom and autofollow, close all menu's and update wind markers (in order to update the "center wind marker")
-                  autoFollow = showEventMenu = showInfoPage = showMapMenu = showShipMenu = false;
+                  autoFollow = showEventMenu = showInfoPage = showMapMenu = showShipMenu = showTestingMenu = false;
                   if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
                     rotateWindTo(currentReplayTime);
                   }
@@ -780,7 +797,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   // on tapping the map: close all popups and menu's
                   infoWindowId = '';
                   infoWindowMarkerList = [];
-                  showEventMenu = showMapMenu = showShipMenu = showInfoPage = showAttribution = false;
+                  showEventMenu = showMapMenu = showShipMenu = showInfoPage = showAttribution = showTestingMenu = false;
                 })),
         children: [
           // seven children: the base map, the optional labeloverlay for base (satellite) maps,
@@ -857,7 +874,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 ),
               _ => const SizedBox.shrink()
             },
-          if (replayTracks['windtracks'] != null && replayTracks['windtracks'].length >= nrWindStationsForCenterWindCalculation)
+          if (showWindMarkers &&
+              showWindParticles &&
+              replayTracks['windtracks'] != null &&
+              replayTracks['windtracks'].length >= nrWindStationsForCenterWindCalculation)
             windParticles,
           Scalebar(
               alignment: Alignment.topLeft,
@@ -1052,10 +1072,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         padding: const EdgeInsets.fromLTRB(20, 0, 40, 15),
         color: Colors.transparent, // set a color so that the area does not allow click-through to the map
         child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          Text(
-              (eventStatus == EventStatus.live && currentReplayTime == sliderEnd)
-                  ? '1 sec/sec${(testing) ? ' | $debugString' : ''}'
-                  : '${speedTextTable[speedIndex]}${(testing) ? ' | $debugString' : ''}',
+          Text((eventStatus == EventStatus.live && currentReplayTime == sliderEnd) ? '1 sec/sec' : '${speedTextTable[speedIndex]}',
               style: TextStyle(color: textColor)),
           if (eventStatus != EventStatus.preEvent)
             Expanded(
@@ -1361,12 +1378,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                     moveShipsBuoysAndWindTo(currentReplayTime);
                                   }))
                         ]),
-                      if (testing)
-                        Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          const Divider(),
-                          Text('displayDelay: ${displayDelay / 1000} seconden'),
-                          Text('predictTime: ${predictTime / 1000} seconden')
-                        ]),
                     ])),
               ]))),
       const SizedBox(width: 41),
@@ -1546,7 +1557,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           const Divider(),
                           Row(children: [
                             const SizedBox(width: 5),
-                            const Text('Wind'),
+                            const Text('Windpijlen'),
                             const Spacer(),
                             Checkbox(
                                 visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
@@ -1564,7 +1575,22 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                       }
                                       prefs.setBool('windmarkers', showWindMarkers);
                                     }))
-                          ])
+                          ]),
+                          Row(children: [
+                            const SizedBox(width: 20),
+                            const Text('met simulatie'),
+                            const Spacer(),
+                            Checkbox(
+                                visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                                activeColor: menuForegroundColor,
+                                checkColor: showWindMarkers ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
+                                side: BorderSide(color: menuForegroundColor),
+                                value: showWindParticles,
+                                onChanged: (value) => setState(() {
+                                      showWindParticles = !showWindParticles;
+                                      prefs.setBool('windparticles', showWindParticles);
+                                    }))
+                          ]),
                         ]),
                       if (route['features'] != null ||
                           (replayTracks['gpsbuoy'] != null && replayTracks['gpsbuoy'].length != 0)) // route and routelabels
@@ -1577,7 +1603,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                             Checkbox(
                                 visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                 activeColor: menuForegroundColor,
-                                checkColor: menuBackgroundColor,
+                                checkColor: showRoute ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
                                 side: BorderSide(color: menuForegroundColor),
                                 value: showRoute,
                                 onChanged: (_) => setState(() {
@@ -1688,22 +1714,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 onChanged: (_) => setState(() => replayLoop = !replayLoop))
                           ])
                         ]),
-                      if (testing)
-                        Wrap(children: [
-                          const Divider(),
-                          Row(children: [
-                            const SizedBox(width: 5),
-                            const Text('Move while not in focus'),
-                            const Spacer(),
-                            Checkbox(
-                                visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
-                                activeColor: menuForegroundColor,
-                                checkColor: menuBackgroundColor,
-                                side: BorderSide(color: menuForegroundColor),
-                                value: moveWhileNotInFocus,
-                                onChanged: (_) => setState(() => moveWhileNotInFocus = !moveWhileNotInFocus))
-                          ])
-                        ])
                     ]))
               ]))),
       const SizedBox(width: 41)
@@ -1735,6 +1745,45 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   )
                 ]))),
       ),
+      const SizedBox(width: 41),
+    ]);
+  }
+
+  Row uiTestingMenu() {
+    return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+      SingleChildScrollView(
+          child: Container(
+              width: 275,
+              color: menuBackgroundColor,
+              padding: EdgeInsets.fromLTRB(10, menuOffset, 10, 10),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  const Text('Testing'),
+                  const Spacer(),
+                  IconButton(
+                      icon: Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor),
+                      onPressed: () => setState(() => showTestingMenu = false)),
+                ]),
+                Text('msg: ${(testing) ? debugString : ''}'),
+                Wrap(children: [
+                  const Divider(),
+                  Row(children: [
+                    const Text('Move ships and wind particles\nwhile not in focus'),
+                    const Spacer(),
+                    Checkbox(
+                        visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
+                        activeColor: menuForegroundColor,
+                        checkColor: menuBackgroundColor,
+                        side: BorderSide(color: menuForegroundColor),
+                        value: moveWhileNotInFocus,
+                        onChanged: (_) => setState(() => moveWhileNotInFocus = !moveWhileNotInFocus))
+                  ])
+                ]),
+                Divider(),
+                Text('displayDelay: ${displayDelay / 1000} seconden'),
+                Text('predictTime: ${predictTime / 1000} seconden'),
+                Text('signalLostTime: ${signalLostTime / 1000} seconden')
+              ]))),
       const SizedBox(width: 41),
     ]);
   }
@@ -1853,6 +1902,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // Here we start up the rest of the initialization of our app
   //
   void onMapCreated() async {
+    mapReady = true;
     // Get the list of events ready for selection
     dirList = await getDirList();
     eventNameList = dirList.keys.toList()..sort();
