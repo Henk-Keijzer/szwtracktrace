@@ -39,7 +39,7 @@ class WindParticlesState extends State<WindParticles> with WidgetsBindingObserve
 
   void onTick(Duration elapsed) {
     var screenSize = screenHeight * screenWidth;
-    if (showWindMarkers && oldScreenSize == screenSize) {
+    if (showWindMarkers && showWindParticles && oldScreenSize == screenSize) {
       if (particles.isEmpty) {
         // just create a number of wind particles, the number is based on the screensize
         for (int i = 0; i < (screenSize) ~/ 6000; i++) {

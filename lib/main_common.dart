@@ -874,6 +874,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 ),
               _ => const SizedBox.shrink()
             },
+          if (!mapReady) windParticles, // ensure windParticles and its ticker is initialized in time
           if (showWindMarkers &&
               showWindParticles &&
               replayTracks['windtracks'] != null &&
@@ -2844,7 +2845,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         var replayWindStation = replayTracks['windtracks'][index];
         int laststamp = replayWindStation['stamp'].last;
         for (int k = 0; k < liveWindStation['stamp'].length; k++) {
-          if (liveWindStation['stamp'][k] > laststamp) {
+          if ((liveWindStation['stamp'][k] > laststamp) && (liveWindStation['speed'] != 0)) {
             replayWindStation['stamp'].add(liveWindStation['stamp'][k]);
             replayWindStation['lat'].add(liveWindStation['lat'][k]);
             replayWindStation['lon'].add(liveWindStation['lon'][k]);
@@ -2853,8 +2854,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           }
         }
       } else {
-        // we had no weather station with this name yet
-        replayTracks['windtracks'].add(liveWindStation); // add the complete weather station
+        if (liveWindStation['speed'] != 0) {
+          // we had no weather station with this name yet
+          replayTracks['windtracks'].add(liveWindStation); // add the complete weather station
+        }
       }
     });
     //
