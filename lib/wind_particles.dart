@@ -31,7 +31,7 @@ class WindParticlesState extends State<WindParticles> with WidgetsBindingObserve
   }
 
   @override
-  Widget build(BuildContext context) {
+  CustomPaint build(BuildContext context) {
     return CustomPaint(
       painter: WindParticlesPainter(particles),
     );

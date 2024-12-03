@@ -17,7 +17,12 @@ optimalisaties:
 - live en replay verder integreren en ook live door (replay)ticker aansturen
 
 ----------------------------------------------------------------------------------------------------
-Version 3.3.1
+Version 3.3.2
+
+- no menus if event in the past and eventStart == eventEnd
+- package http replaced by package dio (was already used by flutter_map)
+
+Version 3.3.1, released on November 29 2024
 
 - Improvement: small down/up arrow in appbar title for eventmenu, title with ellipsis on narrow screens
 - Improvement: live/replay date-time string with ellipsis on narrow screens
