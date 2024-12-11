@@ -11,10 +11,10 @@
 // library imports
 //
 import 'dart:async';
-import 'dart:core';
 import 'dart:convert';
-import 'dart:math';
+import 'dart:core';
 import 'dart:io';
+import 'dart:math';
 
 //
 import 'package:bordered_text/bordered_text.dart';
@@ -202,7 +202,7 @@ List<Marker> infoWindowMarkerList = []; // although there is max 1 infowindow, w
 String infoWindowId = '';
 // info for the centerwind and windparticles
 const nrWindStationsForCenterWindCalculation = 3; // should we make this a flutter_config or eventInfo constant???
-WindParticles windParticles = WindParticles();
+late WindParticles windParticles;
 double windParticleDirection = 0;
 int windParticleSpeed = 0;
 //
@@ -237,7 +237,6 @@ List<int> windTimeIndex = []; // for each weather station the time position in t
 late Timer preEventTimer;
 late Timer liveTimer;
 late Ticker replayTicker;
-late Ticker windTicker;
 int liveSecondsTimer = 60;
 int currentReplayTime = 0;
 bool replayRunning = false;
@@ -296,6 +295,7 @@ String queryPlayString = '::';
 final GlobalKey dropEventKey = GlobalKey();
 final GlobalKey dropYearKey = GlobalKey();
 final GlobalKey dropDayKey = GlobalKey();
+final GlobalKey wpKey = GlobalKey();
 //
 DateFormat dtFormat = DateFormat("d MMM y, HH:mm", 'nl');
 DateFormat dtsFormat = DateFormat("d MMM y, HH:mm:ss", 'nl');
@@ -314,6 +314,7 @@ void mainCommon({required String serverUrl}) async {
   packageInfo = await PackageInfo.fromPlatform(); // who and where are we
   prefs = await SharedPreferencesWithCache.create(cacheOptions: SharedPreferencesWithCacheOptions()); // get access to local storage
   await initializeDateFormatting('nl'); // initialize date formatting
+  windParticles = WindParticles(key: wpKey, density: 6000);
   //
   // ----- SERVER
   serverForSharing = serverUrl;
@@ -518,7 +519,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             if (eventStatus == EventStatus.preEvent) preEventTimer.cancel();
             if (eventStatus == EventStatus.live) liveTimer.cancel();
             if (replayTicker.isActive) replayTicker.stop();
-            if (windTicker.isActive) windTicker.stop();
+            dynamic wpState = wpKey.currentState;
+            wpState.pause();
           });
         case AppLifecycleState.resumed:
           setState(() {
@@ -530,7 +532,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               liveTimer = Timer.periodic(const Duration(milliseconds: hfUpdateInterval), (_) => liveTimerRoutine());
             }
             if (replayRunning && !replayTicker.isActive) replayTicker.start();
-            if (showWindMarkers && showWindParticles && replayTracks['windtracks'].isNotEmpty && !windTicker.isActive) windTicker.start();
+            if (showWindMarkers && showWindParticles && (replayTracks['windtracks'] != null) && replayTracks['windtracks'].isNotEmpty) {
+              dynamic wpState = wpKey.currentState;
+              wpState.resume();
+            }
           });
       }
     }
@@ -627,6 +632,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 onDoubleTap: () {
                   testing = !testing;
                   setUnsetTestingActions();
+                  setState(() {});
                 },
                 child: Image.network('$server$appIconUrl'))),
         title: InkWell(
@@ -881,7 +887,6 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 ),
               _ => const SizedBox.shrink()
             },
-          if (!mapReady) windParticles,
           if (showWindMarkers &&
               showWindParticles &&
               replayTracks['windtracks'] != null &&
@@ -1129,7 +1134,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   offset: const Offset(15, 35),
                   itemBuilder: (_) {
                     return eventNameList
-                        .map((event) => PopupMenuItem(height: 25, value: event, child: Text(event, style: const TextStyle(fontSize: 15))))
+                        .map((event) => PopupMenuItem(
+                            height: 25,
+                            value: event,
+                            child: Text(event,
+                                style: TextStyle(fontSize: 15, color: (event == eventName) ? Colors.deepOrange : Colors.black))))
                         .toList(growable: false);
                   },
                   onSelected: (selectedEvent) => selectEventYear(selectedEvent),
@@ -1145,7 +1154,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                     offset: const Offset(15, 35),
                     itemBuilder: (_) {
                       return eventYearList
-                          .map((year) => PopupMenuItem(height: 25, value: year, child: Text(year, style: const TextStyle(fontSize: 15))))
+                          .map((year) => PopupMenuItem(
+                              height: 25,
+                              value: year,
+                              child: Text(year,
+                                  style: TextStyle(fontSize: 15, color: (year == eventYear) ? Colors.deepOrange : Colors.black))))
                           .toList(growable: false);
                     },
                     onSelected: (selectedYear) => selectEventDay(selectedYear),
@@ -1161,8 +1174,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                     offset: const Offset(15, 35),
                     itemBuilder: (_) {
                       return eventDayList
-                          .map((dayRace) =>
-                              PopupMenuItem(height: 25, value: dayRace, child: Text(dayRace, style: const TextStyle(fontSize: 15))))
+                          .map((dayRace) => PopupMenuItem(
+                              height: 25,
+                              value: dayRace,
+                              child: Text(dayRace,
+                                  style: TextStyle(fontSize: 15, color: (dayRace == eventDay) ? Colors.deepOrange : Colors.black))))
                           .toList(growable: false);
                     },
                     onSelected: (selectedDay) => newEventSelected(selectedDay),
@@ -2101,6 +2117,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       showRoute = true;
       showRouteLabels = true;
       buildRoute(move: true); // and move the map to the bounds of the route
+      setState(() {});
     }
     showProgress = false;
     // hide the menu when we are running in a web iframe
@@ -2167,10 +2184,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     autoFollow = true;
     autoZoom = true; // zoom to all ships at the start
     moveShipsBuoysAndWindTo(currentReplayTime - displayDelay);
-    //autoZoom = false; // but turn of autozoom when running
     liveSecondsTimer = trailsUpdateInterval * 1000 ~/ hfUpdateInterval;
     liveTimer = Timer.periodic(const Duration(milliseconds: hfUpdateInterval), (_) => liveTimerRoutine());
-    setState(() {}); // redraw the UI
+//    setState(() {}); // redraw the UI
     // hide the event menu and the progress indicator after 1.5 seconds
     Timer(const Duration(milliseconds: 1500), () => setState(() => showEventMenu = showProgress = false));
   }
@@ -2260,8 +2276,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     if (shipList.isEmpty) showRouteLabels = true; // no ships (yet), always show routelabels
     if (route['features'] != null) buildRoute(move: true); // and move the map to the bounds of the route
     moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
-    setState(() {}); // redraw the UI
-    Timer(const Duration(seconds: 2), () => setState(() => showEventMenu = showProgress = false));
+    Timer(const Duration(milliseconds: 1500), () => setState(() => showEventMenu = showProgress = false));
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
@@ -2652,9 +2667,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     if (showWindMarkers && replayTracks['windtracks'].length >= nrWindStationsForCenterWindCalculation) {
       // calculate average windspeed and direction at the middle of the screen
       ({int heading, double speed}) center = centerWind(nrWindStationsForCenterWindCalculation);
-      // prepare some data for the wind particle widget
-      windParticleDirection = (((center.heading + 90 + 720) % 360) * pi / 180);
-      windParticleSpeed = knotsToBft(center.speed);
+      // set heading and speed in the windParticles widget
+      windParticles.speed = knotsToBft(center.speed);
+      windParticles.direction = center.heading;
       // create infowindowdata and a marker in the topleftcorner of the screen
       String infoWindowTitle = 'Wind midden van de kaart\nobv nabije weerstations';
       String infoWindowText = '${center.speed.toStringAsFixed(1)} knopen, ${knotsToBft(center.speed)} Bft';
@@ -2769,7 +2784,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           padding:
               EdgeInsets.fromLTRB(screenWidth * 0.15, menuOffset + screenHeight * 0.10, screenWidth * 0.15, screenHeight * 0.10 + 60)));
     }
-    setState(() {}); // redraw the UI
+//    setState(() {}); // redraw the UI
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
@@ -3027,9 +3042,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
-  // All timestamps in the file we receive from the server are in seconds. In the app we work with milliseconds so after getting the
-  // jsonfile into a map, we need to multiply all stamps with 1000. To save us some null-checking lateron, we also add empty ship-, buoy-
-  // and windtracks just in case they were not in the file
+  // All timestamps in the file we receive from the server (live or replay) are in seconds. In the app we work with milliseconds so after
+  // getting the jsonfile into a map, we need to multiply all stamps with 1000. To save us some null-checking lateron, we also add empty
+  // ship-, buoy- and windtracks just in case they were not in the file
   //
   Map<String, dynamic> convertTimes(track) {
     track['starttime'] *= 1000;

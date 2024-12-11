@@ -19,8 +19,11 @@ optimalisaties:
 ----------------------------------------------------------------------------------------------------
 Version 3.3.2
 
-- no menus if event in the past and eventStart == eventEnd
+- no menus & sliders if event in the past and eventStart == eventEnd
 - package http replaced by package dio (was already used by flutter_map)
+- selected item colored red in drop down lists in uiEventMenu
+- WindParticles widget implemented as a 'package' (no interdependencies any more)
+-
 
 Version 3.3.1, released on November 29 2024
 

@@ -1,61 +1,95 @@
-// lib/wind_particles.dart
-
-import 'package:flutter/material.dart';
-import 'package:szwtracktrace/default_maptileproviders.dart';
+///
+/// lib/wind_particles.dart
+/// widget to paint windsimulation / windparticles on the screen
+/// Assign to a variable and include the variable in your tree
+///
 import 'dart:math';
 
-import 'package:szwtracktrace/main_common.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
+import 'package:szwtracktrace/default_maptileproviders.dart';
 
+//ignore: must_be_immutable
 class WindParticles extends StatefulWidget {
-  const WindParticles({super.key});
+  WindParticles({super.key, this.density = 6000, this.direction = 0, this.speed = 0});
+
+  /// the number of windparticles on the screen as: width * heigth / density i.e. the larger the less particles
+  int density;
+
+  /// heading in degrees
+  int direction;
+
+  /// speed in beaufort
+  int speed;
 
   @override
   WindParticlesState createState() => WindParticlesState();
 }
 
 class WindParticlesState extends State<WindParticles> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
-  List<Particle> particles = [];
-  double oldScreenSize = 0;
+  List<Particle> _particles = [];
+  double _oldScreenSize = 0;
+  double _dir = 0;
+  int _sp = 0;
+  late Ticker _windTicker;
 
   @override
   void initState() {
     super.initState();
-    windTicker = createTicker(onTick);
-    windTicker.start();
+    WidgetsBinding.instance.addObserver(this); // needed to get the MediaQuery for screen size working
+    _windTicker = createTicker(onTick);
+    _windTicker.start();
+  }
+
+  /// call pause and resume to temporarily stop moving the particles, for example when the app goes to the background
+  /// 1. create the widget with a key, 2. then use the key to get the currentstate, 3. call pause/resume as a method of this state
+  ///   windParticleWidget
+  ///   dynamic state = key.currentState;
+  ///   state.pause();    or    state.resume();
+  void pause() {
+    if (_windTicker.isTicking) _windTicker.stop();
+  }
+
+  void resume() {
+    if (!_windTicker.isTicking) _windTicker.start();
   }
 
   @override
   void dispose() {
-    windTicker.dispose();
+    _windTicker.dispose();
     super.dispose();
   }
 
   @override
   CustomPaint build(BuildContext context) {
     return CustomPaint(
-      painter: WindParticlesPainter(particles),
+      painter: WindParticlesPainter(_particles),
     );
   }
 
   void onTick(Duration elapsed) {
-    var screenSize = screenHeight * screenWidth;
-    if (showWindMarkers && showWindParticles && oldScreenSize == screenSize) {
-      if (particles.isEmpty) {
+    _dir = (((widget.direction + 90 + 720) % 360) * pi / 180);
+    _sp = widget.speed;
+    var screenWidth = MediaQuery.of(context).size.width;
+    var screenHeight = MediaQuery.of(context).size.height;
+    var screenSize = screenWidth * screenHeight;
+    if (_oldScreenSize == screenSize) {
+      if (_particles.isEmpty) {
         // just create a number of wind particles, the number is based on the screensize
-        for (int i = 0; i < (screenSize) ~/ 6000; i++) {
-          particles.add(Particle());
+        for (int i = 0; i < (screenSize ~/ widget.density); i++) {
+          _particles.add(Particle(width: screenWidth, height: screenHeight));
         }
       }
       // and update all particles using data prepared by the rotateWindTo(time) routine in main_common
       setState(() {
-        for (var particle in particles) {
-          particle.update(windParticleDirection, windParticleSpeed);
+        for (var particle in _particles) {
+          particle.update(_dir, _sp);
         }
       });
     } else {
       // no need to show anything, clear-out all particles
-      particles = [];
-      oldScreenSize = screenHeight * screenWidth;
+      _particles = [];
+      _oldScreenSize = screenSize;
       setState(() {});
     }
   }
@@ -65,10 +99,12 @@ class Particle {
   late double x, y;
   List<Offset> trail = [];
   Random random = Random();
+  double width;
+  double height;
 
-  Particle() {
-    x = random.nextDouble() * screenWidth;
-    y = random.nextDouble() * screenHeight;
+  Particle({this.width = 0, this.height = 0}) {
+    x = random.nextDouble() * width;
+    y = random.nextDouble() * height;
   }
 
   void update(direction, speed) {
@@ -79,23 +115,23 @@ class Particle {
       trail.removeAt(0);
     }
     // first remove the trail if we are outside of the screen
-    if (x < 0 || x > screenWidth || y < 0 || y > screenHeight) trail = [];
-    // thyen wrap around the screen edges with random reappearance at the other side of the screen
+    if (x < 0 || x > width || y < 0 || y > height) trail = [];
+    // then wrap around the screen edges with random reappearance at the other side of the screen
     if (x < 0) {
-      x = screenWidth;
-      y = random.nextDouble() * screenHeight;
+      x = width;
+      y = random.nextDouble() * height;
     }
-    if (x > screenWidth) {
+    if (x > width) {
       x = 0;
-      y = random.nextDouble() * screenHeight;
+      y = random.nextDouble() * height;
     }
     if (y < 0) {
-      y = screenHeight;
-      x = random.nextDouble() * screenWidth;
+      y = height;
+      x = random.nextDouble() * width;
     }
-    if (y > screenHeight) {
+    if (y > height) {
       y = 0;
-      x = random.nextDouble() * screenWidth;
+      x = random.nextDouble() * width;
     }
   }
 }
