@@ -3,6 +3,8 @@
 /// widget to paint windsimulation / windparticles on the screen
 /// Assign to a variable and include the variable in your tree
 ///
+library;
+
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -41,11 +43,16 @@ class WindParticlesState extends State<WindParticles> with WidgetsBindingObserve
     _windTicker.start();
   }
 
+  ///
   /// call pause and resume to temporarily stop moving the particles, for example when the app goes to the background
-  /// 1. create the widget with a key, 2. then use the key to get the currentstate, 3. call pause/resume as a method of this state
-  ///   windParticleWidget
-  ///   dynamic state = key.currentState;
-  ///   state.pause();    or    state.resume();
+  /// 1. create the widget with a key:
+  ///   WindParticles windParticleWidget = WindParticles(key: wpKey);
+  /// 2. insert the widget in the tree, for example as a child of flutter_map)
+  /// 3. then use the key to get the currentstate
+  ///   dynamic wpState = wpKey.currentState;
+  /// 4. call pause/resume as a method of this state  dynamic state = wpKey.currentState;
+  ///   wpState?.pause();    or    state?.resume();     // note ?. as wpState may be null
+  ///
   void pause() {
     if (_windTicker.isTicking) _windTicker.stop();
   }
@@ -56,6 +63,7 @@ class WindParticlesState extends State<WindParticles> with WidgetsBindingObserve
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _windTicker.dispose();
     super.dispose();
   }
