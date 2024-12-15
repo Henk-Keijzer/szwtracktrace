@@ -277,6 +277,8 @@ String labelOverlayType = '';
 bool showWindMarkers = false;
 bool showWindParticles = false;
 bool windPaused = false;
+int windParticlesSpeed = 0;
+int windParticlesDirection = 0;
 bool showRoute = true;
 bool showRouteLabels = false;
 bool showShipLabels = true;
@@ -312,7 +314,7 @@ void mainCommon({required String serverUrl}) async {
   packageInfo = await PackageInfo.fromPlatform(); // who and where are we
   prefs = await SharedPreferencesWithCache.create(cacheOptions: SharedPreferencesWithCacheOptions()); // get access to local storage
   await initializeDateFormatting('nl'); // initialize date formatting
-  windParticles = WindParticles(); // create the windparticles widget (will be one of the flutter map layers)
+//  windParticles = WindParticles(); // create the windparticles widget (will be one of the flutter map layers)
   //
   // ----- SERVER
   serverForSharing = serverUrl; // save the complete server URL, we need it for the share button function
@@ -882,12 +884,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               _ => const SizedBox.shrink()
             },
           // 4. the windParticle layer
-          if (!windPaused &&
-              showWindMarkers &&
-              showWindParticles &&
-              replayTracks['windtracks'] != null &&
-              replayTracks['windtracks'].length >= nrWindStationsForCenterWindCalculation)
-            windParticles,
+          if (showWindMarkers && showWindParticles && replayTracks['windtracks'] != null)
+            WindParticles(direction: windParticlesDirection, speed: windParticlesSpeed, animate: !windPaused, color: markerBackgroundColor),
           // 5. the scalebar
           Scalebar(
               alignment: Alignment.topLeft,
@@ -2671,13 +2669,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     windMarkerList.last = const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
     if (showWindMarkers && replayTracks['windtracks'].length >= nrWindStationsForCenterWindCalculation) {
       // calculate average windspeed and direction at the middle of the screen
-      ({int heading, double speed}) center = centerWind(nrWindStationsForCenterWindCalculation);
-      // set heading and speed in the windParticles widget
-      windParticles.speed = knotsToBft(center.speed);
-      windParticles.direction = center.heading;
+      ({int heading, double speed}) center = centerWind(replayTracks['windtracks'], nrWindStationsForCenterWindCalculation);
+      // set heading and speed for the windParticles widget
+      windParticlesSpeed = knotsToBft(center.speed);
+      windParticlesDirection = center.heading;
       // create infowindowdata and a marker in the topleftcorner of the screen
       String infoWindowTitle = 'Wind midden van de kaart\nobv nabije weerstations';
-      String infoWindowText = '${center.speed.toStringAsFixed(1)} knopen, ${knotsToBft(center.speed)} Bft';
+      String infoWindowText = '${center.speed.toStringAsFixed(1)} knopen, $windParticlesSpeed Bft';
       String toolTipText = infoWindowText;
       String fillColor = knotsToColor(center.speed);
       String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="10" '
@@ -3120,51 +3118,54 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //----------------------------------------------------------------------------------------------------------------------------------------
   // routine to calculate the weighted average wind speed and direction based on nrStations nearest to the center of the screen
   //
-  ({int heading, double speed}) centerWind(nrStations) {
-    var windTracks = replayTracks['windtracks'];
-    Map<int, double> unsortedDistanceTable = {}; // map with station index in the windTracks as key and the distance as value
-    var distance = const Distance();
-    List<double> eastWestVectors = [];
-    List<double> northSouthVectors = [];
-    List<double> distanceFactors = [];
-    double eastWestSum = 0;
-    double northSouthSum = 0;
-    // get the distances from the center of the screen to all Buienradar stations
-    for (int i = 0; i < windTracks.length; i++) {
-      unsortedDistanceTable.addAll({
-        i: distance.as(
-            LengthUnit.Meter, mapController.camera.center, LatLng(windTracks[i]['lat'][0].toDouble(), windTracks[i]['lon'][0].toDouble()))
+  ({int heading, double speed}) centerWind(windTracks, nrStations) {
+    if (windTracks.length >= nrStations) {
+      Map<int, double> unsortedDistanceTable = {}; // map with station index in the windTracks as key and the distance as value
+      var distance = const Distance();
+      List<double> eastWestVectors = [];
+      List<double> northSouthVectors = [];
+      List<double> distanceFactors = [];
+      double eastWestSum = 0;
+      double northSouthSum = 0;
+      // get the distances from the center of the screen to all Buienradar stations
+      for (int i = 0; i < windTracks.length; i++) {
+        unsortedDistanceTable.addAll({
+          i: distance.as(
+              LengthUnit.Meter, mapController.camera.center, LatLng(windTracks[i]['lat'][0].toDouble(), windTracks[i]['lon'][0].toDouble()))
+        });
+      }
+      // sort the map from near to far (values)
+      var distanceTable = unsortedDistanceTable.entries.toList();
+      distanceTable.sort((e1, e2) {
+        var diff = e1.value.compareTo(e2.value);
+        if (diff == 0) diff = e1.key.compareTo(e2.key);
+        return diff;
       });
+      // get relevant info of the nearest stations in a number of lists
+      // first the sum of the distances to the nearest stations
+      double sumDistances = distanceTable.take(nrStations).fold(0, (sum, element) => sum + element.value);
+      // now create a list with 'reverse' distancefactors (nearest has highest value, but sum is higher then 1.0)
+      // and in the same loop lists for East-West and NorthSouth vectors using the speed and direction values in windTracks
+      for (int i = 0; i < nrStations; i++) {
+        distanceFactors.add(1 - (distanceTable[i].value / sumDistances));
+        var windDirection = (windTracks[distanceTable[i].key]['course'][windTimeIndex[distanceTable[i].key]] * pi / 180).toDouble();
+        var windSpeed = windTracks[distanceTable[i].key]['speed'][windTimeIndex[distanceTable[i].key]].toDouble();
+        eastWestVectors.add(windSpeed * cos(windDirection));
+        northSouthVectors.add(windSpeed * sin(windDirection));
+      }
+      // normalize the 'reversed' distancefactors to 1.0 (again) and use the elements to
+      // calculate the weighted vector at the center of the screen
+      sumDistances = distanceFactors.sum;
+      distanceFactors = distanceFactors.map((factor) => factor / sumDistances).toList();
+      for (int i = 0; i < nrStations; i++) {
+        eastWestSum += eastWestVectors[i] * distanceFactors[i];
+        northSouthSum += northSouthVectors[i] * distanceFactors[i];
+      }
+      // and return the result
+      return (heading: atan2(northSouthSum, eastWestSum) * 180 ~/ pi, speed: sqrt(pow(eastWestSum, 2) + pow(northSouthSum, 2)));
+    } else {
+      return (heading: 0, speed: 0);
     }
-    // sort the map from near to far (values)
-    var distanceTable = unsortedDistanceTable.entries.toList();
-    distanceTable.sort((e1, e2) {
-      var diff = e1.value.compareTo(e2.value);
-      if (diff == 0) diff = e1.key.compareTo(e2.key);
-      return diff;
-    });
-    // get relevant info of the nearest stations in a number of lists
-    // first the sum of the distances to the nearest stations
-    double sumDistances = distanceTable.take(nrStations).fold(0, (sum, element) => sum + element.value);
-    // now create a list with 'reverse' distancefactors (nearest has highest value, but sum is higher then 1.0)
-    // and in the same loop lists for East-West and NorthSouth vectors using the speed and direction values in windTracks
-    for (int i = 0; i < nrStations; i++) {
-      distanceFactors.add(1 - (distanceTable[i].value / sumDistances));
-      var windDirection = (windTracks[distanceTable[i].key]['course'][windTimeIndex[distanceTable[i].key]] * pi / 180).toDouble();
-      var windSpeed = windTracks[distanceTable[i].key]['speed'][windTimeIndex[distanceTable[i].key]].toDouble();
-      eastWestVectors.add(windSpeed * cos(windDirection));
-      northSouthVectors.add(windSpeed * sin(windDirection));
-    }
-    // normalize the 'reversed' distancefactors to 1.0 (again) and use the elements to
-    // calculate the weighted vector at the center of the screen
-    sumDistances = distanceFactors.sum;
-    distanceFactors = distanceFactors.map((factor) => factor / sumDistances).toList();
-    for (int i = 0; i < nrStations; i++) {
-      eastWestSum += eastWestVectors[i] * distanceFactors[i];
-      northSouthSum += northSouthVectors[i] * distanceFactors[i];
-    }
-    // and return the result
-    return (heading: atan2(northSouthSum, eastWestSum) * 180 ~/ pi, speed: sqrt(pow(eastWestSum, 2) + pow(northSouthSum, 2)));
   }
 
   void setUnsetTestingActions() async {
