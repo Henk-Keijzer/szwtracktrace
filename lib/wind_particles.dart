@@ -34,6 +34,7 @@ class WindParticlesState extends State<WindParticles> with WidgetsBindingObserve
   double _dir = 0;
   int _sp = 0;
   late Ticker _windTicker;
+  int _cntr = 1;
 
   @override
   void initState() {
@@ -41,24 +42,6 @@ class WindParticlesState extends State<WindParticles> with WidgetsBindingObserve
     WidgetsBinding.instance.addObserver(this); // needed to get the MediaQuery for screen size working
     _windTicker = createTicker(onTick);
     _windTicker.start();
-  }
-
-  ///
-  /// call pause and resume to temporarily stop moving the particles, for example when the app goes to the background
-  /// 1. create the widget with a key:
-  ///   WindParticles windParticleWidget = WindParticles(key: wpKey);
-  /// 2. insert the widget in the tree, for example as a child of flutter_map)
-  /// 3. then use the key to get the currentstate
-  ///   dynamic wpState = wpKey.currentState;
-  /// 4. call pause/resume as a method of this state  dynamic state = wpKey.currentState;
-  ///   wpState?.pause();    or    state?.resume();     // note ?. as wpState may be null
-  ///
-  void pause() {
-    if (_windTicker.isTicking) _windTicker.stop();
-  }
-
-  void resume() {
-    if (!_windTicker.isTicking) _windTicker.start();
   }
 
   @override
@@ -75,30 +58,33 @@ class WindParticlesState extends State<WindParticles> with WidgetsBindingObserve
     );
   }
 
-  void onTick(Duration elapsed) {
-    _dir = (((widget.direction + 90 + 720) % 360) * pi / 180);
-    _sp = widget.speed;
-    var screenWidth = MediaQuery.of(context).size.width;
-    var screenHeight = MediaQuery.of(context).size.height;
-    var screenSize = screenWidth * screenHeight;
-    if (_oldScreenSize == screenSize) {
-      if (_particles.isEmpty) {
-        // just create a number of wind particles, the number is based on the screensize
-        for (int i = 0; i < (screenSize ~/ widget.density); i++) {
-          _particles.add(Particle(width: screenWidth, height: screenHeight));
+  void onTick(_) {
+    if (_cntr-- <= 0) {
+      _cntr = 2;
+      _dir = ((widget.direction + 90 + 720) % 360) * pi / 180;
+      _sp = widget.speed;
+      var screenWidth = MediaQuery.of(context).size.width;
+      var screenHeight = MediaQuery.of(context).size.height;
+      var screenSize = screenWidth * screenHeight;
+      if (_oldScreenSize == screenSize) {
+        if (_particles.isEmpty) {
+          // just create a number of wind particles, the number is based on the screensize
+          for (int i = 0; i < (screenSize ~/ widget.density); i++) {
+            _particles.add(Particle(width: screenWidth, height: screenHeight));
+          }
         }
+        // and update all particles using direction and speed set in the widget
+        setState(() {
+          for (var particle in _particles) {
+            particle.update(_dir, _sp);
+          }
+        });
+      } else {
+        // no need to show anything, clear-out all particles
+        _particles = [];
+        _oldScreenSize = screenSize;
+        setState(() {});
       }
-      // and update all particles using data prepared by the rotateWindTo(time) routine in main_common
-      setState(() {
-        for (var particle in _particles) {
-          particle.update(_dir, _sp);
-        }
-      });
-    } else {
-      // no need to show anything, clear-out all particles
-      _particles = [];
-      _oldScreenSize = screenSize;
-      setState(() {});
     }
   }
 }

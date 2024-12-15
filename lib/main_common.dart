@@ -276,6 +276,7 @@ String labelOverlayType = '';
 // default values for some booleans, selectable from the mapmenu
 bool showWindMarkers = false;
 bool showWindParticles = false;
+bool windPaused = false;
 bool showRoute = true;
 bool showRouteLabels = false;
 bool showShipLabels = true;
@@ -293,7 +294,6 @@ String queryPlayString = '::';
 final GlobalKey dropEventKey = GlobalKey();
 final GlobalKey dropYearKey = GlobalKey();
 final GlobalKey dropDayKey = GlobalKey();
-final GlobalKey wpKey = GlobalKey();
 //
 DateFormat dtFormat = DateFormat("d MMM y, HH:mm", 'nl');
 DateFormat dtsFormat = DateFormat("d MMM y, HH:mm:ss", 'nl');
@@ -312,7 +312,7 @@ void mainCommon({required String serverUrl}) async {
   packageInfo = await PackageInfo.fromPlatform(); // who and where are we
   prefs = await SharedPreferencesWithCache.create(cacheOptions: SharedPreferencesWithCacheOptions()); // get access to local storage
   await initializeDateFormatting('nl'); // initialize date formatting
-  windParticles = WindParticles(key: wpKey); // create the windparticles widget (will be one of the flutter map layers)
+  windParticles = WindParticles(); // create the windparticles widget (will be one of the flutter map layers)
   //
   // ----- SERVER
   serverForSharing = serverUrl; // save the complete server URL, we need it for the share button function
@@ -520,8 +520,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             if (eventStatus == EventStatus.preEvent) preEventTimer.cancel();
             if (eventStatus == EventStatus.live) liveTimer.cancel();
             if (replayTicker.isActive) replayTicker.stop();
-            dynamic wpState = wpKey.currentState;
-            wpState?.pause();
+            windPaused = true;
           });
         case AppLifecycleState.resumed:
           setState(() {
@@ -533,10 +532,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               liveTimer = Timer.periodic(const Duration(milliseconds: hfUpdateInterval), (_) => liveTimerRoutine());
             }
             if (replayRunning && !replayTicker.isActive) replayTicker.start();
-            if (showWindMarkers && showWindParticles && (replayTracks['windtracks'] != null) && replayTracks['windtracks'].isNotEmpty) {
-              dynamic wpState = wpKey.currentState;
-              wpState?.resume();
-            }
+            windPaused = false;
           });
       }
     }
@@ -886,7 +882,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               _ => const SizedBox.shrink()
             },
           // 4. the windParticle layer
-          if (showWindMarkers &&
+          if (!windPaused &&
+              showWindMarkers &&
               showWindParticles &&
               replayTracks['windtracks'] != null &&
               replayTracks['windtracks'].length >= nrWindStationsForCenterWindCalculation)
@@ -1615,7 +1612,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                   infoWindowMarkerList = [];
                                 }
                                 buildRoute();
-                                showGPSBuoys(currentReplayTime);
+                                updateGPSBuoys(currentReplayTime);
                                 prefs.setBool('showroute', showRoute);
                               }))
                     ]),
@@ -1633,7 +1630,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 showRouteLabels = !showRouteLabels;
                                 buildRoute();
                                 gpsBuoyTimeIndex = List.filled(gpsBuoyTimeIndex.length, -1, growable: true);
-                                showGPSBuoys(currentReplayTime);
+                                updateGPSBuoys(currentReplayTime);
                                 prefs.setBool('routelabels', showRouteLabels);
                               }))
                     ])
@@ -2334,25 +2331,37 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // 'move' is default to true.
   // Set it to false when you only want to change the backgroundcolor of the markers or turn on/off the route and or labels
   //
-  void moveShipsBuoysAndWindTo(time, {bool moveMap = true}) {
+  void moveShipsBuoysAndWindTo(int time, {bool moveMap = true}) {
     setState(() {
       moveShipsTo(time, moveMap: moveMap);
-      if (showRoute) showGPSBuoys(time);
+      if (showRoute) updateGPSBuoys(time);
       if (showWindMarkers && allowShowWind) rotateWindTo(time);
     });
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
-  void moveShipsTo(time, {moveMap}) {
+  void moveShipsTo(int time, {bool moveMap = true}) {
     late int timeIndex;
     LatLng calculatedPosition = const LatLng(0, 0);
     int calculatedRotation = 0;
     List<LatLng> followBounds = [];
     // loop through the ships in replayTracks
+    //
+    // for each ship we do the following:
+    // 1. find where we are in the list of timestamps of this ship
+    // 2. based on this, calculate position and rotation
+    // 3. update the followbounds if we are following this ship
+    // 4. prepare texts for tooltip, infowindow and label
+    // 5. create a clickable marker with a tooltip and three click-callback functions (right click, double click and single click)
+    // 6. update the infowindow for this ship if it is open
+    // 7. create a label next to the ship
+    // 8. build the trail behind the ship
+    //
     for (int i = 0; i < replayTracks['shiptracks'].length; i++) {
       var shipTrack = replayTracks['shiptracks'][i];
       if (shipTrack['stamp'].length > 0) {
-        // see where we are in the time track of the ship
+        // 1. find where we are in the list of timestamps of this ship
+        // 2. based on this, calculate position and rotation
         if (time <= shipTrack['stamp'].first) {
           // before the first timestamp
           timeIndex = 0; // set the track's timeIndex to the first entry
@@ -2370,7 +2379,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             // in this situation we make a prediction where the ship could be, based on the last known location, speed, time since the last
             // location and the heading
             calculatedPosition = predictPosition(LatLng(shipTrack['lat'].last.toDouble(), shipTrack['lon'].last.toDouble()),
-                shipTrack['speed'].last / 10, time - shipTrack['stamp'].last, calculatedRotation);
+                shipTrack['speed'].last / 10, time - shipTrack['stamp'].last as int, calculatedRotation);
           } else {
             calculatedPosition = LatLng(shipTrack['lat'].last.toDouble(), shipTrack['lon'].last.toDouble());
           }
@@ -2410,16 +2419,15 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         }
         shipTimeIndex[i] = timeIndex; // save the timeindex in the list of timeindices for the next run
         //
-        // Update the bounds with the calculated position of this ship (but only if we are supposed to follow this ship)
+        // 3. update the followbounds if we are following this ship
         if (following[shipTrack['name']] ?? false) {
           followBounds.add(calculatedPosition);
         }
         //
-        // make a string with the ship's speed for the infowindow and the shiplabel
+        // 4. prepare texts for tooltip, infowindow and label
         var speedString = '${(shipTrack['speed'][timeIndex] / 18.52).toStringAsFixed(1)}kn ('
             '${(shipTrack['speed'][timeIndex] / 10).toStringAsFixed(1)}km/h)';
         //
-        // make a new infowindow text with the name of the ship, the lostsignalindicator and the speed
         shipLostSignalIndicators[i] =
             ((time - (replayRunning ? shipTrack['stamp'][timeIndex] : shipTrack['stamp'].last)) > signalLostTime) ? "'" : '';
         //
@@ -2433,7 +2441,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         var svgString = '<svg width="22" height="22"><polygon points="$shipSvgPath" '
             'style="fill:${shipColorsSvg[i]};stroke:$bgColor;stroke-width:1" '
             'transform="rotate($calculatedRotation,11,11)" /></svg>';
-        // create / replace the ship marker
+        //
+        // 5. create a clickable marker with a tooltip and three click-callback functions (right click, double click and single click)
         shipMarkerList[i] = Marker(
           point: calculatedPosition,
           width: 22,
@@ -2450,9 +2459,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                         followAll = false;
                         following.forEach((k, v) => following[k] = false);
                         autoFollow = following[shipTrack['name']] = true;
-                        var saveZoom = autoZoom;
+                        var saveZoom = autoZoom; // we want moveShips to zoom to level 16 for this ship, but the original setting of
+                        // autozoom must be restored afterwards
                         autoZoom = true;
-                        moveShipsBuoysAndWindTo(currentReplayTime);
+                        moveShipsTo(currentReplayTime);
                         autoZoom = saveZoom;
                         // show the ship menu and hide any info window and ship info
                         showShipMenu = true;
@@ -2469,12 +2479,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                       }))),
         );
         //
-        // refresh the infowindow if it was open for this ship
+        // 6. update the infowindow for this ship if it is open
         if (infoWindowId == 'ship${shipTrack['name']}') {
           infoWindowMarkerList = [infoWindowMarker(title: infoWindowTitle, body: infoWindowText, link: '', point: calculatedPosition)];
         }
         //
-        // build the shipLabel
+        // 7. create a label next to the ship
         shipLabelList[i] = showShipLabels
             ? mapTextLabel(
                 calculatedPosition,
@@ -2482,7 +2492,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                     '$speedString' : '')}')
             : const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
         //
-        // build the shipTrail (note we reuse/destroy the timeIndex here...)
+        // 8. build the trail behind the ship
         var maxTrailLength = (maxReplay == 0) ? (currentReplayTime - eventStart) / 1000 ~/ 60 : maxReplay * 60;
         var displayTrailLength = (showMaxTrailLength && following[shipTrack['name']] == true) ? maxTrailLength : eventTrailLength;
         List<LatLng> trail = [calculatedPosition];
@@ -2515,7 +2525,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
 
   //----------------------------------------------------------------------------------------------------------------------------------------
   // now position all gps buoy markers
-  void showGPSBuoys(time) {
+  void updateGPSBuoys(int time) {
     int timeIndex = 0;
     for (int i = 0; i < replayTracks['buoytracks'].length; i++) {
       if (!showRoute) {
@@ -2585,10 +2595,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
 
   //----------------------------------------------------------------------------------------------------------------------------------------
   // as the title says: rotate (and recolor) the windmarkers
-  void rotateWindTo(time) {
+  void rotateWindTo(int time) {
     int rotation = 0;
     int timeIndex = 0;
     // now rotate all weather station markers and set the correct colors
+    // similar to moveShipsTo
     for (int i = 0; i < replayTracks['windtracks'].length; i++) {
       if (!showWindMarkers) {
         windMarkerList[i] = const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
@@ -2655,8 +2666,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       }
     }
     // update the windmarker at the upperleft corner
-    // this windmarker represents the average wind speed and direction of
-    // nrWindStationsForCenterWindCalculation in the middle of the screen
+    // this windmarker represents the average wind speed and direction of the nearest
+    // nrWindStationsForCenterWindCalculation stations around the middle of the screen
     windMarkerList.last = const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
     if (showWindMarkers && replayTracks['windtracks'].length >= nrWindStationsForCenterWindCalculation) {
       // calculate average windspeed and direction at the middle of the screen
@@ -3074,7 +3085,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   }
 
   String knotsToColor(speedInKnots) {
-    List windColorTable = [
+    const List windColorTable = [
       '#ffffff',
       '#ffffff',
       '#c1fcf9',
@@ -3157,7 +3168,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   }
 
   void setUnsetTestingActions() async {
-    // clear the test string under the time slider (currently set in replayTickerRoutine if testing is true)
+    // clear the test string uin the testing menu)
     if (!testing) debugString = '';
     // get a new dirlist WITH (or without, depending on the value of testing) domain name items starting with an underscore
     dirList = await getDirList();
