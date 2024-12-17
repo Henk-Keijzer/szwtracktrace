@@ -23,7 +23,7 @@ Version 3.3.2
 - package http replaced by package dio (was already used by flutter_map)
 - selected item colored red in drop down lists in uiEventMenu
 - WindParticles widget implemented as a 'package' (no interdependencies any more)
--
+- upgrading to latest version of flutter, dart:ui and gradl (including handling deprecated Color.value)
 
 Version 3.3.1, released on November 29 2024
 

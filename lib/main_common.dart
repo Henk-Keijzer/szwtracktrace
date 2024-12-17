@@ -3,7 +3,7 @@
 // Track & Trace app, oorspronkelijk voor zeilwedstrijden met historische zeilende bedrijfsvaartuigen,
 // maar ook geschikt voor het volgen van deelnemers aan sloeproeiwedstrijden en het volgen van huurboten.
 //
-// © 2010 - 2024 Stichting Zeilvaart Warmond / Henk Keijzer
+// © 2010 - 2025 Stichting Zeilvaart Warmond / Henk Keijzer
 //
 // Version history in README.md
 //
@@ -72,12 +72,12 @@ final bool kIsWebOnAndroid = kIsWeb && (defaultTargetPlatform == TargetPlatform.
 String phoneId = "";
 //
 // Colors (menu colors are overruled by colors in config/flutter_config.json, but we define them here in case we cannot reach the server)
-// setting it as hex means we don't need a null check in the code
+// setting it as ARGB hex means we don't need a null check in the code
 Color menuAccentColor = const Color(0xffffffff); // pure white
 Color menuBackgroundColor = const Color(0xffd32f2f); // Colors.red[700]
 Color menuForegroundColor = const Color(0xb3ffffff); // Colors.white70;
 //
-const String bgDark = '#000000'; // marker and label outline colors depending on background black or white
+const String bgDark = '#000000'; // marker and label outline colors in #RGB string depending on map background black or white
 const String bgLight = '#ffffff';
 //
 // the next color table was created using an online program to create 32 distinct colors, for example https://mokole.com/palette.html
@@ -118,14 +118,13 @@ const List shipMarkerColorTable = [
 ];
 //
 // vars for getting physical device info and the phoneId
-late MediaQueryData queryData; // needed for getting the screen width and height
 double screenWidth = 0;
 double screenHeight = 0;
 double menuOffset = 0; // used to calculate the offset of the menutext from the top of the screen
 //
 // variables and constants for the flutter_map
 final MapController mapController = MapController();
-CacheStore cacheStore = FileCacheStore('');
+CacheStore cacheStore = FileCacheStore(''); // used by the tileprovider
 const LatLng initialMapPosition = LatLng(52.5, 5.0);
 const double initialMapZoom = 9;
 bool mapReady = false;
@@ -183,7 +182,7 @@ List<String> shipList = []; // list with ship names
 List<String> teamList = []; // list with team names
 List<String> shipLostSignalIndicators = []; // either "" or "'"
 List<Color> shipColors = []; // corresponding list of ship colors used in the participantsmenu
-List<String> shipColorsSvg = []; //same list but as an svg string used as markercolor
+List<String> shipColorsSvg = []; //same list but as an svg string used as markercolor ('#RRGGBB')
 String shipSvgPath = '10,1 11,1 14,4 14,18 13,19 8,19 7,18 7,4'; // outline of the ship, overwritten by config['icons']['boatSVGPath']
 //
 // lists for markers and polylines, maintained in moveShipsTo, updateGpsBuoys and rotateWindTo
@@ -201,9 +200,6 @@ List<Marker> infoWindowMarkerList = []; // although there is max 1 infowindow, w
 String infoWindowId = '';
 // info for the centerwind and windparticles
 const nrWindStationsForCenterWindCalculation = 3; // should we make this a flutter_config or eventInfo constant???
-late WindParticles windParticles;
-double windParticleDirection = 0;
-int windParticleSpeed = 0;
 //
 // variables used for following ships and zooming
 Map<String, bool> following = {}; // list of shipnames to be followed
@@ -214,7 +210,7 @@ bool moveWhileNotInFocus = false;
 //
 // vars and constants for the movement of ships and wind markers in time
 const int speedIndexInitialValue = 4;
-int speedIndex = speedIndexInitialValue; // index in the following table en position of the speed slider, default = 3 min/sec
+int speedIndex = speedIndexInitialValue; // index in the following table en position of the speed slider, default = 1 min/sec
 const List<int> speedTable = [0, 1, 10, 30, 60, 180, 300, 900, 1800, 3600];
 const List speedTextTable = [
   "gestopt",
@@ -228,9 +224,9 @@ const List speedTextTable = [
   "30 min/sec",
   "1 uur/sec"
 ];
-List<int> shipTimeIndex = []; // for each ship the time position in its list of stamps
-List<int> gpsBuoyTimeIndex = []; // for each gps buoy the time position in its list of stamps
-List<int> windTimeIndex = []; // for each weather station the time position in the list of stamps
+List<int> shipTimeIndex = []; // for each ship the currenttime position in its list of stamps
+List<int> gpsBuoyTimeIndex = []; // for each gps buoy the currenttime position in its list of stamps
+List<int> windTimeIndex = []; // for each weather station the currenttime position in the list of stamps
 //
 // timers, ticker and live/replay related vars
 late Timer preEventTimer;
@@ -300,6 +296,14 @@ final GlobalKey dropDayKey = GlobalKey();
 DateFormat dtFormat = DateFormat("d MMM y, HH:mm", 'nl');
 DateFormat dtsFormat = DateFormat("d MMM y, HH:mm:ss", 'nl');
 
+// (temporary?) extension to the Color class to get the hex value of a color back as an int
+// the Color.value method was deprecated, but there were comments on github, requesting the method not te be deprecated
+extension ToARGB on Color {
+  static int floatToInt8(double x) => (x * 255.0).round();
+
+  int toARGB32({alpha = true}) => (alpha ? floatToInt8(a) << 24 : 0) | floatToInt8(r) << 16 | floatToInt8(g) << 8 | floatToInt8(b);
+}
+
 //
 //------------------------------------------------------------------------------
 //
@@ -314,7 +318,6 @@ void mainCommon({required String serverUrl}) async {
   packageInfo = await PackageInfo.fromPlatform(); // who and where are we
   prefs = await SharedPreferencesWithCache.create(cacheOptions: SharedPreferencesWithCacheOptions()); // get access to local storage
   await initializeDateFormatting('nl'); // initialize date formatting
-//  windParticles = WindParticles(); // create the windparticles widget (will be one of the flutter map layers)
   //
   // ----- SERVER
   serverForSharing = serverUrl; // save the complete server URL, we need it for the share button function
@@ -612,8 +615,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //
   AppBar uiAppBar() {
     return AppBar(
-        backgroundColor: menuBackgroundColor.withOpacity(
-            (showShipMenu || showInfoPage || showEventMenu || showMapMenu || showPreEventParticipants || showTestingMenu) ? 1 : 0.5),
+        backgroundColor: menuBackgroundColor.withValues(
+            alpha: (showShipMenu || showInfoPage || showEventMenu || showMapMenu || showPreEventParticipants || showTestingMenu) ? 1 : 0.5),
         foregroundColor: menuForegroundColor,
         elevation: 0,
         toolbarHeight: 40,
@@ -693,8 +696,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           SizedBox(height: menuOffset),
           Container(
               width: 40,
-              color: menuBackgroundColor.withOpacity(
-                  (showShipMenu || showInfoPage || showEventMenu || showMapMenu || showPreEventParticipants || showTestingMenu) ? 1 : 0.5),
+              color: menuBackgroundColor.withValues(
+                  alpha: (showShipMenu || showInfoPage || showEventMenu || showMapMenu || showPreEventParticipants || showTestingMenu)
+                      ? 1
+                      : 0.5),
               child: Column(children: [
                 IconButton(
                   // button for the shipList
@@ -980,8 +985,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         Transform.scale(
             scale: 0.8,
             child: Switch(
-                activeTrackColor: menuBackgroundColor.withOpacity(0.5),
-                inactiveTrackColor: menuForegroundColor.withOpacity(0.5),
+                activeTrackColor: menuBackgroundColor.withValues(alpha: 0.5),
+                inactiveTrackColor: menuForegroundColor.withValues(alpha: 0.5),
                 trackOutlineWidth: const WidgetStatePropertyAll(0.0),
                 thumbIcon: autoZoom ? const WidgetStatePropertyAll(Icon(Icons.check)) : null,
                 value: autoZoom,
@@ -997,8 +1002,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       Transform.scale(
           scale: 0.8,
           child: Switch(
-              activeTrackColor: menuBackgroundColor.withOpacity(0.5),
-              inactiveTrackColor: menuForegroundColor.withOpacity(0.5),
+              activeTrackColor: menuBackgroundColor.withValues(alpha: 0.5),
+              inactiveTrackColor: menuForegroundColor.withValues(alpha: 0.5),
               trackOutlineWidth: const WidgetStatePropertyAll(0),
               thumbIcon: autoFollow ? const WidgetStatePropertyAll(Icon(Icons.check)) : null,
               value: autoFollow,
@@ -1322,7 +1327,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                         Checkbox(
                             visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                             activeColor: menuForegroundColor,
-                            checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
+                            checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                             side: BorderSide(color: menuForegroundColor),
                             value: showShipSpeeds,
                             onChanged: (_) => setState(() {
@@ -1341,7 +1346,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                         Checkbox(
                             visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                             activeColor: menuForegroundColor,
-                            checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
+                            checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                             side: BorderSide(color: menuForegroundColor),
                             value: showTeam,
                             onChanged: (_) => setState(() {
@@ -1434,7 +1439,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           Checkbox(
                               visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                               activeColor: menuForegroundColor,
-                              checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
+                              checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                               side: BorderSide(color: menuForegroundColor),
                               value: showTeam,
                               onChanged: (_) => setState(() {
@@ -1580,7 +1585,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           child: Checkbox(
                               visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                               activeColor: menuForegroundColor,
-                              checkColor: showWindMarkers ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
+                              checkColor: showWindMarkers ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                               side: BorderSide(color: menuForegroundColor),
                               value: showWindParticles,
                               onChanged: (value) => setState(() {
@@ -1600,7 +1605,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                       Checkbox(
                           visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                           activeColor: menuForegroundColor,
-                          checkColor: showRoute ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
+                          checkColor: showRoute ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                           side: BorderSide(color: menuForegroundColor),
                           value: showRoute,
                           onChanged: (_) => setState(() {
@@ -1621,7 +1626,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                       Checkbox(
                           visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                           activeColor: menuForegroundColor,
-                          checkColor: showRoute ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
+                          checkColor: showRoute ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                           side: BorderSide(color: menuForegroundColor),
                           value: showRouteLabels,
                           onChanged: (value) => setState(() {
@@ -1665,7 +1670,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                         Checkbox(
                             visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                             activeColor: menuForegroundColor,
-                            checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
+                            checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                             side: BorderSide(color: menuForegroundColor),
                             value: showShipSpeeds,
                             onChanged: (_) => setState(() {
@@ -1684,7 +1689,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                         Checkbox(
                             visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                             activeColor: menuForegroundColor,
-                            checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withOpacity(0.5),
+                            checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                             side: BorderSide(color: menuForegroundColor),
                             value: showTeam,
                             onChanged: (_) => setState(() {
@@ -2036,7 +2041,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     shipList = []; // list of patricipting shipnames
     teamList = []; // list of corresponding teamnames
     shipColors = []; // and their corresponding colors
-    shipColorsSvg = []; // same but in svg format
+    shipColorsSvg = []; // same but in svg format ('#RRGGBB')
     shipMarkerList = [];
     shipLabelList = [];
     shipTrailList = [];
@@ -2193,7 +2198,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       liveSecondsTimer--;
       if (liveSecondsTimer <= 0) {
         // we've waited 'trailsUpdateInterval' seconds, so, reset it and get new trails and add them to what we have
-        liveSecondsTimer = trailsUpdateInterval * 1000 ~/ hfUpdateInterval; // we run 10 times per second
+        liveSecondsTimer = trailsUpdateInterval * (1000 ~/ hfUpdateInterval); // 1000 / 100 ms, we run 10 times per second
         if ((now - replayTracks['endtime']) > (trailsUpdateInterval * 1000 * 3)) {
           // we must have been asleep for at least two trailsUpdatePeriods, get a complete update since the last fetch
           liveTrails = await getTrails(eventDomain, fromTime: replayTracks['endtime'] ~/ 1000); // fetch special
@@ -2897,7 +2902,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       teamList.add((ship['team'] != "") ? ship['team'] : "team ${ship['name']}");
       shipLostSignalIndicators.add('');
       shipColors.add(Color(shipMarkerColorTable[int.parse(ship['colorcode']) % 32])); // and the color code
-      shipColorsSvg.add('#${((shipColors[i].value) - 0xFF000000).toRadixString(16).padLeft(6, '0')}');
+      shipColorsSvg.add('#${shipColors[i].toARGB32(alpha: false).toRadixString(16).padLeft(6, '0')}');
       shipMarkerList.add(const Marker(point: LatLng(0, 0), child: SizedBox.shrink()));
       shipLabelList.add(const Marker(point: LatLng(0, 0), child: SizedBox.shrink()));
       shipTrailList.add(Polyline(points: [const LatLng(0, 0)]));
@@ -3161,8 +3166,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         eastWestSum += eastWestVectors[i] * distanceFactors[i];
         northSouthSum += northSouthVectors[i] * distanceFactors[i];
       }
-      // and return the result
-      return (heading: atan2(northSouthSum, eastWestSum) * 180 ~/ pi, speed: sqrt(pow(eastWestSum, 2) + pow(northSouthSum, 2)));
+      // and return the result (heading always from 0-359
+      return (
+        heading: ((atan2(northSouthSum, eastWestSum) * 180 ~/ pi) + 360) % 360,
+        speed: sqrt(pow(eastWestSum, 2) + pow(northSouthSum, 2))
+      );
     } else {
       return (heading: 0, speed: 0);
     }

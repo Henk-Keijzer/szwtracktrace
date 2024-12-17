@@ -16,7 +16,7 @@ class WindParticles extends StatefulWidget {
   /// the number of windparticles on the screen as: width * heigth / density i.e. the larger the less particles
   final int density;
 
-  /// heading in degrees
+  /// heading in degrees (0-359)
   final int direction;
 
   /// speed in beaufort
@@ -36,7 +36,7 @@ class WindParticlesState extends State<WindParticles> with WidgetsBindingObserve
   List<Particle> _particles = [];
   Color _color = Colors.black;
   double _oldScreenSize = 0;
-  double _dir = 0;
+  double _dirRad = 0;
   int _sp = 0;
   late Ticker _windTicker;
   int _cntr = 1; // speedreduction counter (skips windTicker ticks)
@@ -61,8 +61,8 @@ class WindParticlesState extends State<WindParticles> with WidgetsBindingObserve
   void onTick(_) {
     if (widget.animate) {
       if (_cntr-- <= 0) {
-        _cntr = 2;
-        _dir = ((widget.direction + 90 + 720) % 360) * pi / 180;
+        _cntr = 2; // update every second frame
+        _dirRad = widget.direction * pi / 180;
         _sp = widget.speed;
         _color = widget.color;
         var screenWidth = MediaQuery.of(context).size.width;
@@ -78,7 +78,7 @@ class WindParticlesState extends State<WindParticles> with WidgetsBindingObserve
           // and update all particles using direction and speed set in the widget
           setState(() {
             for (var particle in _particles) {
-              particle.update(_dir, _sp);
+              particle.update(_dirRad, _sp);
             }
           });
         } else {
@@ -103,6 +103,8 @@ class WindParticlesState extends State<WindParticles> with WidgetsBindingObserve
 class Particle {
   // creates the data for a single particle and a method for updating it
   Particle({this.width = 0, this.height = 0}) {
+    // width and hight are the screen width and height. The constructor places the particle
+    // initially at a random position on the screen.
     x = random.nextDouble() * width;
     y = random.nextDouble() * height;
   }
@@ -114,8 +116,9 @@ class Particle {
   double height;
 
   void update(direction, speed) {
-    x += speed * cos(direction) / 2; // 2 is a dempening factor
-    y += speed * sin(direction) / 2;
+    // direction in radians, speed in Beaufort from 0 to 16
+    x += speed * -sin(direction) / 2; // 2 is a dempening factor
+    y += speed * cos(direction) / 2;
     trail.add(Offset(x, y));
     if (trail.length > 15) {
       trail.removeAt(0);
@@ -146,7 +149,7 @@ class WindParticlesPainter extends CustomPainter {
     final paint = Paint();
     for (var particle in particles) {
       for (int i = 0; i < particle.trail.length; i++) {
-        paint.color = color.withOpacity(((i + 1) / particle.trail.length) / 2.5);
+        paint.color = color.withValues(alpha: ((i + 1) / particle.trail.length) / 2.5);
         canvas.drawCircle(particle.trail[i], 1.0, paint);
       }
     }
