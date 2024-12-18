@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 
-// If you want to add new keys/values: not more then the two current levels and all keys/values must be Strings,
-// otherwise the merge with the user provided config/flutter_config.json file will fail
 //
-Map<String, dynamic> config = {
+// you can add key/values as necessary, the values here are merged/added to the config file on the server
+// identical keyvalues in this defaultconfig will be overwritten by keyvalues with the same keys in the server file
+//
+Map<String, dynamic> defaultConfig = {
   "text": {"participants": "schepen", "shipNames": "Scheepsnamen", "skipper": "Schipper"},
   "colors": {
     "menuBackgroundColor": "FF455A64",
