@@ -69,8 +69,7 @@ final bool kIsWebOnIOS =
     kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS); // true if the user is running the web app on a mobile device
 final bool kIsWebOnAndroid = kIsWeb && (defaultTargetPlatform == TargetPlatform.android);
 //
-String phoneId = "";
-
+String phoneId = '';
 late Map<dynamic, dynamic> config;
 //
 // Colors (menu colors are overruled by colors in config/flutter_config.json, but we define them here in case we cannot reach the server)
@@ -126,7 +125,7 @@ double menuOffset = 0; // used to calculate the offset of the menutext from the 
 //
 // variables and constants for the flutter_map
 final MapController mapController = MapController();
-CacheStore cacheStore = FileCacheStore(''); // used by the tileprovider
+CacheStore cacheStore = FileCacheStore(''); // used by the map tileprovider
 const LatLng initialMapPosition = LatLng(52.5, 5.0);
 const double initialMapZoom = 9;
 bool mapReady = false;
@@ -351,14 +350,14 @@ void mainCommon({required String serverUrl}) async {
     await prefs.clear(); // clear all data (and wait for it...)
     prefs.setString('appversion', packageInfo.buildNumber); // and set the new appversion
   }
-  prefs.setBool('cookieconsent', cookieConsentGiven);
+  await prefs.setBool('cookieconsent', cookieConsentGiven);
   // overrule cookieConsent in case we are running embedded in an iframe of another website
   if (kIsWeb && (document.referrer != '')) cookieConsentGiven = true;
   //
   // ----- PHONE (DEVICE) ID (used for statistics, to identify unique users/devices)
   // See if we already have a phone id, if not, create one and save it in local storage
   phoneId = prefs.getString('phoneid') ?? const Uuid().v1();
-  prefs.setString('phoneid', phoneId); // and save it (even if it did not change)
+  await prefs.setString('phoneid', phoneId); // and save it (even if it did not change)
   // add a platform prefix and the appversion in front of the phoneid
   // this phoneId is used in all communication with the server for statistical purposes
   String prefix = kIsWeb
@@ -430,7 +429,7 @@ void mainCommon({required String serverUrl}) async {
   selectedMapType =
       (!baseMapTileProviders.keys.toList().contains(selectedMapType)) ? baseMapTileProviders.keys.toList().first : selectedMapType;
   // save the base maptype for next time and set the marker and labelbackgroudcolors, based on the info in the map record
-  prefs.setString('maptype', selectedMapType);
+  await prefs.setString('maptype', selectedMapType);
   // bgColor is the color (black or white) for edges of the ship/wind/buoy markers and windparticles to offset them from the base color
   // of the map. Note that the labels (shipnames, buoynames) use the reverse scheme
   bgColor = baseMapTileProviders[selectedMapType]['bgColor'];
@@ -456,8 +455,8 @@ void mainCommon({required String serverUrl}) async {
         ? selectedOverlayType
         : overlayTileProviders.keys.toList().first; // if not, use first
   }
-  prefs.setBool('mapoverlay', mapOverlay);
-  prefs.setString('overlaytype', selectedOverlayType);
+  await prefs.setBool('mapoverlay', mapOverlay);
+  await prefs.setString('overlaytype', selectedOverlayType);
   //
   // ----- EVENT DOMAIN
   // Get the event domain from a previous session or from the query string, if no event domain found, set default to an empty string
@@ -480,23 +479,23 @@ void mainCommon({required String serverUrl}) async {
   // ----- WINDMARKERS, ROUTE, ROUTELABELS, SHIPLABELS, and SHIPSPEEDS
   // get/set this info from shared preference (set default if value was not present in prefs)
   showWindMarkers = prefs.getBool('windmarkers') ?? showWindMarkers;
-  prefs.setBool('windmarkers', showWindMarkers);
+  await prefs.setBool('windmarkers', showWindMarkers);
   //
   showWindParticles = prefs.getBool('windparticles') ?? showWindParticles;
-  prefs.setBool('windmarkers', showWindParticles);
+  await prefs.setBool('windmarkers', showWindParticles);
   //
   showRoute = prefs.getBool('showroute') ?? showRoute;
-  prefs.setBool('showroute', showRoute);
+  await prefs.setBool('showroute', showRoute);
   //
   showRouteLabels = prefs.getBool('routelabels') ?? showRouteLabels;
-  prefs.setBool('routelabels', showRouteLabels);
+  await prefs.setBool('routelabels', showRouteLabels);
   //
   showShipLabels = prefs.getBool('shiplabels') ?? showShipLabels;
-  prefs.setBool('shiplabels', showShipLabels);
+  await prefs.setBool('shiplabels', showShipLabels);
   //
   showShipSpeeds = prefs.getBool('shipspeeds') ?? showShipSpeeds;
   if (!allowShowSpeed) showShipSpeeds = false;
-  prefs.setBool('shipspeeds', showShipSpeeds);
+  await prefs.setBool('shipspeeds', showShipSpeeds);
   //
   // Nowstart the flutter framework
   //
@@ -1326,12 +1325,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           checkColor: menuBackgroundColor,
                           side: BorderSide(color: menuForegroundColor),
                           value: showShipLabels,
-                          onChanged: (_) => setState(() {
+                          onChanged: (_) => setState(() async {
                                 showShipLabels = !showShipLabels;
                                 if (eventStatus != EventStatus.preEvent && currentReplayTime != sliderEnd) {
                                   moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                 }
-                                prefs.setBool('shiplabels', showShipLabels);
+                                await prefs.setBool('shiplabels', showShipLabels);
                               }))
                     ]),
                     if (allowShowSpeed)
@@ -1345,12 +1344,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                             checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                             side: BorderSide(color: menuForegroundColor),
                             value: showShipSpeeds,
-                            onChanged: (_) => setState(() {
+                            onChanged: (_) => setState(() async {
                                   showShipSpeeds = !showShipSpeeds;
                                   if (eventStatus != EventStatus.preEvent && currentReplayTime != sliderEnd) {
                                     moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                   }
-                                  prefs.setBool('shipspeeds', showShipSpeeds);
+                                  await prefs.setBool('shipspeeds', showShipSpeeds);
                                 }))
                       ]),
                     if (eventInfo['showteam'] == 'true')
@@ -1510,9 +1509,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                               visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                               value: baseMapTileProviders.keys.toList()[index],
                               groupValue: selectedMapType,
-                              onChanged: (value) => setState(() {
+                              onChanged: (value) => setState(() async {
                                 selectedMapType = value!;
-                                prefs.setString('maptype', selectedMapType);
+                                await prefs.setString('maptype', selectedMapType);
                                 bgColor = baseMapTileProviders[selectedMapType]['bgColor'];
                                 markerBackgroundColor = (bgColor == bgDark) ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
                                 labelBackgroundColor = (bgColor == bgDark) ? const Color(0xBfFFFFFF) : const Color(0xFF000000);
@@ -1540,9 +1539,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           checkColor: menuBackgroundColor,
                           side: BorderSide(color: menuForegroundColor),
                           value: mapOverlay,
-                          onChanged: (_) => setState(() {
+                          onChanged: (_) => setState(() async {
                                 mapOverlay = !mapOverlay;
-                                prefs.setBool('mapoverlay', mapOverlay);
+                                await prefs.setBool('mapoverlay', mapOverlay);
                               }))
                     ]),
                     ListView.builder(
@@ -1562,9 +1561,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                     visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                     value: overlayTileProviders.keys.toList()[index],
                                     groupValue: selectedOverlayType,
-                                    onChanged: (value) => setState(() {
+                                    onChanged: (value) => setState(() async {
                                           selectedOverlayType = value!;
-                                          prefs.setString('overlaytype', selectedOverlayType);
+                                          await prefs.setString('overlaytype', selectedOverlayType);
                                         })))
                           ]);
                         })
@@ -1582,7 +1581,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           checkColor: menuBackgroundColor,
                           side: BorderSide(color: menuForegroundColor),
                           value: showWindMarkers,
-                          onChanged: (value) => setState(() {
+                          onChanged: (value) => setState(() async {
                                 showWindMarkers = !showWindMarkers;
                                 windTimeIndex = List.filled(windTimeIndex.length, -1, growable: true);
                                 rotateWindTo(currentReplayTime);
@@ -1590,7 +1589,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                   infoWindowId = '';
                                   infoWindowMarkerList = [];
                                 }
-                                prefs.setBool('windmarkers', showWindMarkers);
+                                await prefs.setBool('windmarkers', showWindMarkers);
                               }))
                     ]),
                     Row(children: [
@@ -1605,9 +1604,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                               checkColor: showWindMarkers ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                               side: BorderSide(color: menuForegroundColor),
                               value: showWindParticles,
-                              onChanged: (value) => setState(() {
+                              onChanged: (value) => setState(() async {
                                     showWindParticles = !showWindParticles;
-                                    prefs.setBool('windparticles', showWindParticles);
+                                    await prefs.setBool('windparticles', showWindParticles);
                                   })))
                     ]),
                   ]),
@@ -1625,7 +1624,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           checkColor: showRoute ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                           side: BorderSide(color: menuForegroundColor),
                           value: showRoute,
-                          onChanged: (_) => setState(() {
+                          onChanged: (_) => setState(() async {
                                 showRoute = !showRoute;
                                 if (infoWindowId != '' && infoWindowId.substring(0, 4) == 'rout') {
                                   infoWindowId = '';
@@ -1633,7 +1632,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 }
                                 buildRoute();
                                 updateGPSBuoys(currentReplayTime);
-                                prefs.setBool('showroute', showRoute);
+                                await prefs.setBool('showroute', showRoute);
                               }))
                     ]),
                     Row(children: [
@@ -1646,12 +1645,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           checkColor: showRoute ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                           side: BorderSide(color: menuForegroundColor),
                           value: showRouteLabels,
-                          onChanged: (value) => setState(() {
+                          onChanged: (value) => setState(() async {
                                 showRouteLabels = !showRouteLabels;
                                 buildRoute();
                                 gpsBuoyTimeIndex = List.filled(gpsBuoyTimeIndex.length, -1, growable: true);
                                 updateGPSBuoys(currentReplayTime);
-                                prefs.setBool('routelabels', showRouteLabels);
+                                await prefs.setBool('routelabels', showRouteLabels);
                               }))
                     ])
                   ]),
@@ -1671,12 +1670,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           checkColor: menuBackgroundColor,
                           side: BorderSide(color: menuForegroundColor),
                           value: showShipLabels,
-                          onChanged: (value) => setState(() {
+                          onChanged: (value) => setState(() async {
                                 showShipLabels = !showShipLabels;
                                 if (eventStatus != EventStatus.preEvent && currentReplayTime != sliderEnd) {
                                   moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                 }
-                                prefs.setBool('shiplabels', showShipLabels);
+                                await prefs.setBool('shiplabels', showShipLabels);
                               }))
                     ]),
                     if (allowShowSpeed)
@@ -1690,12 +1689,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                             checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                             side: BorderSide(color: menuForegroundColor),
                             value: showShipSpeeds,
-                            onChanged: (_) => setState(() {
+                            onChanged: (_) => setState(() async {
                                   showShipSpeeds = !showShipSpeeds;
                                   if (eventStatus != EventStatus.preEvent && currentReplayTime != sliderEnd) {
                                     moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                   }
-                                  prefs.setBool('shipspeeds', showShipSpeeds);
+                                  await prefs.setBool('shipspeeds', showShipSpeeds);
                                 }))
                       ]),
                     if (eventInfo['showteam'] == 'true')
@@ -1909,9 +1908,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 padding: const EdgeInsets.fromLTRB(15, 0, 0, 0),
                 child: Center(
                   child: ElevatedButton(
-                      onPressed: () => setState(() {
+                      onPressed: () => setState(() async {
                             cookieConsentGiven = true;
-                            prefs.setBool('cookieconsent', cookieConsentGiven);
+                            await prefs.setBool('cookieconsent', cookieConsentGiven);
                           }),
                       child: const Text('Akkoord')),
                 ))
@@ -1978,9 +1977,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       // if we have no eventDomain from local storage or from the query string, the event selection menu will start things up
       Timer(const Duration(milliseconds: 600), () {
         // give the uiEventMenu animation time to settle, otherwise the drop down list shows up at the wrong place
-        dynamic state = dropEventKey.currentState;
-        state.showButtonMenu();
-        setState(() {}); // redraw the UI
+        setState(() {
+          dynamic state = dropEventKey.currentState;
+          state?.showButtonMenu();
+        }); // redraw the UI
       });
     }
     setState(() {}); // redraw the UI
@@ -2000,9 +2000,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     eventYear = 'Kies een jaar';
     Timer(const Duration(milliseconds: 600), () {
       // give the uiEventMenu animation time to settle, otherwise the drop down list shows up at the wrong place
-      dynamic state = dropYearKey.currentState;
-      state.showButtonMenu();
-      setState(() {}); // redraw the UI
+      setState(() {
+        dynamic state = dropYearKey.currentState;
+        state?.showButtonMenu();
+      }); // redraw the UI
     });
     eventDay = '';
     eventDayList = [];
@@ -2023,9 +2024,10 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       eventDay = 'Kies een dag/race';
       Timer(const Duration(milliseconds: 600), () {
         // give the uiMapMenu animation time to settle, otherwise the drop down list show up at the wrong place
-        dynamic state = dropDayKey.currentState;
-        state.showButtonMenu();
-        setState(() {}); // redraw the UI
+        setState(() {
+          dynamic state = dropDayKey.currentState;
+          state?.showButtonMenu();
+        }); // redraw the UI
       });
       setState(() {});
     } else {
@@ -2043,7 +2045,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     eventDay = day;
     eventDomain = '$eventName/$eventYear';
     if (eventDay != '') eventDomain = '$eventDomain/$eventDay';
-    prefs.setString('domain', eventDomain); // save the selected event in local storage
+    await prefs.setString('domain', eventDomain); // save the selected event in local storage
     // put the direct link to this event in the addressbar
     if (kIsWeb) window.history.pushState({}, '', '?event=$eventDomain');
     // then "kill" whatever was running
@@ -2183,7 +2185,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       replayTracks = await getTrails(eventDomain, fromTime: eventStart ~/ 1000);
     }
     // save the trails when not on web
-    if (!kIsWeb) prefs.setString('live-$eventId', jsonEncode(replayTracks));
+    if (!kIsWeb) await prefs.setString('live-$eventId', jsonEncode(replayTracks));
     setupShipGpsBuoyAndWindInfo(); // prepare menu and track info
     for (var name in shipList) {
       following[name] = true;
@@ -2261,7 +2263,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     eventStatus = EventStatus.replay;
     selectionMessage = 'Het evenement is voorbij. Wacht tot de tracks zijn geladen';
     // First get rid of the temporary live file if that existed...
-    prefs.remove('live-$eventId');
+    await prefs.remove('live-$eventId');
     // Do we have already have data in local storage?
     String? savedTracks = prefs.getString('replay-$eventId');
     if (savedTracks == null) {
@@ -2903,7 +2905,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     replayTracks['endtime'] = liveTrails['endtime']; // set the new endtime and store locally
     // browsers do not allow us to store more then 5 Mbyte. But for the rest: store/overwrite the updated tracks
     // using the eventId as unique identifier
-    if (!kIsWeb) prefs.setString('live-$eventId', jsonEncode(replayTracks));
+    if (!kIsWeb) await prefs.setString('live-$eventId', jsonEncode(replayTracks));
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
