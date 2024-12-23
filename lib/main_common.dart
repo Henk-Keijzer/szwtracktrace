@@ -18,7 +18,6 @@ import 'dart:math';
 
 //
 import 'package:bordered_text/bordered_text.dart';
-import 'package:collection/collection.dart';
 import 'package:dio/dio.dart';
 import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
 import 'package:dio_cache_interceptor_file_store/dio_cache_interceptor_file_store.dart';
@@ -306,6 +305,13 @@ extension ToARGB on Color {
   static int floatToInt8(double x) => (x * 255.0).round();
 
   int toARGB32({alpha = true}) => (alpha ? floatToInt8(a) << 24 : 0) | floatToInt8(r) << 16 | floatToInt8(g) << 8 | floatToInt8(b);
+}
+
+extension ResetTicker on Ticker {
+  void reset() {
+    stop();
+    start();
+  }
 }
 
 void mergeMaps(Map<dynamic, dynamic> map1, Map<dynamic, dynamic> map2) {
@@ -1088,11 +1094,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                             '&zoom=$zoom&level=surface&overlay=wind&product=ecmwf&menu=&message=true&marker=&calendar=now&pressure='
                             '&type=map&location=coordinates&detail=true&metricWind=bft&metricTemp=%C2%B0C&radarRange=-1'));
                       }),
-                IconButton(
-                    onPressed: () async {
-                      await Share.share('Link naar de Track&Tace website: $serverForSharing?event=${eventDomain.replaceAll(' ', '%20')}');
-                    },
-                    icon: Icon(Icons.share, color: menuForegroundColor)),
+                if (!kIsWeb || document.referrer == '') // no sharing possible from <iframe> embedded mode
+                  IconButton(
+                      onPressed: () async {
+                        await Share.share('Link naar de Track&Tace website: $serverForSharing?event=${eventDomain.replaceAll(' ', '%20')}');
+                      },
+                      icon: Icon(Icons.share, color: menuForegroundColor)),
                 const Divider(),
                 // and a + and - button for zoom-in and -out
                 IconButton(icon: Icon(Icons.add_box, color: menuForegroundColor), onPressed: () => zoom(0.5)),
@@ -1325,12 +1332,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           checkColor: menuBackgroundColor,
                           side: BorderSide(color: menuForegroundColor),
                           value: showShipLabels,
-                          onChanged: (_) => setState(() async {
+                          onChanged: (_) => setState(() {
                                 showShipLabels = !showShipLabels;
                                 if (eventStatus != EventStatus.preEvent && currentReplayTime != sliderEnd) {
                                   moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                 }
-                                await prefs.setBool('shiplabels', showShipLabels);
+                                prefs.setBool('shiplabels', showShipLabels);
                               }))
                     ]),
                     if (allowShowSpeed)
@@ -1344,12 +1351,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                             checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                             side: BorderSide(color: menuForegroundColor),
                             value: showShipSpeeds,
-                            onChanged: (_) => setState(() async {
+                            onChanged: (_) => setState(() {
                                   showShipSpeeds = !showShipSpeeds;
                                   if (eventStatus != EventStatus.preEvent && currentReplayTime != sliderEnd) {
                                     moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                   }
-                                  await prefs.setBool('shipspeeds', showShipSpeeds);
+                                  prefs.setBool('shipspeeds', showShipSpeeds);
                                 }))
                       ]),
                     if (eventInfo['showteam'] == 'true')
@@ -1509,9 +1516,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                               visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                               value: baseMapTileProviders.keys.toList()[index],
                               groupValue: selectedMapType,
-                              onChanged: (value) => setState(() async {
+                              onChanged: (value) => setState(() {
                                 selectedMapType = value!;
-                                await prefs.setString('maptype', selectedMapType);
+                                prefs.setString('maptype', selectedMapType);
                                 bgColor = baseMapTileProviders[selectedMapType]['bgColor'];
                                 markerBackgroundColor = (bgColor == bgDark) ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
                                 labelBackgroundColor = (bgColor == bgDark) ? const Color(0xBfFFFFFF) : const Color(0xFF000000);
@@ -1539,9 +1546,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           checkColor: menuBackgroundColor,
                           side: BorderSide(color: menuForegroundColor),
                           value: mapOverlay,
-                          onChanged: (_) => setState(() async {
+                          onChanged: (_) => setState(() {
                                 mapOverlay = !mapOverlay;
-                                await prefs.setBool('mapoverlay', mapOverlay);
+                                prefs.setBool('mapoverlay', mapOverlay);
                               }))
                     ]),
                     ListView.builder(
@@ -1561,9 +1568,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                     visualDensity: const VisualDensity(horizontal: -4, vertical: -4),
                                     value: overlayTileProviders.keys.toList()[index],
                                     groupValue: selectedOverlayType,
-                                    onChanged: (value) => setState(() async {
+                                    onChanged: (value) => setState(() {
                                           selectedOverlayType = value!;
-                                          await prefs.setString('overlaytype', selectedOverlayType);
+                                          prefs.setString('overlaytype', selectedOverlayType);
                                         })))
                           ]);
                         })
@@ -1581,7 +1588,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           checkColor: menuBackgroundColor,
                           side: BorderSide(color: menuForegroundColor),
                           value: showWindMarkers,
-                          onChanged: (value) => setState(() async {
+                          onChanged: (value) => setState(() {
                                 showWindMarkers = !showWindMarkers;
                                 windTimeIndex = List.filled(windTimeIndex.length, -1, growable: true);
                                 rotateWindTo(currentReplayTime);
@@ -1589,7 +1596,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                   infoWindowId = '';
                                   infoWindowMarkerList = [];
                                 }
-                                await prefs.setBool('windmarkers', showWindMarkers);
+                                prefs.setBool('windmarkers', showWindMarkers);
                               }))
                     ]),
                     Row(children: [
@@ -1604,9 +1611,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                               checkColor: showWindMarkers ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                               side: BorderSide(color: menuForegroundColor),
                               value: showWindParticles,
-                              onChanged: (value) => setState(() async {
+                              onChanged: (value) => setState(() {
                                     showWindParticles = !showWindParticles;
-                                    await prefs.setBool('windparticles', showWindParticles);
+                                    prefs.setBool('windparticles', showWindParticles);
                                   })))
                     ]),
                   ]),
@@ -1624,7 +1631,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           checkColor: showRoute ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                           side: BorderSide(color: menuForegroundColor),
                           value: showRoute,
-                          onChanged: (_) => setState(() async {
+                          onChanged: (_) => setState(() {
                                 showRoute = !showRoute;
                                 if (infoWindowId != '' && infoWindowId.substring(0, 4) == 'rout') {
                                   infoWindowId = '';
@@ -1632,7 +1639,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                                 }
                                 buildRoute();
                                 updateGPSBuoys(currentReplayTime);
-                                await prefs.setBool('showroute', showRoute);
+                                prefs.setBool('showroute', showRoute);
                               }))
                     ]),
                     Row(children: [
@@ -1645,12 +1652,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           checkColor: showRoute ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                           side: BorderSide(color: menuForegroundColor),
                           value: showRouteLabels,
-                          onChanged: (value) => setState(() async {
+                          onChanged: (value) => setState(() {
                                 showRouteLabels = !showRouteLabels;
                                 buildRoute();
                                 gpsBuoyTimeIndex = List.filled(gpsBuoyTimeIndex.length, -1, growable: true);
                                 updateGPSBuoys(currentReplayTime);
-                                await prefs.setBool('routelabels', showRouteLabels);
+                                prefs.setBool('routelabels', showRouteLabels); // (don't await the result...)
                               }))
                     ])
                   ]),
@@ -1670,12 +1677,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                           checkColor: menuBackgroundColor,
                           side: BorderSide(color: menuForegroundColor),
                           value: showShipLabels,
-                          onChanged: (value) => setState(() async {
+                          onChanged: (value) => setState(() {
                                 showShipLabels = !showShipLabels;
                                 if (eventStatus != EventStatus.preEvent && currentReplayTime != sliderEnd) {
                                   moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                 }
-                                await prefs.setBool('shiplabels', showShipLabels);
+                                prefs.setBool('shiplabels', showShipLabels);
                               }))
                     ]),
                     if (allowShowSpeed)
@@ -1689,12 +1696,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                             checkColor: showShipLabels ? menuBackgroundColor : menuBackgroundColor.withValues(alpha: 0.5),
                             side: BorderSide(color: menuForegroundColor),
                             value: showShipSpeeds,
-                            onChanged: (_) => setState(() async {
+                            onChanged: (_) => setState(() {
                                   showShipSpeeds = !showShipSpeeds;
                                   if (eventStatus != EventStatus.preEvent && currentReplayTime != sliderEnd) {
                                     moveShipsBuoysAndWindTo(currentReplayTime, moveMap: false);
                                   }
-                                  await prefs.setBool('shipspeeds', showShipSpeeds);
+                                  prefs.setBool('shipspeeds', showShipSpeeds);
                                 }))
                       ]),
                     if (eventInfo['showteam'] == 'true')
@@ -1908,9 +1915,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 padding: const EdgeInsets.fromLTRB(15, 0, 0, 0),
                 child: Center(
                   child: ElevatedButton(
-                      onPressed: () => setState(() async {
+                      onPressed: () => setState(() {
                             cookieConsentGiven = true;
-                            await prefs.setBool('cookieconsent', cookieConsentGiven);
+                            prefs.setBool('cookieconsent', cookieConsentGiven);
                           }),
                       child: const Text('Akkoord')),
                 ))
@@ -2133,7 +2140,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     selectionMessage = 'Het evenement is nog niet begonnen.\n\nKies een ander evenement of wacht rustig af. '
         'De Track & Trace begint op ${dtFormat.format(DateTime.fromMillisecondsSinceEpoch(eventStart))}';
     // see if there are already participants in the database (will be loaded in shipList, shipColors and teamList)
-    getParticipants(eventDomain); // make sure we wait for the routine to finish
+    await getParticipants(eventDomain);
     // see if we have a route
     if (route['features'] != null) {
       selectionMessage += '\n\nBekijk intussen de route / havens / boeien op de kaart';
@@ -2221,8 +2228,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     int now = DateTime.now().millisecondsSinceEpoch; // have a look at the clock
     if (now < eventEnd) {
       // event is not over yet
-      liveSecondsTimer--;
-      if (liveSecondsTimer <= 0) {
+      if (liveSecondsTimer-- <= 0) {
         // we've waited 'trailsUpdateInterval' seconds, so, reset it and get new trails and add them to what we have
         liveSecondsTimer = trailsUpdateInterval * (1000 ~/ hfUpdateInterval); // 1000 / 100 ms, we run 10 times per second
         if ((now - replayTracks['endtime']) > (trailsUpdateInterval * 1000 * 3)) {
@@ -2264,7 +2270,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     selectionMessage = 'Het evenement is voorbij. Wacht tot de tracks zijn geladen';
     // First get rid of the temporary live file if that existed...
     await prefs.remove('live-$eventId');
-    // Do we have already have data in local storage?
+    // Do we already have data in local storage?
     String? savedTracks = prefs.getString('replay-$eventId');
     if (savedTracks == null) {
       // no data yet
@@ -2276,7 +2282,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       replayTracks = jsonDecode(savedTracks); // and just use the data from local storage
     }
     replayRunning = false;
-    setupShipGpsBuoyAndWindInfo(); // prepare menu and track info
+    setupShipGpsBuoyAndWindInfo(); // prepare menu and track info, including shipList
     for (var name in shipList) {
       following[name] = true;
     }
@@ -2304,8 +2310,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // this ticker routine ensures that ships are moving forward and wind is rotating in a timely manner during replay
   void replayTickerRoutine(Duration elapsedTime) {
     // reset elapsed time to zero (for next tick)
-    replayTicker.stop();
-    replayTicker.start();
+    replayTicker.reset();
     if (replayPause) return; // don't move forward, the user is moving the timeslider
     // use the elapsed since the previous run to calculate the new currentReplayTime
     currentReplayTime = (currentReplayTime + (elapsedTime.inMilliseconds * speedTable[speedIndex]));
@@ -2321,12 +2326,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       //case 1
       if (eventStatus == EventStatus.live) liveTimer.cancel(); // case 1
       eventStatus = EventStatus.replay; // case 1, 3
-      if (replayLoop) {
-        currentReplayTime = eventStart; // case 3
-      } else {
-        startStopRunning();
-        currentReplayTime = eventEnd;
-      }
+      currentReplayTime = replayLoop ? eventStart : eventEnd; // Case 3
+      if (!replayLoop) startStopRunning();
     } else if (currentReplayTime > sliderEnd) {
       // case 2
       startStopRunning();
@@ -2343,7 +2344,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       setState(() {
         replayRunning = !replayRunning;
         if (currentReplayTime == sliderEnd && replayRunning) {
-          // if he wants to run while at the end of the slider, move it to the beginning
+          // if (s)he wants to run while at the end of the slider, move it to the beginning
           currentReplayTime = eventStart;
         }
         (replayRunning) ? replayTicker.start() : replayTicker.stop();
@@ -2484,7 +2485,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   child: SvgPicture.string(svgString),
                   onSecondaryTap: () => loadAndShowShipDetails(shipTrack['name']),
                   onDoubleTap: () => setState(() {
-                        // zoom in on the ship double tapped
+                        // zoom in on the ship
                         followAll = false;
                         following.forEach((k, v) => following[k] = false);
                         autoFollow = following[shipTrack['name']] = true;
@@ -2500,6 +2501,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                         showShipInfo = false;
                       }),
                   onTap: () => setState(() {
+                        // open ship's infowindow
                         infoWindowId = 'ship${shipTrack['name']}';
                         infoWindowMarkerList = [
                           infoWindowMarker(title: infoWindowTitle, body: infoWindowText, link: '', point: calculatedPosition)
@@ -2517,8 +2519,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         shipLabelList[i] = showShipLabels
             ? mapTextLabel(
                 calculatedPosition,
-                '${showTeam ? teamList[i] : shipList[i]}${shipLostSignalIndicators[i]}${(showShipSpeeds ? ', '
-                    '$speedString' : '')}')
+                '${showTeam ? teamList[i] : shipList[i]}'
+                '${shipLostSignalIndicators[i]}'
+                '${(showShipSpeeds ? ', $speedString' : '')}')
             : const Marker(point: LatLng(0, 0), child: SizedBox.shrink());
         //
         // 8. build the trail behind the ship
@@ -2586,8 +2589,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             // only update when we moved into a different timeframe
             gpsBuoyTimeIndex[i] = timeIndex;
             // no interpolation to the next position, as the position of a GPS buoy should be relatively constant
-            // add the buoy marker
-            String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="4" '
+            // now add the buoy marker
+            String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="3.5" '
                 'fill="${gpsBuoy['color']}" stroke="$bgColor" stroke-width="1"/></svg>';
             LatLng gpsBuoyPosition = LatLng(gpsBuoy['lat'][timeIndex].toDouble(), gpsBuoy['lon'][timeIndex].toDouble());
             gpsBuoyMarkerList[i] = Marker(
@@ -2771,7 +2774,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         } else if (feature['geometry']['type'] == 'Point') {
           var routePoint = LatLng(feature['geometry']['coordinates'][1], feature['geometry']['coordinates'][0]);
           var fillColor = feature['properties']['fillcolor'] ?? 'red';
-          String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="4" '
+          String svgString = '<svg width="22" height="22"><circle cx="11" cy="11" r="3.5" '
               'fill="$fillColor" stroke="$bgColor" stroke-width="1"/></svg>';
           String infoWindowTitle = '${feature['properties']['name']}';
           String infoWindowText = feature['properties']['description'] ?? '';
@@ -2909,30 +2912,31 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
-  // Routine to prepare info for ships, gps buoys and windstations after we received new tracks
+  // Routine to prepare lists for ships, gps buoys and windstations after we received new/updated tracks
+  // in live at every update, in replay only after loading the tracks
   //
   void setupShipGpsBuoyAndWindInfo() {
-    shipTimeIndex = List.filled(replayTracks['shiptracks'].length, 0, growable: true);
+    final nrShips = replayTracks['shiptracks'].length;
+    shipTimeIndex = List.filled(nrShips, 0, growable: true);
+    shipMarkerList = List.filled(nrShips, const Marker(point: LatLng(0, 0), child: SizedBox.shrink()), growable: true);
+    shipLabelList = List.filled(nrShips, const Marker(point: LatLng(0, 0), child: SizedBox.shrink()), growable: true);
+    shipTrailList = List.filled(nrShips, Polyline(points: [const LatLng(0, 0)]), growable: true);
+    shipLostSignalIndicators = List.filled(nrShips, '', growable: true);
     shipList = [];
     teamList = [];
-    shipLostSignalIndicators = [];
     shipColors = [];
     shipColorsSvg = [];
-    shipMarkerList = [];
-    shipLabelList = [];
-    shipTrailList = [];
-    for (int i = 0; i < replayTracks['shiptracks'].length; i++) {
-      var ship = replayTracks['shiptracks'][i];
+    for (var ship in replayTracks['shiptracks']) {
       shipList.add(ship['name']); // add the name to the shipList for the shipmenu
-      ship['team'] = ship['team'] ?? "";
-      teamList.add((ship['team'] != "") ? ship['team'] : "team ${ship['name']}");
-      shipLostSignalIndicators.add('');
-      shipColors.add(Color(shipMarkerColorTable[int.parse(ship['colorcode']) % 32])); // and the color code
-      shipColorsSvg.add('#${shipColors[i].toARGB32(alpha: false).toRadixString(16).padLeft(6, '0')}');
-      shipMarkerList.add(const Marker(point: LatLng(0, 0), child: SizedBox.shrink()));
-      shipLabelList.add(const Marker(point: LatLng(0, 0), child: SizedBox.shrink()));
-      shipTrailList.add(Polyline(points: [const LatLng(0, 0)]));
+      final team = ship['team'] ?? "";
+      teamList.add(team.isNotEmpty ? team : "team ${ship['name']}");
+      final color = Color(shipMarkerColorTable[int.parse(ship['colorcode']) % 32]);
+      shipColors.add(color);
+      shipColorsSvg.add('#${color..toARGB32(alpha: false).toRadixString(16).padLeft(6, '0')}');
     }
+    // now initialize the lists for the buoys and the windstations.
+    // note that we initialize the timeindex lists with -1's; this ensures that the markers are shown from the start (see update buoys and
+    // wind)
     gpsBuoyTimeIndex = List.filled(replayTracks['buoytracks'].length, -1, growable: true);
     gpsBuoyMarkerList =
         List.filled(replayTracks['buoytracks'].length, const Marker(point: LatLng(0, 0), child: SizedBox.shrink()), growable: true);
@@ -2944,6 +2948,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         List.filled(replayTracks['windtracks'].length + 1, const Marker(point: LatLng(0, 0), child: SizedBox.shrink()), growable: true);
   }
 
+  //----------------------------------------------------------------------------------------------------------------------------------------
   //
   // a few widget creating routines
   //
@@ -3020,16 +3025,16 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // get the list of colorcodes, shipnames and teamnames, only for use in the participants menu during pre-event
   // (otherwise the particpants are coming from the trails and replaytrails json files)
   //
-  void getParticipants(domain) async {
+  Future<void> getParticipants(domain) async {
     shipList = [];
     teamList = [];
     shipColors = [];
     final response = await http.get('get/?req=participants&dev=$phoneId&event=$domain');
     final participants = (response.statusCode == 200 && response.data != '') ? jsonDecode(response.data) : [];
-    for (int i = 0; i < participants.length; i++) {
-      shipColors.add(Color(shipMarkerColorTable[int.parse(participants[i]['colorcode']) % 32]));
-      shipList.add(participants[i]['shipname']);
-      teamList.add(participants[i]['teamname'] != '' ? participants[i]['teamname'] : 'Team ${participants[i]['shipname']}');
+    for (var participant in participants) {
+      shipColors.add(Color(shipMarkerColorTable[int.parse(participant['colorcode']) % 32]));
+      shipList.add(participant['shipname']);
+      teamList.add(participant['teamname'] != '' ? participant['teamname'] : 'Team ${participant['shipname']}');
     }
   }
 
@@ -3083,11 +3088,20 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     track['starttime'] *= 1000;
     track['endtime'] *= 1000;
     track['shiptracks'] ??= [];
-    track['shiptracks'].forEach((ship) => ship['stamp'] = ship['stamp'].map((timeStamp) => timeStamp * 1000).toList());
+    track['shiptracks'] = track['shiptracks'].map((ship) {
+      ship['stamp'] = ship['stamp'].map((timeStamp) => timeStamp * 1000).toList();
+      return ship;
+    }).toList();
     track['buoytracks'] ??= [];
-    track['buoytracks'].forEach((buoy) => buoy['stamp'] = buoy['stamp'].map((timeStamp) => timeStamp * 1000).toList());
+    track['buoytracks'] = track['buoytracks'].map((buoy) {
+      buoy['stamp'] = buoy['stamp'].map((timeStamp) => timeStamp * 1000).toList();
+      return buoy;
+    }).toList();
     track['windtracks'] ??= [];
-    track['windtracks'].forEach((station) => station['stamp'] = station['stamp'].map((timeStamp) => timeStamp * 1000).toList());
+    track['windtracks'] = track['windtracks'].map((station) {
+      station['stamp'] = station['stamp'].map((timeStamp) => timeStamp * 1000).toList();
+      return station;
+    }).toList();
     return track;
   }
 
@@ -3115,19 +3129,19 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
 
   String knotsToColor(speedInKnots) {
     const List windColorTable = [
-      '#ffffff',
-      '#ffffff',
-      '#c1fcf9',
-      '#7ef8f3',
-      '#24fc54',
-      '#b2f500',
-      '#ff5225',
-      '#ff08d1',
-      '#e50cff',
-      '#b026ff',
-      '#8334ff',
-      '#7f0000',
-      '#000000'
+      '#A5A5A5', // 0
+      '#A5A5A5', // 1
+      '#DBE5F1', // 2
+      '#01FFCD', // 3
+      '#00FF99', // 4
+      '#CCFF9A', // 5
+      '#FEFF99', // 6
+      '#FAC090', // 7
+      '#FF9934', // 8
+      '#FE504F', // 9
+      '#FE0000', //10
+      '#953735', //11
+      '#953735' //12
     ];
     return windColorTable[knotsToBft(speedInKnots)];
   }
@@ -3150,56 +3164,55 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // routine to calculate the weighted average wind speed and direction based on nrStations nearest to the center of the screen
   //
   ({int heading, double speed}) centerWind(windTracks, nrStations) {
-    if (windTracks.length >= nrStations) {
-      Map<int, double> unsortedDistanceTable = {}; // map with station index in the windTracks as key and the distance as value
-      var distance = const Distance();
-      List<double> eastWestVectors = [];
-      List<double> northSouthVectors = [];
-      List<double> distanceFactors = [];
-      double eastWestSum = 0;
-      double northSouthSum = 0;
-      // get the distances from the center of the screen to all Buienradar stations
-      for (int i = 0; i < windTracks.length; i++) {
-        unsortedDistanceTable.addAll({
-          i: distance.as(
-              LengthUnit.Meter, mapController.camera.center, LatLng(windTracks[i]['lat'][0].toDouble(), windTracks[i]['lon'][0].toDouble()))
-        });
-      }
-      // sort the map from near to far (values)
-      var distanceTable = unsortedDistanceTable.entries.toList();
-      distanceTable.sort((e1, e2) {
-        var diff = e1.value.compareTo(e2.value);
-        if (diff == 0) diff = e1.key.compareTo(e2.key);
-        return diff;
-      });
-      // get relevant info of the nearest stations in a number of lists
-      // first the sum of the distances to the nearest stations
-      double sumDistances = distanceTable.take(nrStations).fold(0, (sum, element) => sum + element.value);
-      // now create a list with 'reverse' distancefactors (nearest has highest value, but sum is higher then 1.0)
-      // and in the same loop lists for East-West and NorthSouth vectors using the speed and direction values in windTracks
-      for (int i = 0; i < nrStations; i++) {
-        distanceFactors.add(1 - (distanceTable[i].value / sumDistances));
-        var windDirection = (windTracks[distanceTable[i].key]['course'][windTimeIndex[distanceTable[i].key]] * pi / 180).toDouble();
-        var windSpeed = windTracks[distanceTable[i].key]['speed'][windTimeIndex[distanceTable[i].key]].toDouble();
-        eastWestVectors.add(windSpeed * cos(windDirection));
-        northSouthVectors.add(windSpeed * sin(windDirection));
-      }
-      // normalize the 'reversed' distancefactors to 1.0 (again) and use the elements to
-      // calculate the weighted vector at the center of the screen
-      sumDistances = distanceFactors.sum;
-      distanceFactors = distanceFactors.map((factor) => factor / sumDistances).toList();
-      for (int i = 0; i < nrStations; i++) {
-        eastWestSum += eastWestVectors[i] * distanceFactors[i];
-        northSouthSum += northSouthVectors[i] * distanceFactors[i];
-      }
-      // and return the result (heading always from 0-359
-      return (
-        heading: ((atan2(northSouthSum, eastWestSum) * 180 ~/ pi) + 360) % 360,
-        speed: sqrt(pow(eastWestSum, 2) + pow(northSouthSum, 2))
-      );
-    } else {
+    if (windTracks.length < nrStations) {
       return (heading: 0, speed: 0);
     }
+
+    final Map<int, double> unsortedDistanceTable = {}; // map with station index in the windTracks as key and the distance as value
+    final distance = const Distance();
+    final List<double> eastWestVectors = [];
+    final List<double> northSouthVectors = [];
+    final List<double> distanceFactors = [];
+    double eastWestSum = 0;
+    double northSouthSum = 0;
+
+    // get the distances from the center of the screen to all Buienradar stations
+    for (int i = 0; i < windTracks.length; i++) {
+      unsortedDistanceTable[i] = distance.as(
+        LengthUnit.Meter,
+        mapController.camera.center,
+        LatLng(windTracks[i]['lat'][0].toDouble(), windTracks[i]['lon'][0].toDouble()),
+      );
+    }
+    // sort the map from near to far (values)
+    final distanceTable = unsortedDistanceTable.entries.toList()..sort((e1, e2) => e1.value.compareTo(e2.value));
+
+    // get relevant info of the nearest stations in a number of lists
+    // first the sum of the distances to the nearest stations
+    double sumDistances = distanceTable.take(nrStations).fold(0, (sum, element) => sum + element.value);
+    // now create a list with 'reverse' distancefactors (nearest has highest value, but sum is higher then 1.0)
+    // and in the same loop lists for East-West and NorthSouth vectors using the speed and direction values in windTracks
+    for (int i = 0; i < nrStations; i++) {
+      distanceFactors.add(1 - (distanceTable[i].value / sumDistances));
+      final windDirection = (windTracks[distanceTable[i].key]['course'][windTimeIndex[distanceTable[i].key]] * pi / 180).toDouble();
+      final windSpeed = windTracks[distanceTable[i].key]['speed'][windTimeIndex[distanceTable[i].key]].toDouble();
+      eastWestVectors.add(windSpeed * cos(windDirection));
+      northSouthVectors.add(windSpeed * sin(windDirection));
+    }
+    // Normalize the 'reversed' distance factors to 1.0 and calculate the weighted vector
+    final double normalizedSumDistances = distanceFactors.reduce((a, b) => a + b);
+    final normalizedDistanceFactors = distanceFactors.map((factor) => factor / normalizedSumDistances).toList();
+
+    for (int i = 0; i < nrStations; i++) {
+      eastWestSum += eastWestVectors[i] * normalizedDistanceFactors[i];
+      northSouthSum += northSouthVectors[i] * normalizedDistanceFactors[i];
+    }
+
+    // Return the result (heading always from 0-359)
+    return (
+      heading: ((atan2(northSouthSum, eastWestSum) * 180 ~/ pi) + 360) % 360,
+      speed: sqrt(pow(eastWestSum, 2) + pow(northSouthSum, 2))
+    );
   }
 
   void setUnsetTestingActions() async {

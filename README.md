@@ -24,6 +24,8 @@ Version 3.3.2
 - selected item colored red in drop down lists in uiEventMenu
 - WindParticles widget implemented as a 'package' (no interdependencies any more)
 - upgrading to latest version of flutter, dart:ui and gradl (including handling deprecated Color.value)
+- code cleanup
+- bugfix: sharing is not possible when app is embedded in an <ifrae>, so hide the button
 
 Version 3.3.1, released on November 29 2024
 
