@@ -235,7 +235,7 @@ late Ticker replayTicker;
 int liveSecondsTimer = 60;
 int currentReplayTime = 0;
 bool replayRunning = false;
-bool replayPause = false; // set to true if user is moving the timeslider
+bool manualSliderMove = false; // set to true if user is moving the timeslider
 bool replayLoop = false;
 //
 // UI messages in the EventSelection menu
@@ -640,16 +640,15 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
         elevation: 0,
         toolbarHeight: 40,
         leading: InkWell(
-            // appIcon of the T&T organization. single tap opens event menu, double tap enters testing mode (without redrawing the ui)
+            // appIcon of the T&T organization. single tap opens event menu, double tap enters testing mode
             onTap: () => setState(() {
                   showShipMenu = showMapMenu = showInfoPage = showAttribution = showPreEventParticipants = showTestingMenu = false;
                   showEventMenu = !showEventMenu;
                 }),
-            onDoubleTap: () {
-              testing = !testing;
-              setUnsetTestingActions();
-              setState(() {});
-            },
+            onDoubleTap: () => setState(() {
+                  testing = !testing;
+                  setUnsetTestingActions();
+                }),
             child: Image.network('$server$appIconUrl')),
         title: InkWell(
           onTap: () => setState(() {
@@ -682,7 +681,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                       '&overlay=${mapOverlay ? 'true' : 'false'}:$selectedOverlayType'
                       '&play=${replayRunning ? 'true' : 'false'}:${currentReplayTime == sliderEnd ? '0' : currentReplayTime.toString()}'
                       ':$speedIndex'));
-                  if (replayRunning) startStopRunning();
+                  if (replayRunning) startStopRunning(); // stop running in this screen
                 } else {
                   FullScreenWindow.setFullScreen(fullScreen);
                   if ((eventStatus == EventStatus.live || eventStatus == EventStatus.replay) && showWindMarkers && allowShowWind) {
@@ -815,7 +814,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               _ => const SizedBox.shrink()
             },
           // 4. the windParticle layer
-          if (showWindMarkers && showWindParticles && replayTracks['windtracks'] != null)
+          if (showWindMarkers && showWindParticles && replayTracks['windtracks'] != null && replayTracks['windtracks'].isNotEmpty)
             WindParticles(direction: windParticlesDirection, speed: windParticlesSpeed, animate: !windPaused, color: markerBackgroundColor),
           // 5. the scalebar
           Scalebar(
@@ -850,7 +849,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   Column uiSliderArea() {
     return Column(mainAxisAlignment: MainAxisAlignment.end, crossAxisAlignment: CrossAxisAlignment.start, children: [
       // a column with 3 children:
-      // first 1. a row with the speedslider, a spacer and the zoom/follow buttons
+      // first 1. a simple row with the speedslider, a spacer and the zoom/follow buttons
       Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
         const SizedBox(width: 8),
         if (eventStatus == EventStatus.replay || currentReplayTime != sliderEnd) uiSpeedSlider(),
@@ -980,24 +979,16 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                     value: (currentReplayTime < eventStart || currentReplayTime > sliderEnd)
                         ? eventStart.toDouble()
                         : currentReplayTime.toDouble(),
-                    onChangeStart: (_) => replayPause = true,
-                    // pause the replay
+                    onChangeStart: (_) {
+                      manualSliderMove = true;
+                    },
                     onChanged: (time) {
                       currentReplayTime = time.toInt();
-                      if (time == sliderEnd) {
-                        replayRunning = false;
-                      }
                       moveShipsBuoysAndWindTo(currentReplayTime);
                     },
                     onChangeEnd: (time) {
-                      // resume play, but stop at end
                       currentReplayTime = time.toInt();
-                      replayPause = false;
-                      if (sliderEnd - time < 60 * 1000) {
-                        // within one minute of sliderEnd
-                        currentReplayTime = sliderEnd;
-                        replayRunning = false;
-                      }
+                      manualSliderMove = false;
                       moveShipsBuoysAndWindTo(currentReplayTime);
                     },
                   ))),
@@ -1017,8 +1008,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             Expanded(
                 child: Text(
               ((currentReplayTime == sliderEnd) && (sliderEnd != eventEnd) ? 'Live ' : 'Replay ') +
-                  dtsFormat.format(
-                      DateTime.fromMillisecondsSinceEpoch(currentReplayTime - ((currentReplayTime == sliderEnd) ? displayDelay : 0))),
+                  dtsFormat.format(DateTime.fromMillisecondsSinceEpoch(
+                      currentReplayTime - ((currentReplayTime == sliderEnd) && (sliderEnd != eventEnd) ? displayDelay : 0))),
               textAlign: TextAlign.center,
               style: TextStyle(color: textColor),
               overflow: TextOverflow.ellipsis,
@@ -1026,12 +1017,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           if (eventStatus == EventStatus.live)
             InkWell(
                 onTap: () => setState(() => liveSecondsTimer = 0),
-                child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-                  Text((liveSecondsTimer * hfUpdateInterval / 1000).ceil().toString(),
-                      textAlign: TextAlign.right, style: TextStyle(color: textColor)),
-                  const SizedBox(width: 2),
-                  Icon(Icons.refresh, color: textColor, size: 15),
-                ])),
+                child: SizedBox(
+                    width: 45,
+                    child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                      Text((liveSecondsTimer * hfUpdateInterval / 1000).ceil().toString(),
+                          textAlign: TextAlign.right, style: TextStyle(color: textColor)),
+                      const SizedBox(width: 2),
+                      Icon(Icons.refresh, color: textColor, size: 15),
+                    ]))),
         ]));
   }
 
@@ -1832,14 +1825,13 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
             child: Container(
                 constraints: BoxConstraints(minHeight: 100, maxHeight: 500, maxWidth: screenWidth - 55 < 350 ? screenWidth - 55 : 350),
                 decoration: BoxDecoration(color: menuBackgroundColor, border: Border.all(color: menuForegroundColor, width: 1)),
-                padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
+                padding: const EdgeInsets.all(10),
                 child: Stack(children: [
                   SingleChildScrollView(
                       child: Html(
                           data: shipInfoHTML,
                           onLinkTap: (link, _, __) => launchUrl(Uri.parse(link!), mode: LaunchMode.externalApplication))),
-                  Row(children: [
-                    const Spacer(),
+                  Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                     Icon(Icons.cancel_outlined, size: 20, color: menuForegroundColor),
                   ]),
                 ]))));
@@ -1938,7 +1930,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     mapReady = true;
     // Get the list of events ready for selection
     dirList = await getDirList();
-    eventNameList = dirList.keys.toList()..sort(); // ensure the events are in alphabetical order
+    eventNameList = dirList.keys.toList();
+    eventNameList.sort(); // ensure the events are in alphabetical order
     eventYearList = [];
     eventDayList = [];
     //
@@ -1949,14 +1942,16 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       List eventSubStrings = ('$eventDomain///').split('/');
       if (dirList.containsKey(eventSubStrings[0])) {
         eventName = eventSubStrings[0];
-        eventYearList = dirList[eventName].keys.toList()..sort();
+        eventYearList = dirList[eventName].keys.toList();
+        eventYearList.sort();
         eventYearList = eventYearList.reversed.toList();
         if (eventYearList.contains(eventSubStrings[1])) {
           eventYear = eventSubStrings[1];
           if (dirList[eventName][eventYear].isEmpty) {
             newEventSelected(''); // no day/races in this year, just go with eventName and eventYear
           } else {
-            eventDayList = dirList[eventName][eventYear].keys.toList()..sort();
+            eventDayList = dirList[eventName][eventYear].keys.toList();
+            eventDayList.sort();
             if (eventDayList.contains(eventSubStrings[2])) {
               eventDay = eventSubStrings[2];
               newEventSelected(eventDay); // go with eventName, eventYear and eventDay
@@ -2002,7 +1997,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     eventName = event;
     eventYearList = [];
     // make a list of years for the event in reverse order. The list is automatically shown in the UI
-    eventYearList = dirList[event].keys.toList()..sort();
+    eventYearList = dirList[event].keys.toList();
+    eventYearList.sort();
     eventYearList = eventYearList.reversed.toList();
     eventYear = 'Kies een jaar';
     Timer(const Duration(milliseconds: 600), () {
@@ -2027,7 +2023,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     eventDayList = [];
     // make a list of days for the event/year, but only if this event year has any days. Otherwise we have a complete event selected
     if (dirList[eventName][eventYear].length != 0) {
-      eventDayList = dirList[eventName][eventYear].keys.toList()..sort();
+      eventDayList = dirList[eventName][eventYear].keys.toList();
+      eventDayList.sort();
       eventDay = 'Kies een dag/race';
       Timer(const Duration(milliseconds: 600), () {
         // give the uiMapMenu animation time to settle, otherwise the drop down list show up at the wrong place
@@ -2148,8 +2145,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       showRouteLabels = true;
       buildRoute(move: true); // and move the map to the bounds of the route
     }
-    showProgress = false;
-    // hide the menu when we are running in a web iframe
+    setState(() => showProgress = false); // hide the progress indicator
+    // and hide the menu when we are running in a web iframe (otherwise leave it open until (s)he hits the map)
     if (kIsWeb && (document.referrer != '')) Timer(const Duration(milliseconds: 1500), () => setState(() => showEventMenu = false));
     preEventTimer = Timer.periodic(const Duration(seconds: 1), (_) => preEventTimerRoutine());
   }
@@ -2158,7 +2155,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   void preEventTimerRoutine() {
     if (DateTime.now().millisecondsSinceEpoch > eventStart) {
       preEventTimer.cancel();
-      eventStatus = EventStatus.live;
+      setState(() => showProgress = true);
       startLive();
     }
   }
@@ -2185,7 +2182,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       }
       // now get the latest bunch of live tracks
       liveTrails = await getTrails(eventDomain, fromTime: (replayTracks['endtime'] / 1000).toInt());
-      addLiveTrailsToTracks(); // merge the latest track info with the replay info and save it
+      replayTracks = mergeTracks(replayTracks, liveTrails); // merge the latest track info with the replay info and save it
     } else {
       // maxReplay > 0, fetch the trails of the last {maxReplay} hours
       eventStart = DateTime.now().millisecondsSinceEpoch - (maxReplay * 60 * 60 * 1000);
@@ -2193,7 +2190,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     }
     // save the trails when not on web
     if (!kIsWeb) await prefs.setString('live-$eventId', jsonEncode(replayTracks));
-    setupShipGpsBuoyAndWindInfo(); // prepare menu and track info
+    setupShipGpsBuoyAndWindInfo(replayTracks); // prepare menu and track info
     for (var name in shipList) {
       following[name] = true;
     }
@@ -2240,8 +2237,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
           // the last four trails update periods (see get/index/php)
           liveTrails = await getTrails(eventDomain); // fetch the latest data
         }
-        addLiveTrailsToTracks(); // add it to what we already had and store it
-        setupShipGpsBuoyAndWindInfo(); // prepare menu and track info
+        replayTracks = mergeTracks(replayTracks, liveTrails); // add it to what we already had and store it
+        if (!kIsWeb) prefs.setString('live-$eventId', jsonEncode(replayTracks));
+        setupShipGpsBuoyAndWindInfo(replayTracks); // prepare menu and track info
       }
       if (currentReplayTime == sliderEnd) {
         // slider is at the end
@@ -2250,7 +2248,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       } else {
         // slider is not at the end, the slider has been moved back in time by the user
         sliderEnd = now; // just make the slider a second longer
-        if (!replayRunning || replayPause) {
+        if (!replayRunning || manualSliderMove) {
           moveShipsBuoysAndWindTo(currentReplayTime); // and redraw the ships at the current replaytime,
           // only whenreplay is not running or replay is pausing (user moves slider during replayrunning)
         }
@@ -2258,7 +2256,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     } else {
       // the live event is over
       liveTimer.cancel();
-      eventStatus = EventStatus.replay;
+      setState(() => showProgress = true);
       startReplay();
     }
   }
@@ -2269,7 +2267,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     eventStatus = EventStatus.replay;
     selectionMessage = 'Het evenement is voorbij. Wacht tot de tracks zijn geladen';
     // First get rid of the temporary live file if that existed...
-    await prefs.remove('live-$eventId');
+    prefs.remove('live-$eventId');
     // Do we already have data in local storage?
     String? savedTracks = prefs.getString('replay-$eventId');
     if (savedTracks == null) {
@@ -2282,8 +2280,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       replayTracks = jsonDecode(savedTracks); // and just use the data from local storage
     }
     replayRunning = false;
-    setupShipGpsBuoyAndWindInfo(); // prepare menu and track info, including shipList
+    setupShipGpsBuoyAndWindInfo(replayTracks); // prepare menu and track info, including shipList, using the data in replayTracks
     for (var name in shipList) {
+      // set 'following' true for all ships
       following[name] = true;
     }
     autoFollow = autoZoom = true;
@@ -2311,45 +2310,45 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   void replayTickerRoutine(Duration elapsedTime) {
     // reset elapsed time to zero (for next tick)
     replayTicker.reset();
-    if (replayPause) return; // don't move forward, the user is moving the timeslider
+    if (manualSliderMove) return; // don't move forward, the user is moving the timeslider manually
     // use the elapsed since the previous run to calculate the new currentReplayTime
     currentReplayTime = (currentReplayTime + (elapsedTime.inMilliseconds * speedTable[speedIndex]));
     //
     // Now we have different situations:
-    //  1 We moved beyond the end of the event and eventStatus is live: eventStatus becomes 'replay' and we goto case 3
+    //  1 We moved beyond the end of the event and eventStatus is live: eventStatus becomes 'replay'
+    //    1.a We moved beyond the end of the event and replayLoop is true, move to the beginning of the track and go on
     //  2 We moved beyond the last trails received from the server and the event is still live: just stop
     //    If we were live, the liveTimerRoutine will take over. If we were in replay, wait for the user to move the timeslider
-    //  3 We moved beyond the last trails in replay and replayLoop is true, move to the beginning of the track and go on
-    //  4 We are still in replay: just move the ships and windmarkers
+    //  3 We are still in replay: just move the ships and windmarkers
     //
     if (currentReplayTime > eventEnd) {
       //case 1
       if (eventStatus == EventStatus.live) liveTimer.cancel(); // case 1
-      eventStatus = EventStatus.replay; // case 1, 3
-      currentReplayTime = replayLoop ? eventStart : eventEnd; // Case 3
+      eventStatus = EventStatus.replay; // case 1 and 1a
+      currentReplayTime = replayLoop ? eventStart : eventEnd; // Case 1a
       if (!replayLoop) startStopRunning();
     } else if (currentReplayTime > sliderEnd) {
       // case 2
       startStopRunning();
       currentReplayTime = sliderEnd;
     }
-    moveShipsBuoysAndWindTo(currentReplayTime); // case 4
+    moveShipsBuoysAndWindTo(currentReplayTime); // in all cases move the ships and buoys and rotate the wind
   }
 
   //----------------------------------------------------------------------------
   //
   // Routine to handle start/stop button
   void startStopRunning() {
-    if (eventStatus != EventStatus.preEvent) {
-      setState(() {
-        replayRunning = !replayRunning;
-        if (currentReplayTime == sliderEnd && replayRunning) {
-          // if (s)he wants to run while at the end of the slider, move it to the beginning
-          currentReplayTime = eventStart;
-        }
-        (replayRunning) ? replayTicker.start() : replayTicker.stop();
-      }); // redraw the UI
-    }
+//    if (eventStatus != EventStatus.preEvent) {
+    setState(() {
+      replayRunning = !replayRunning;
+      if (currentReplayTime == sliderEnd && replayRunning) {
+        // if (s)he wants to run while at the end of the slider, move it to the beginning
+        currentReplayTime = eventStart;
+      }
+      replayRunning ? replayTicker.start() : replayTicker.stop();
+    }); // redraw the UI
+//    }
   }
 
   //----------------------------------------------------------------------------
@@ -2379,7 +2378,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     //
     // for each ship we do the following:
     // 1. find where we are in the list of timestamps of this ship
-    // 2. based on this, calculate position and rotation
+    // 2. based on this, calculate/estimate position and rotation
     // 3. update the followbounds if we are following this ship
     // 4. prepare texts for tooltip, infowindow and label
     // 5. create a clickable marker with a tooltip and three click-callback functions (right click, double click and single click)
@@ -2391,7 +2390,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
       var shipTrack = replayTracks['shiptracks'][i];
       if (shipTrack['stamp'].length > 0) {
         // 1. find where we are in the list of timestamps of this ship
-        // 2. based on this, calculate position and rotation
+        // 2. based on this, calculate/estimate position and rotation
         if (time <= shipTrack['stamp'].first) {
           // before the first timestamp
           timeIndex = 0; // set the track's timeIndex to the first entry
@@ -2405,17 +2404,16 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               (eventStatus == EventStatus.live) &&
               (currentReplayTime == sliderEnd) &&
               (time - shipTrack['stamp'].last) < predictTime) {
-            // we are allowed to predict AND we are live AND at the end of the slider AND the last stamp is less then predictTime old:
-            // in this situation we make a prediction where the ship could be, based on the last known location, speed, time since the last
-            // location and the heading
+            // we are allowed to predict (hfUpdate) AND we are live AND at the end of the slider AND the last stamp is less then
+            // predictTime old: in this situation we make a prediction where the ship could be, based on the last known location, speed,
+            // time since the last location and the heading
             calculatedPosition = predictPosition(LatLng(shipTrack['lat'].last.toDouble(), shipTrack['lon'].last.toDouble()),
                 shipTrack['speed'].last / 10, time - shipTrack['stamp'].last as int, calculatedRotation);
           } else {
             calculatedPosition = LatLng(shipTrack['lat'].last.toDouble(), shipTrack['lon'].last.toDouble());
           }
         } else {
-          // we are somewhere between two stamps:
-          // travel along the track from the previous index forth (or back) to find out where we are
+          // we are somewhere between two stamps: travel along the track from the previous index forth (or back) to find out where we are
           timeIndex = shipTimeIndex[i]; // get the timeindex of this ship from a previous run
           var stamps = shipTrack['stamp']; // make a ref to the list of stamps, in an effort to speedup the search
           if (time > stamps[timeIndex]) {
@@ -2437,42 +2435,34 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               .transform(ratio);
           // calculate the rotation
           // tried this with a conversion to vectors, but the sin, cos and atan2 functions require too much time
+          // found this short algorithm using Copilot
           int diff = shipTrack['course'][timeIndex + 1] - shipTrack['course'][timeIndex];
-          if (diff >= 180) {
-            calculatedRotation = (shipTrack['course'][timeIndex] + (ratio * (diff - 360)).floor()); // anticlockwise through north (360 dg)
-          } else if (diff <= -180) {
-            calculatedRotation = (shipTrack['course'][timeIndex] + (ratio * (diff + 360)).floor()); // clockwise through north (360 dg)
-          } else {
-            calculatedRotation = (shipTrack['course'][timeIndex] + (ratio * diff).floor()); // clockwise or anti clockwise less then 180 dg
-          }
-          calculatedRotation = (calculatedRotation + 720) % 360; // ensures a value between 0 and 359
+          diff = (diff + 540) % 360 - 180; // Normalize diff to be within -180 to 180 degrees
+          calculatedRotation =
+              (shipTrack['course'][timeIndex] + (ratio * diff).floor() + 360) % 360; // Ensure the result is within 0 to 359 degrees
         }
         shipTimeIndex[i] = timeIndex; // save the timeindex in the list of timeindices for the next run
         //
         // 3. update the followbounds if we are following this ship
-        if (following[shipTrack['name']] ?? false) {
-          followBounds.add(calculatedPosition);
-        }
+        followBounds += (following[shipTrack['name']] ?? false) ? [calculatedPosition] : [];
         //
         // 4. prepare texts for tooltip, infowindow and label
         var speedString = '${(shipTrack['speed'][timeIndex] / 18.52).toStringAsFixed(1)}kn ('
             '${(shipTrack['speed'][timeIndex] / 10).toStringAsFixed(1)}km/h)';
-        //
         shipLostSignalIndicators[i] =
             ((time - (replayRunning ? shipTrack['stamp'][timeIndex] : shipTrack['stamp'].last)) > signalLostTime) ? "'" : '';
-        //
         String infoWindowTitle = '${shipTrack['name']}${shipLostSignalIndicators[i]}';
         String infoWindowText = (allowShowSpeed) ? 'Snelheid: $speedString' : '';
         // only during live AND lost signal we add a line with info when this 'more-then-3-minutes-old' position was received
         infoWindowText += (shipLostSignalIndicators[i] != '' && eventStatus == EventStatus.live && !replayRunning)
             ? '\nPositie op ${dtsFormat.format(DateTime.fromMillisecondsSinceEpoch(shipTrack['stamp'][timeIndex]))}'
             : '';
-        // create the shipmarker's icon with the correct color and rotation
+        //
+        // 5. create a clickable marker with a tooltip and three click-callback functions (right click, double click and single click)
+        // first create the shipmarker's icon with the correct color and rotation
         var svgString = '<svg width="22" height="22"><polygon points="$shipSvgPath" '
             'style="fill:${shipColorsSvg[i]};stroke:$bgColor;stroke-width:1" '
             'transform="rotate($calculatedRotation,11,11)" /></svg>';
-        //
-        // 5. create a clickable marker with a tooltip and three click-callback functions (right click, double click and single click)
         shipMarkerList[i] = Marker(
           point: calculatedPosition,
           width: 22,
@@ -2483,7 +2473,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   : ('${shipTrack['name']}${shipLostSignalIndicators[i]}${showShipSpeeds ? ', $speedString' : ''}'),
               child: InkWell(
                   child: SvgPicture.string(svgString),
-                  onSecondaryTap: () => loadAndShowShipDetails(shipTrack['name']),
+                  onSecondaryTap: () => loadAndShowShipDetails(shipTrack['name']), // right click
                   onDoubleTap: () => setState(() {
                         // zoom in on the ship
                         followAll = false;
@@ -2829,94 +2819,92 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // the race later (tracker or AIS data only turned on after eventStart, or the admin added a ship).
   // At the end of the routine the merged data is saved in local storage (pref)
   //
-  void addLiveTrailsToTracks() async {
-    liveTrails['shiptracks'].forEach((liveShip) {
+  Map<String, dynamic> mergeTracks(Map<String, dynamic> tracks, Map<String, dynamic> newTracks) {
+    newTracks['shiptracks'].forEach((newShip) {
       // get the index (index) in the replaytracks with the same name as the ship we try to add (liveShip)
-      int index = replayTracks['shiptracks'].indexWhere((item) => item['name'] == liveShip['name']);
+      int index = tracks['shiptracks'].indexWhere((item) => item['name'] == newShip['name']);
       if (index != -1) {
         // we found a ship with this name, now add the 'live' info to the 'replay' track info
-        var replayShip = replayTracks['shiptracks'][index];
-        replayShip['colorcode'] = liveShip['colorcode']; // copy possible new colorcode
-        int laststamp = (replayShip['stamp'].length > 0) ? replayShip['stamp'].last : 0; // there may be overlapping data, so make sure we
+        var ship = tracks['shiptracks'][index];
+        ship['colorcode'] = newShip['colorcode']; // copy possible new colorcode
+        int laststamp = (ship['stamp'].length > 0) ? ship['stamp'].last : 0; // there may be overlapping data, so make sure we
         // start with data newer then our last stamp
-        for (int k = 0; k < liveShip['stamp'].length; k++) {
+        for (int k = 0; k < newShip['stamp'].length; k++) {
           // add stamps, lats, lons, speeds and courses
-          if (liveShip['stamp'][k] > laststamp) {
-            replayShip['stamp'].add(liveShip['stamp'][k]);
-            replayShip['lat'].add(liveShip['lat'][k]);
-            replayShip['lon'].add(liveShip['lon'][k]);
-            replayShip['speed'].add(liveShip['speed'][k]);
-            replayShip['course'].add(liveShip['course'][k]);
+          if (newShip['stamp'][k] > laststamp) {
+            ship['stamp'].add(newShip['stamp'][k]);
+            ship['lat'].add(newShip['lat'][k]);
+            ship['lon'].add(newShip['lon'][k]);
+            ship['speed'].add(newShip['speed'][k]);
+            ship['course'].add(newShip['course'][k]);
           }
         }
       } else {
         // we had no ship with this name yet, just add it at at the end
-        replayTracks['shiptracks'].add(liveShip);
-        following[liveShip['name']] = followAll; // set following for this ship same as followAll checkbox
+        tracks['shiptracks'].add(newShip);
+        following[newShip['name']] = followAll; // set following for this ship same as followAll checkbox
       }
       // sort tracks based on colorcode (new tracks and tracks with changed colorcodes)
       replayTracks['shiptracks'].sort((a, b) => int.parse(a['colorcode']).compareTo(int.parse(b['colorcode'])));
     });
     //
     // now for the gps buoys
-    liveTrails['buoytracks'].forEach((liveBuoy) {
+    newTracks['buoytracks'].forEach((newBuoy) {
       // get the index (index) in the replaytracks with the same name as the buoy we try to add (liveBuoy)
-      int index = replayTracks['buoytracks'].indexWhere((item) => item['name'] == liveBuoy['name']);
+      int index = tracks['buoytracks'].indexWhere((item) => item['name'] == newBuoy['name']);
       if (index != -1) {
         // we found a buoy with this name
-        var replayBuoy = replayTracks['buoytracks'][index];
-        replayBuoy['color'] = liveBuoy['color']; // copy possible new colorcode
-        int laststamp = replayBuoy['stamp'].last;
-        for (int k = 0; k < liveBuoy['stamp'].length; k++) {
+        var buoy = tracks['buoytracks'][index];
+        buoy['color'] = newBuoy['color']; // copy possible new colorcode
+        int laststamp = buoy['stamp'].last;
+        for (int k = 0; k < newBuoy['stamp'].length; k++) {
           // add stamps, lats and lons. There are no relevant speeds and courses.
-          if (liveBuoy['stamp'][k] > laststamp) {
-            replayBuoy['stamp'].add(liveBuoy['stamp'][k]);
-            replayBuoy['lat'].add(liveBuoy['lat'][k]);
-            replayBuoy['lon'].add(liveBuoy['lon'][k]);
+          if (newBuoy['stamp'][k] > laststamp) {
+            buoy['stamp'].add(newBuoy['stamp'][k]);
+            buoy['lat'].add(newBuoy['lat'][k]);
+            buoy['lon'].add(newBuoy['lon'][k]);
           }
         }
       } else {
         // we had no buoy with this name yet, just add it
-        replayTracks['buoytracks'].add(liveBuoy);
+        tracks['buoytracks'].add(newBuoy);
       }
     });
     //
     // and finally the same for the weather stations
-    liveTrails['windtracks'].forEach((liveWindStation) {
-      int index = replayTracks['windtracks'].indexWhere((item) => item['name'] == liveWindStation['name']);
+    newTracks['windtracks'].forEach((newWindStation) {
+      int index = tracks['windtracks'].indexWhere((item) => item['name'] == newWindStation['name']);
       if (index != -1) {
         // we already had a weather station with this name
-        var replayWindStation = replayTracks['windtracks'][index];
-        int laststamp = replayWindStation['stamp'].last;
-        for (int k = 0; k < liveWindStation['stamp'].length; k++) {
-          if ((liveWindStation['stamp'][k] > laststamp) && (liveWindStation['speed'] != 0)) {
-            replayWindStation['stamp'].add(liveWindStation['stamp'][k]);
-            replayWindStation['lat'].add(liveWindStation['lat'][k]);
-            replayWindStation['lon'].add(liveWindStation['lon'][k]);
-            replayWindStation['speed'].add(liveWindStation['speed'][k]);
-            replayWindStation['course'].add(liveWindStation['course'][k]);
+        var windStation = tracks['windtracks'][index];
+        int laststamp = windStation['stamp'].last;
+        for (int k = 0; k < newWindStation['stamp'].length; k++) {
+          if ((newWindStation['stamp'][k] > laststamp) && (newWindStation['speed'] != 0)) {
+            windStation['stamp'].add(newWindStation['stamp'][k]);
+            windStation['lat'].add(newWindStation['lat'][k]);
+            windStation['lon'].add(newWindStation['lon'][k]);
+            windStation['speed'].add(newWindStation['speed'][k]);
+            windStation['course'].add(newWindStation['course'][k]);
           }
         }
       } else {
-        if (liveWindStation['speed'] != 0) {
+        if (newWindStation['speed'] != 0) {
           // we had no weather station with this name yet
-          replayTracks['windtracks'].add(liveWindStation); // add the complete weather station
+          tracks['windtracks'].add(newWindStation); // add the complete weather station
         }
       }
     });
     //
-    replayTracks['endtime'] = liveTrails['endtime']; // set the new endtime and store locally
-    // browsers do not allow us to store more then 5 Mbyte. But for the rest: store/overwrite the updated tracks
-    // using the eventId as unique identifier
-    if (!kIsWeb) await prefs.setString('live-$eventId', jsonEncode(replayTracks));
+    tracks['endtime'] = newTracks['endtime']; // set the new endtime and store locally
+    return tracks;
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
   // Routine to prepare lists for ships, gps buoys and windstations after we received new/updated tracks
   // in live at every update, in replay only after loading the tracks
   //
-  void setupShipGpsBuoyAndWindInfo() {
-    final nrShips = replayTracks['shiptracks'].length;
+  void setupShipGpsBuoyAndWindInfo(Map<String, dynamic> tracks) {
+    final nrShips = tracks['shiptracks'].length;
     shipTimeIndex = List.filled(nrShips, 0, growable: true);
     shipMarkerList = List.filled(nrShips, const Marker(point: LatLng(0, 0), child: SizedBox.shrink()), growable: true);
     shipLabelList = List.filled(nrShips, const Marker(point: LatLng(0, 0), child: SizedBox.shrink()), growable: true);
@@ -2926,26 +2914,25 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     teamList = [];
     shipColors = [];
     shipColorsSvg = [];
-    for (var ship in replayTracks['shiptracks']) {
+    for (var ship in tracks['shiptracks']) {
       shipList.add(ship['name']); // add the name to the shipList for the shipmenu
-      final team = ship['team'] ?? "";
-      teamList.add(team.isNotEmpty ? team : "team ${ship['name']}");
+      teamList.add(ship['team'] ?? "team ${ship['name']}");
       final color = Color(shipMarkerColorTable[int.parse(ship['colorcode']) % 32]);
       shipColors.add(color);
-      shipColorsSvg.add('#${color..toARGB32(alpha: false).toRadixString(16).padLeft(6, '0')}');
+      shipColorsSvg.add('#${color.toARGB32(alpha: false).toRadixString(16).padLeft(6, '0')}');
     }
     // now initialize the lists for the buoys and the windstations.
     // note that we initialize the timeindex lists with -1's; this ensures that the markers are shown from the start (see update buoys and
-    // wind)
-    gpsBuoyTimeIndex = List.filled(replayTracks['buoytracks'].length, -1, growable: true);
+    // wind routines)
+    gpsBuoyTimeIndex = List.filled(tracks['buoytracks'].length, -1, growable: true);
     gpsBuoyMarkerList =
-        List.filled(replayTracks['buoytracks'].length, const Marker(point: LatLng(0, 0), child: SizedBox.shrink()), growable: true);
+        List.filled(tracks['buoytracks'].length, const Marker(point: LatLng(0, 0), child: SizedBox.shrink()), growable: true);
     gpsBuoyLabelList =
-        List.filled(replayTracks['buoytracks'].length, const Marker(point: LatLng(0, 0), child: SizedBox.shrink()), growable: true);
-    windTimeIndex = List.filled(replayTracks['windtracks'].length, -1, growable: true);
+        List.filled(tracks['buoytracks'].length, const Marker(point: LatLng(0, 0), child: SizedBox.shrink()), growable: true);
+    windTimeIndex = List.filled(tracks['windtracks'].length, -1, growable: true);
     // note: one extra for the centerscreenwindmarker
     windMarkerList =
-        List.filled(replayTracks['windtracks'].length + 1, const Marker(point: LatLng(0, 0), child: SizedBox.shrink()), growable: true);
+        List.filled(tracks['windtracks'].length + 1, const Marker(point: LatLng(0, 0), child: SizedBox.shrink()), growable: true);
   }
 
   //----------------------------------------------------------------------------------------------------------------------------------------
@@ -2984,7 +2971,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   }
 
   //
-  // and a routine to create labels next to ships, buoys and route points
+  // and a routine to create labels for ships, buoys and route points
   //
   Marker mapTextLabel(LatLng point, String txt) {
     return Marker(
@@ -3050,7 +3037,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // get the app icon url
   //
   Future<String> getAppIconUrl({event = ''}) async {
-    final response = await http.get('get?req=appiconurl${(event == '') ? '' : '&event=$eventDomain'}&dev=$phoneId');
+    final response = await http.get('get/?req=appiconurl${(event == '') ? '' : '&event=$eventDomain'}&dev=$phoneId');
     return (response.statusCode == 200)
         ? response.data.replaceFirst('/', '|', 8).split('|').last // remove servername from response
         : 'assets/assets/images/defaultAppIcon.png';
@@ -3220,7 +3207,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
     if (!testing) debugString = '';
     // get a new dirlist WITH (or without, depending on the value of testing) domain name items starting with an underscore
     dirList = await getDirList();
-    eventNameList = dirList.keys.toList()..sort;
+    eventNameList = dirList.keys.toList();
+    eventNameList.sort();
     eventYearList = [];
     eventDayList = [];
     // redraw the route with or without the geofence polygons in line with the testing boolean

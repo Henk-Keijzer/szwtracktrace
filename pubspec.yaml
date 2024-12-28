@@ -54,6 +54,7 @@ dependencies:
   url_launcher: ^6.1.12
   uuid: ^4.1.0
   vector_math: ^2.1.4
+  vector_map_tiles: ^9.0.0-beta.3
 
 dev_dependencies:
   flutter_test:
