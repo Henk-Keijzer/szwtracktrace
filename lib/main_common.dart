@@ -44,13 +44,13 @@ import 'package:uuid/uuid.dart';
 //
 //------------------------------------------------------------------------------------------------------------------------------------------
 // app imports
-import 'default_config.dart';
-import 'default_maptileproviders.dart';
+import 'default_data.dart';
 import 'wind_particles.dart';
 
 //
 //------------------------------------------------------------------------------------------------------------------------------------------
 // app-wide variables
+//------------------------------------------------------------------------------------------------------------------------------------------
 //
 // default server and package info
 String debugString = '';
@@ -59,7 +59,7 @@ Dio http = Dio();
 String serverForSharing = server;
 late PackageInfo packageInfo; // info is picked up at the beginning of mainCommon
 //
-// devicetype / platformtype
+// devicetype / platformtype / phone/device identification
 final bool kIsDesktop = !kIsWeb &&
     (defaultTargetPlatform == TargetPlatform.windows ||
         defaultTargetPlatform == TargetPlatform.macOS ||
@@ -67,55 +67,9 @@ final bool kIsDesktop = !kIsWeb &&
 final bool kIsWebOnIOS =
     kIsWeb && (defaultTargetPlatform == TargetPlatform.iOS); // true if the user is running the web app on a mobile device
 final bool kIsWebOnAndroid = kIsWeb && (defaultTargetPlatform == TargetPlatform.android);
-//
 String phoneId = '';
+//
 late Map<dynamic, dynamic> config;
-//
-// Colors (menu colors are overruled by colors in config/flutter_config.json, but we define them here in case we cannot reach the server)
-// setting it as ARGB hex means we don't need a null check in the code
-Color menuAccentColor = const Color(0xffffffff); // pure white
-Color menuBackgroundColor = const Color(0xffd32f2f); // Colors.red[700]
-Color menuForegroundColor = const Color(0xb3ffffff); // Colors.white70;
-//
-const String bgDark = '#000000'; // marker and label outline colors in #RGB string depending on map background black or white
-const String bgLight = '#ffffff';
-//
-// the next color table was created using an online program to create 32 distinct colors, for example https://mokole.com/palette.html
-// or just ask Co-Pilot
-const List shipMarkerColorTable = [
-  0xFFFF0000,
-  0xFF00FF00,
-  0xFF0000FF,
-  0xFFFFFF00,
-  0xFF00FFFF,
-  0xFFFF00FF,
-  0xFFFFA500,
-  0xFF800080,
-  0xFF00FF00,
-  0xFFFFC0CB,
-  0xFF008080,
-  0xFFE6E6FA,
-  0xFFA52A2A,
-  0xFFF5F5DC,
-  0xFF800000,
-  0xFF808000,
-  0xFF000080,
-  0xFFFF7F50,
-  0xFF40E0D0,
-  0xFFC0C0C0,
-  0xFFFFD700,
-  0xFFFFDAB9,
-  0xFFDDA0DD,
-  0xFF98FF98,
-  0xFFFA8072,
-  0xFF4B0082,
-  0xFFFFFFF0,
-  0xFFF0E68C,
-  0xFFDA70D6,
-  0xFFDC143C,
-  0xFF708090,
-  0xFFEE82EE
-];
 //
 // vars for getting physical device info and the phoneId
 double screenWidth = 0;
@@ -185,7 +139,7 @@ List<Color> shipColors = []; // corresponding list of ship colors used in the pa
 List<String> shipColorsSvg = []; //same list but as an svg string used as markercolor ('#RRGGBB')
 String shipSvgPath = '10,1 11,1 14,4 14,18 13,19 8,19 7,18 7,4'; // outline of the ship, overwritten by config['icons']['boatSVGPath']
 //
-// lists for markers and polylines, maintained in moveShipsTo, updateGpsBuoys and rotateWindTo
+// lists for markers and polylines, maintained in moveShipsTo, updateGpsBuoys and rotateWindTo (as layers in the flutter map)
 List<Marker> shipMarkerList = [];
 List<Marker> shipLabelList = [];
 List<Polyline> shipTrailList = [];
@@ -198,8 +152,6 @@ List<Polyline> routeLineList = [];
 List<Polygon> routePolygons = [];
 List<Marker> infoWindowMarkerList = []; // although there is max 1 infowindow, we have a list to make it easy to add it to the other markers
 String infoWindowId = '';
-// info for the centerwind and windparticles
-const nrWindStationsForCenterWindCalculation = 3; // should we make this a flutter_config or eventInfo constant???
 //
 // variables used for following ships and zooming
 Map<String, bool> following = {}; // list of shipnames to be followed
@@ -208,22 +160,8 @@ bool autoZoom = true;
 bool autoFollow = true;
 bool moveWhileNotInFocus = false;
 //
-// vars and constants for the movement of ships and wind markers in time
-const int speedIndexInitialValue = 4;
-int speedIndex = speedIndexInitialValue; // index in the following table en position of the speed slider, default = 1 min/sec
-const List<int> speedTable = [0, 1, 10, 30, 60, 180, 300, 900, 1800, 3600];
-const List speedTextTable = [
-  "gestopt",
-  "1 sec/sec",
-  "10 sec/sec",
-  "30 sec/sec",
-  "1 min/sec",
-  "3 min/sec",
-  "5 min/sec",
-  "15 min/sec",
-  "30 min/sec",
-  "1 uur/sec"
-];
+// vars for the movement of ships and wind markers in time
+int speedIndex = speedIndexInitialValue; // index in the following table en position of the speed slider
 List<int> shipTimeIndex = []; // for each ship the currenttime position in its list of stamps
 List<int> gpsBuoyTimeIndex = []; // for each gps buoy the currenttime position in its list of stamps
 List<int> windTimeIndex = []; // for each weather station the currenttime position in the list of stamps
@@ -261,20 +199,26 @@ String infoPageHTML = ''; // HTML text for the info page from {server}/config/ap
 bool testing = false; // double tap the logo of the app (appicon) to set to true.
 //
 // map related vars
-// initial baseMapTileProviders and some vars are imported from default_maptileproviders.dart
+// initial MapTileProviders and some vars are imported from default_maptileproviders.dart
 Map<String, dynamic> baseMapTileProviders = {};
+String selectedMapType = 'Standaard';
 Map<String, dynamic> overlayTileProviders = {};
 String selectedOverlayType = '';
 bool mapOverlay = false;
 Map<String, dynamic> labelTileProviders = {};
 String labelOverlayType = '';
+String bgColor = defaultMapTileProviders['basemaps']['bgColor'];
+Color markerBackgroundColor = (bgColor == '#000000') ? const Color(0xFF000000) : const Color(0xFFFFFFFF);
+Color labelBackgroundColor = (bgColor == '#000000') ? const Color(0xBfFFFFFF) : const Color(0xFF000000);
+//
+// vars for transfering data to the windParticlesWidget
+int windParticlesSpeed = 0;
+int windParticlesDirection = 0;
 //
 // default values for some booleans, selectable from the mapmenu
 bool showWindMarkers = false;
 bool showWindParticles = false;
 bool windPaused = false;
-int windParticlesSpeed = 0;
-int windParticlesDirection = 0;
 bool showRoute = true;
 bool showRouteLabels = false;
 bool showShipLabels = true;
@@ -296,6 +240,7 @@ final GlobalKey dropDayKey = GlobalKey();
 DateFormat dtFormat = DateFormat("d MMM y, HH:mm", 'nl');
 DateFormat dtsFormat = DateFormat("d MMM y, HH:mm:ss", 'nl');
 
+//
 //--------------------------------------------------------------------------------------
 // local extensiona and functions
 //
@@ -314,6 +259,8 @@ extension ResetTicker on Ticker {
   }
 }
 
+//
+// used for merging the app's config on the server with the defaultconfig
 void mergeMaps(Map<dynamic, dynamic> map1, Map<dynamic, dynamic> map2) {
   map2.forEach((key, value) {
     if (map1.containsKey(key)) {
@@ -764,6 +711,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
               ),
             _ => const SizedBox.shrink()
           },
+          //
           // 2. the tile layer for the streetlabels (only when the selected basemap indicates a labels layer
           if (baseMapTileProviders[selectedMapType]['labels'] != '')
             switch (labelTileProviders[baseMapTileProviders[selectedMapType]['labels']]['service']) {
@@ -789,6 +737,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 ),
               _ => const SizedBox.shrink()
             },
+          //
           // 3. the tilelayer for the selecatble overlays, showing waterways, etc
           if (mapOverlay && overlayTileProviders.isNotEmpty)
             switch (overlayTileProviders[selectedOverlayType]['service']) {
@@ -799,7 +748,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                   ),
                   tileProvider: CachedTileProvider(store: cacheStore),
                   retinaMode: false,
-                  //RetinaMode.isHighDensity(context),
+                  // otherwise the RWS vaarwegmarkeringen get too small on high retina screens
+//                  retinaMode: RetinaMode.isHighDensity(context),
                   tileDisplay: const TileDisplay.instantaneous(),
                   userAgentPackageName: packageInfo.packageName,
                 ),
@@ -813,9 +763,11 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
                 ),
               _ => const SizedBox.shrink()
             },
+          //
           // 4. the windParticle layer
           if (showWindMarkers && showWindParticles && replayTracks['windtracks'] != null && replayTracks['windtracks'].isNotEmpty)
             WindParticles(direction: windParticlesDirection, speed: windParticlesSpeed, animate: !windPaused, color: markerBackgroundColor),
+          //
           // 5. the scalebar
           Scalebar(
               alignment: Alignment.topLeft,
@@ -3109,29 +3061,9 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   //----------------------------------------------------------------------------------------------------------------------------------------
   // routines to convert wind knots into Beaufort and SVG colors
   //
-  int knotsToBft(speedInKnots) {
-    const List<int> windKnots = [0, 1, 3, 6, 10, 16, 21, 27, 33, 40, 47, 55, 63, 999];
-    return windKnots.indexOf(windKnots.firstWhere((i) => i >= speedInKnots)).toInt();
-  }
+  int knotsToBft(speedInKnots) => windKnots.indexOf(windKnots.firstWhere((i) => i >= speedInKnots)).toInt();
 
-  String knotsToColor(speedInKnots) {
-    const List windColorTable = [
-      '#A5A5A5', // 0
-      '#A5A5A5', // 1
-      '#DBE5F1', // 2
-      '#01FFCD', // 3
-      '#00FF99', // 4
-      '#CCFF9A', // 5
-      '#FEFF99', // 6
-      '#FAC090', // 7
-      '#FF9934', // 8
-      '#FE504F', // 9
-      '#FE0000', //10
-      '#953735', //11
-      '#953735' //12
-    ];
-    return windColorTable[knotsToBft(speedInKnots)];
-  }
+  String knotsToColor(speedInKnots) => windColorTable[knotsToBft(speedInKnots)];
 
   //----------------------------------------------------------------------------------------------------------------------------------------
   // routine to predict new location, based on initial location, speed in km/h, time in milliseconds and course in degrees
