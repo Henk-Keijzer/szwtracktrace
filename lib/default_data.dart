@@ -112,17 +112,17 @@ const List<int> windKnots = [0, 1, 3, 6, 10, 16, 21, 27, 33, 40, 47, 55, 63, 999
 //
 // windColorTable from 0 to 12 Bft
 const List<String> windColorTable = [
-  '#FFFFFF', // White
-  '#CCFFCC', // Light Green
-  '#99FF99', // Pale Green
-  '#66FF66', // Light Lime
-  '#33FF33', // Lime
-  '#00FF00', // Green
-  '#00CCFF', // Light Blue
-  '#0066FF', // Blue
-  '#FFCC00', // Orange
-  '#FF9900', // Red-Orange
-  '#FF0000', // Red
-  '#990000', // Dark Red
-  '#000000', // Black
+  '#FFFFFF', // White, 0 Bft
+  '#CCFFCC', // Light Green, 1 Bft
+  '#66FF66', // Light Lime, 2 Bft
+  '#33FF33', // Lime, 3 Bft
+  '#00FF00', // Green, 4 Bft
+  '#00CCFF', // Light Blue, 5 Bft
+  '#0066FF', // Blue, 6 Bft
+  '#FFCC00', // Orange, 7 Bft
+  '#FF9900', // Red-Orange, 8 Bft
+  '#FF0000', // Red, 9 Bft
+  '#990000', // Dark Red, 10 Bft
+  '#000000', // Black, 11 Bft
+  '#000000', // Black, 12 Bft
 ];
