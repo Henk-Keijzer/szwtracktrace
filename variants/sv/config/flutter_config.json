@@ -1,0 +1,20 @@
+{
+	"text": {
+	},
+	"colors": {
+		"menuBackgroundColor": "FF141639",
+		"menuForegroundColor": "FFC8CED1",
+		"menuAccentColor": "FFD8052A",
+		"infoPageColor": "FFB0BEC5"
+	},
+	"icons": {
+		"boatIcon": "rowing",
+		"boatSVGPath": "10,1 12,1 14,4 14,7 17,10 14,7 14,11 17,14 14,11 14,17 12,20 10,20 8,17 8,11 5,14 8,11 8,7 5,10 8,7 8,4"
+	},
+	"options": {
+		"windy": "false",
+		"applestorelink": "",
+		"playstorelink": "",
+		"localizations": "nl,en,fr,de"
+	}
+}

@@ -1,0 +1,21 @@
+{
+	"eventtitle": "Naam voor in de appbar",
+	"traillength": "30",
+	"trailsupdateinterval": "15",
+	"hfupdate": "true",
+	"displaydelay": "30",
+	"predicttime": "30",
+	"signallosttime": "30",
+	"showteam": "false",
+	"showteamdefault": "false",
+	"allowspeed": "true",
+	"buienradar": "true",
+	"maxreplay": "0",
+	"mediaframe": "",
+	"AISHub": "false",
+	"MarineTraffic": "false",
+	"eventstartstamp": "0",
+	"eventendstamp": "0",
+	"eventid": "",
+	"pipvideo": ""
+}

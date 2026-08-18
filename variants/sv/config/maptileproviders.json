@@ -1,0 +1,102 @@
+{
+	"basemaps": {
+		"Open Street Map": {
+			"service": "WMTS",
+			"URL": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+			"subDomains": [],
+			"wmsbaseURL": "",
+			"wmslayers": [],
+			"labels": "",
+			"bgColor": "#000000",
+			"maxZoom": 19.0,
+			"attrib": "Open Street Map Contributors",
+			"attribLink": "https://www.openstreetmap.org/copyright"
+		},
+		"WaterkaartNL": {
+			"service": "WMTS",
+			"URL": "https://waterkaart.live/tiles/tileserver_eu.php?xy={z}/{x}/{y}.png",
+			"subDomains": [],
+			"labels": "",
+			"bgColor": "#000000",
+			"maxZoom": 19.0,
+			"attrib": "Waterkaart.net en Open Street Map Contributors",
+			"attribLink": "https://www.waterkaart.net/"
+		},
+		"Satelliet": {
+			"service": "WMTS",
+			"URL": "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+			"subDomains": [],
+			"labels": "",
+			"bgColor": "#ffffff",
+			"maxZoom": 20.0,
+			"attrib": "Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+			"attribLink": "https://www.esri.com"
+		},
+		"Satelliet met labels": {
+			"service": "WMTS",
+			"URL": "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+			"subDomains": [],
+			"labels": "ESRIlabels",
+			"bgColor": "#ffffff",
+			"maxZoom": 20.0,
+			"attrib": "Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+			"attribLink": "https://www.esri.com"
+		},
+		"NLMaps Standaard": {
+			"service": "WMTS",
+			"URL": "https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/standaard/EPSG:3857/{z}/{x}/{y}.png",
+			"subDomains": [],
+			"wmsbaseURL": "",
+			"wmslayers": [],
+			"labels": "",
+			"bgColor": "#000000",
+			"maxZoom": 19.0,
+			"attrib": "PDOK/Kadaster",
+			"attribLink": "https://www.kadaster.nl"
+		},
+		"NLMaps Grijs": {
+			"service": "WMTS",
+			"URL": "https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/grijs/EPSG:3857/{z}/{x}/{y}.png",
+			"subDomains": [],
+			"wmsbaseURL": "",
+			"wmslayers": [],
+			"labels": "",
+			"bgColor": "#000000",
+			"maxZoom": 19.0,
+			"attrib": "PDOK/Kadaster",
+			"attribLink": "https://www.kadaster.nl"
+		},
+		"NLMaps Water": {
+			"service": "WMTS",
+			"URL": "https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/water/EPSG:3857/{z}/{x}/{y}.png",
+			"subDomains": [],
+			"wmsbaseURL": "",
+			"wmslayers": [],
+			"labels": "",
+			"bgColor": "#000000",
+			"maxZoom": 19.0,
+			"attrib": "PDOK/Kadaster",
+			"attribLink": "https://www.kadaster.nl"
+		}
+	},
+	"overlays": {},
+	"labels": {
+		"ESRIlabels": {
+			"service": "WMTS",
+			"URL":"https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}{r}",
+			"subDomains":[],
+			"maxZoom": 20.0,
+			"attrib": "ESRI",
+			"attribLink": "https://www.esri.com"
+		},
+		"CartoLabels": {
+			"service": "WMTS",
+			"URL":"https://{s}.basemaps.cartocdn.com/rastertiles/dark_only_labels/{z}/{x}/{y}{r}.png",
+			"subDomains":["a", "b", "c", "d"],
+			"maxZoom": 20.0,
+			"attrib": "Open Street Map Contributors",
+			"attribLink": "https://www.openstreetmap.org/copyright"
+		}
+
+	}
+}

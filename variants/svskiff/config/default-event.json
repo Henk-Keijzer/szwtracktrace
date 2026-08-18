@@ -1,0 +1,17 @@
+{
+	"eventtitle": "Naam van het evenement",
+	"traillength": "1",
+	"trailsupdateinterval": "5",
+	"hfupdate": "true",
+	"signallosttime": "15",
+	"allowspeed": "true",
+	"buienradar": "false",
+	"maxreplay": "0",
+	"mediaframe": "",
+	"AISHub": "false",
+	"MarineTraffic": "false",
+	"eventstartstamp": "0",
+	"eventendstamp": "0",
+	"eventid": "",
+	"pipvideo": ""
+}

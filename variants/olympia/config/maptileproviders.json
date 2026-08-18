@@ -1,0 +1,96 @@
+{
+	"basemaps": {
+		"Standaard": {
+			"service": "WMTS",
+			"URL": "https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/standaard/EPSG:3857/{z}/{x}/{y}.png",
+			"subDomains": [],
+			"labels": "",
+			"bgColor": "#000000",
+			"maxZoom": 19.0,
+			"attrib": "PDOK/Kadaster",
+			"attribLink": "https://www.pdok.nl"
+		},
+		"Grijs": {
+			"service": "WMTS",
+			"URL": "https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/grijs/EPSG:3857/{z}/{x}/{y}.png",
+			"subDomains": [],
+			"labels": "",
+			"bgColor": "#000000",
+			"maxZoom": 19.0,
+			"attrib": "PDOK/Kadaster",
+			"attribLink": "https://www.pdok.nl"
+		},
+		"Water": {
+			"service": "WMTS",
+			"URL": "https://service.pdok.nl/brt/achtergrondkaart/wmts/v2_0/water/EPSG:3857/{z}/{x}/{y}.png",
+			"subDomains": [],
+			"labels": "",
+			"bgColor": "#000000",
+			"maxZoom": 19.0,
+			"attrib": "PDOK/Kadaster",
+			"attribLink": "https://www.pdok.nl"
+		},
+		"Satelliet": {
+			"service": "WMTS",
+			"URL": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?token=AAPK98f1d23951d54ec6af3162442bf68e054QnQLuJueZ8pkCU6hV6vAcwoykak2mZeyCj8Y3-MIMAOSPZtZm4jHvwxGw_kcMJv",
+			"subDomains": [],
+			"labels": "ESRILabels",
+			"bgColor": "#ffffff",
+			"maxZoom": 19.0,
+			"attrib": "Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+			"attribLink": "https://www.esri.com"
+		},
+		"Open Street Map": {
+			"service": "WMTS",
+			"URL": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+			"subDomains": [],
+			"labels": "",
+			"bgColor": "#000000",
+			"maxZoom": 19.0,
+			"attrib": "Open Street Map Contributors",
+			"attribLink": "https://www.openstreetmap.org/"
+		}
+	},
+	"overlays": {
+		"Open Sea Map": {
+			"service": "WMTS",
+			"URL": "https://{s}.openseamap.org/seamark/{z}/{x}/{y}.png",
+			"subDomains": [
+				"t1",
+				"tiles"
+			],
+			"maxZoom": 19.0,
+			"attrib": "Open Sea Map contributors",
+			"attribLink": "https://openseamap.org"
+		},
+		"Vaarwegmarkeringen RWS": {
+			"service": "WMS",
+			"wmsbaseURL": "https://service.pdok.nl/rws/vaarwegmarkeringennld/wms/v1_0?",
+			"wmslayers": [
+				"markvastrd",
+				"markdrijvendrd"
+			],
+			"maxZoom": 19.0,
+			"attrib": "PDOK/Rijkswaterstaat",
+			"attribLink": "https://www.pdok.nl"
+		}
+	},
+	"labels": {
+		"ESRILabels": {
+			"service": "WMTS",
+			"URL":"https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}{r}",
+			"subDomains":[],
+			"maxZoom": 20.0,
+			"attrib": "ESRI",
+			"attribLink": "https://www.esri.com"
+		},
+		"OSMlabels": {
+			"service": "WMTS",
+			"URL": "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",
+			"subDomains": ["a", "b", "c", "d"],
+			"maxZoom": 20.0,
+			"attrib": "OpenStreetMap contributors",
+			"attribLink": "https://carto.com/attributions"
+		}
+	}
+}

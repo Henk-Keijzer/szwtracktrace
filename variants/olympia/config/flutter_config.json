@@ -1,0 +1,21 @@
+{
+	"text": {
+      "participants": "boten",
+      "shipNames": "Bootnamen"
+	},
+	"colors": {
+		"menuBackgroundColor": "FF455A64",
+		"menuForegroundColor": "FFC8CED1",
+		"infoPageColor": "FFB0BEC5"
+	},
+	"icons": {
+		"boatIcon": "motorboat",
+		"boatSVGPath": "10,1 11,1 14,4 14,18 13,19 8,19 7,18 7,4"
+	},
+	"options": {
+		"windy": "true",
+        "localizations": "nl",
+		"applestorelink": "",
+		"playstorelink": ""
+	}
+}

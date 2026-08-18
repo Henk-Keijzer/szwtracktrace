@@ -1,0 +1,21 @@
+{
+	"eventtitle": "Naam van de race of heat",
+	"traillength": "1",
+	"trailsupdateinterval": "5",
+	"hfupdate": "true",
+	"displaydelay": "15",
+	"predicttime": "15",
+	"signallosttime": "30",
+	"showteam": "false",
+	"showteamdefault": "false",
+	"allowspeed": "true",
+	"buienradar": "false",
+	"maxreplay": "0",
+	"mediaframe": "",
+	"AISHub": "false",
+	"MarineTraffic": "false",
+	"eventstartstamp": "0",
+	"eventendstamp": "0",
+	"eventid": "",
+	"pipvideo": ""
+}

@@ -1,0 +1,62 @@
+{
+	"basemaps": {
+		"Open Street Map": {
+			"service": "WMTS",
+			"URL": "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+			"subDomains": [],
+			"wmsbaseURL": "",
+			"wmslayers": [],
+			"labels": "",
+			"bgColor": "#000000",
+			"maxZoom": 19.0,
+			"attrib": "Open Street Map Contributors",
+			"attribLink": "https://www.openstreetmap.org/"
+		},
+		"Satelliet": {
+			"service": "WMTS",
+			"URL": "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?token=AAPK98f1d23951d54ec6af3162442bf68e054QnQLuJueZ8pkCU6hV6vAcwoykak2mZeyCj8Y3-MIMAOSPZtZm4jHvwxGw_kcMJv",
+			"subDomains": [],
+			"wmsbaseURL": "",
+			"wmslayers": [],
+			"labels": "",
+			"bgColor": "#ffffff",
+			"maxZoom": 19.0,
+			"attrib": "Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+			"attribLink": "https://www.esri.com"
+		},
+		"Satelliet met labels": {
+			"service": "WMTS",
+			"URL": "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+			"subDomains": [],
+			"labels": "ESRILabels",
+			"bgColor": "#ffffff",
+			"maxZoom": 20.0,
+			"attrib": "Esri, Vantor, Earthstar Geographics, and the GIS User Community",
+			"attribLink": "https://www.esri.com"
+		}
+	},
+	"overlays": {},
+	"labels": {
+		"OSMlabels": {
+			"service": "WMTS",
+			"URL": "https://{s}.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}{r}.png",
+			"subDomains": [
+				"a",
+				"b",
+				"c",
+				"d"
+			],
+			"maxZoom": 20.0,
+			"attrib": "OpenStreetMap contributors",
+			"attribLink": "https://carto.com/attributions"
+		},
+		"ESRILabels": {
+			"service": "WMTS",
+			"URL": "https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}{r}",
+			"subDomains": [],
+			"maxZoom": 20.0,
+			"attrib": "ESRI",
+			"attribLink": "https://www.esri.com"
+		}
+	}
+}
