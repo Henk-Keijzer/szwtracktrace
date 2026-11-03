@@ -6,6 +6,7 @@ Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen e
 
 feature requests:
 
+replayloop opnieuw invoeren.
 
 ----------------------------------------------------------------------------------------------------
 Version 3.4.6/3.4.8
