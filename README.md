@@ -6,16 +6,16 @@ Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen e
 
 feature requests:
 
-replayloop opnieuw invoeren.
+
 
 ----------------------------------------------------------------------------------------------------
-Version 3.4.6/3.4.8
+Version 3.5.0/3.5.0
 
 - bug fixes 
   - isEmbeddedInIframe() and timeconversion to milliseconds
   - wrong url when lauching from embedded
   - allow trailslider (when enabled) down to zero
-  - 
+- replayloop added again as sliderbutton under zoom and follow
 
 Version 3.4.5, released on March 26, 2026
 

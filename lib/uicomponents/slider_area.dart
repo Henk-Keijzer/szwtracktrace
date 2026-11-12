@@ -255,7 +255,26 @@ class ZoomFollowButtons extends StatelessWidget {
               })),
       Text(txt.str('follow'),
           style: TextStyle(fontSize: 13, height: 0.01, color: (appState.bgColor == bgDark) ? Colors.black : Colors.white)),
-      const SizedBox(height: 10),
+      const SizedBox(width: 0, height: 10),
+      if (appState.eventStatus == EventStatus.replay)
+        Transform.scale(
+          scale: 0.8,
+          child: Switch(
+              activeTrackColor: appState.menuBackgroundColor.withAlpha(0x7F),
+              inactiveTrackColor: appState.menuForegroundColor.withAlpha(0x7F),
+              trackOutlineWidth: const WidgetStatePropertyAll(0),
+              thumbIcon: appState.replayLoop ? const WidgetStatePropertyAll(Icon(Icons.check)) : null,
+              value: appState.replayLoop,
+              onChanged: (value) {
+                appState.replayLoop = !appState.replayLoop;
+                appState.refreshUI();
+              })),
+      if (appState.eventStatus == EventStatus.replay)
+        Text(txt.str('loop'),
+          style: TextStyle(fontSize: 13, height: 0.01, color: (appState.bgColor == bgDark) ? Colors.black : Colors.white)),
+      if (appState.eventStatus == EventStatus.replay)
+        const SizedBox(height: 10),
+
     ]);
   }
 }
