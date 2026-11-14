@@ -64,8 +64,7 @@ Version 3.4.0, released on November 13, 2025
 - change text in Dutch consent message
 - animate menu's down AND up
 - added toggleMenu method and enum OpenMenu (instead of seven bool's)
-- make a ship's infowindow marker clickable to open the draggable shipInfoWindow (instead of double 
-  clicking the ship's marker)
+- make a ship's infowindow marker clickable to open the draggable shipInfoWindow (instead of double clicking the ship's marker)
 
 Version 3.3.9, released on November 2, 2025
 
@@ -85,10 +84,8 @@ Version 3.3.7, released on Sept 15, 2025
 Version 3.3.6, released on July 25, 2025
 
 - bugfix: timers were not cancelled (timer routines were async)
-- Feature: make map rotatable. Useful when sailing in a limited area. Allows to make the sailing 
-  area as big as possible
-- Feature: show youtube video picture-in-picture (landscape screen) or at the bottom of a portrait 
-  oriented screen
+- Feature: make map rotatable. Useful when sailing in a limited area. Allows to make the sailing area as big as possible
+- Feature: show youtube video picture-in-picture (landscape screen) or at the bottom of a portrait oriented screen
 
 Version 3.3.5, released on July 2, 2025
 
@@ -146,8 +143,7 @@ Version 3.3.1, released on November 29 2024
 
 Version 3.3.0 released on October 15, 2024
 
-- Bugfix: transition from pre-event to live gave some problems in case no positions were received
-  yet
+- Bugfix: transition from pre-event to live gave some problems in case no positions were received yet
 
 Version 3.2.9
 

@@ -4,8 +4,8 @@
 // o
 // |
 // | speedslider
-// |
-// |                                         zoomfollowbuttons o-o
+// |                                                           o-o
+// |                                     zoomfollowloopbuttons o-o
 // o                                                           o-o
 // > ----------replayslider--------o------------------------------
 // 1/1sec                  slidertext                          @ 2
