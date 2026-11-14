@@ -11,7 +11,7 @@
 // 1/1sec                  slidertext                          @ 2
 //
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../main_common.dart';
 import '../default_data.dart';
@@ -270,7 +270,7 @@ class ZoomFollowButtons extends StatelessWidget {
                 appState.refreshUI();
               })),
       if (appState.eventStatus == EventStatus.replay)
-        Text(txt.str('loop'),
+        Text(txt.str('replayLoop'),
           style: TextStyle(fontSize: 13, height: 0.01, color: (appState.bgColor == bgDark) ? Colors.black : Colors.white)),
       if (appState.eventStatus == EventStatus.replay)
         const SizedBox(height: 10),

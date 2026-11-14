@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:country_flags/country_flags.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
@@ -35,8 +35,8 @@ class LanguageMenu extends StatelessWidget {
       children: [
         SingleChildScrollView(
           child: Container(
+            decoration: BoxDecoration(color: appState.menuBackgroundColor, borderRadius: BorderRadius.all(Radius.circular(5))),
             width: 85,
-            color: appState.menuBackgroundColor,
             padding: EdgeInsets.fromLTRB(5, appState.menuOffset, 10, 10),
             child: ListView.builder(
               shrinkWrap: true,

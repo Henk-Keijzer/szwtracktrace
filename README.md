@@ -5,7 +5,7 @@ Track & Trace app voor wedstrijden met historische zeilende bedrijfsvaartuigen e
 ----------------------------------------------------------------------------------------------------
 
 feature requests:
-
+  notifications
 
 
 ----------------------------------------------------------------------------------------------------
@@ -16,14 +16,19 @@ Version 3.5.0/3.5.0
   - wrong url when lauching from embedded
   - allow trailslider (when enabled) down to zero
 - replayloop added again as sliderbutton under zoom and follow
+- slightly rounded menus
 
 Version 3.4.5, released on March 26, 2026
 
-- prepare for future compilation to wasm (move from dart:html to universal_web/web.dart in helpers.dart)
+- prepare for future compilation to wasm (move from dart:html to universal_web/web.dart in 
+  helpers.dart)
 - corrected position of close button in floating video frame
-- allow for multiple live videos in event.json (comma separated) but only works in non-web (web only plays the first one in the list)
-- added mapOnly mode in testing mode (removes action buttons from appbar, except menubuttonbar button, and the sliderarea)
-- longpress on zoombuttons zoom smooth in and out, tap gives animated zoom, click on zoomlevel toggles autozoom
+- allow for multiple live videos in event.json (comma separated) but only works in non-web (web only
+  plays the first one in the list)
+- added mapOnly mode in testing mode (removes action buttons from appbar, except menubuttonbar 
+  button, and the sliderarea)
+- longpress on zoombuttons zoom smooth in and out, tap gives animated zoom, click on zoomlevel 
+  toggles autozoom
 - menus scrollable, without scrolling the close button and the select all (participantsmenu) rows
 - added mouse regions on clickable elements (for web and desktop)
 - updated for new certificate
@@ -50,7 +55,8 @@ Version 3.4.1, released on November 24, 2025
 - bugfixes and optimizations
 - added language Afrikaans as sole language for KNRM
 - added slider for trails in map_menu and participants_menu (if allowMaxTrails in eventInfo is true)
-- allow windsimulation on/off independent of wind arrows. topleft windarrow always visible (if allowShowWind in eventInfo is true)
+- allow windsimulation on/off independent of wind arrows. topleft windarrow always visible (if 
+  allowShowWind in eventInfo is true)
 
 Version 3.4.0, released on November 13, 2025
 
@@ -58,7 +64,8 @@ Version 3.4.0, released on November 13, 2025
 - change text in Dutch consent message
 - animate menu's down AND up
 - added toggleMenu method and enum OpenMenu (instead of seven bool's)
-- make a ship's infowindow marker clickable to open the draggable shipInfoWindow (instead of double clicking the ship's marker)
+- make a ship's infowindow marker clickable to open the draggable shipInfoWindow (instead of double 
+  clicking the ship's marker)
 
 Version 3.3.9, released on November 2, 2025
 
@@ -78,8 +85,10 @@ Version 3.3.7, released on Sept 15, 2025
 Version 3.3.6, released on July 25, 2025
 
 - bugfix: timers were not cancelled (timer routines were async)
-- Feature: make map rotatable. Useful when sailing in a limited area. Allows to make the sailing area as big as possible
-- Feature: show youtube video picture-in-picture (landscape screen) or at the bottom of a portrait oriented screen
+- Feature: make map rotatable. Useful when sailing in a limited area. Allows to make the sailing 
+  area as big as possible
+- Feature: show youtube video picture-in-picture (landscape screen) or at the bottom of a portrait 
+  oriented screen
 
 Version 3.3.5, released on July 2, 2025
 
@@ -91,12 +100,14 @@ Version 3.3.5, released on July 2, 2025
 - Feature: calculate length of lines between gpsBuoys and show it in test modus
 - Feature: show length of buoy lines in test modus
 - Feature: allow buoy--lines to routebuoys
-- Feature: don't show route buoys with empty name, but use them to set bounds in pre-event and the start of replay
+- Feature: don't show route buoys with empty name, but use them to set bounds in pre-event and the 
+  start of replay
 - Feature: allow map to be rotated by the user
 
 Version 3.3.4, released on April 19/21, 2025
 
-- Move the scalebar to the very top of the map layers, so that it cannot be obscured by markers (ship, wind, buoy), labels or infowindows
+- Move the scalebar to the very top of the map layers, so that it cannot be obscured by markers 
+  (ship, wind, buoy), labels or infowindows
 - Removed unnecesarry check on event status in start/stop running
 - Opacity of labeltexts and markerborders reduced
 - Bug: if teamname == '' => teamname = 'team ' + shipname
@@ -113,15 +124,17 @@ Version 3.3.2, released on January 7, 2025
 - package http replaced by package dio (was already used by flutter_map)
 - selected item colored red in drop down lists in uiEventMenu
 - WindParticles widget implemented as a 'package' (no interdependencies any more)
-- upgrading to latest version of flutter, dart:ui and gradl (including handling deprecated Color.value)
+- upgrading to latest version of flutter, dart:ui and gradl (including handling deprecated 
+  Color.value)
 - code cleanup
 - bugfix: sharing is not possible when app is embedded in an <iframe>, so hide the button
-- in pre-event and live: monitor starttime and endtime in event.json and trails.json to see if the start/end of the event was changed by
-  the admin on the server, no need tor refresh anymore
+- in pre-event and live: monitor starttime and endtime in event.json and trails.json to see if the 
+  start/end of the event was changed by the admin on the server, no need tor refresh anymore
 
 Version 3.3.1, released on November 29 2024
 
-- Improvement: small down/up arrow in appbar title for eventmenu, title with ellipsis on narrow screens
+- Improvement: small down/up arrow in appbar title for eventmenu, title with ellipsis on narrow 
+  screens
 - Improvement: live/replay date-time string with ellipsis on narrow screens
 - Improvement: new shipColorTable for improved distict colors
 - Feature: added checkbox to show full trails of selected participants (eventInfo option)
@@ -133,7 +146,8 @@ Version 3.3.1, released on November 29 2024
 
 Version 3.3.0 released on October 15, 2024
 
-- Bugfix: transition from pre-event to live gave some problems in case no positions were received yet
+- Bugfix: transition from pre-event to live gave some problems in case no positions were received
+  yet
 
 Version 3.2.9
 
@@ -142,8 +156,10 @@ Version 3.2.9
 Version 3.2.8
 
 - Feature: switch between team/shipname with default setting added
-- Feature: added downarrow after eventtitle in appbar to indicate that there is a menu when clicking the eventtitle
-- Bugfix & optimizations: displaydelay simplified, prevent jumping during live when changing settings
+- Feature: added downarrow after eventtitle in appbar to indicate that there is a menu when clicking
+  the eventtitle
+- Bugfix & optimizations: displaydelay simplified, prevent jumping during live when changing 
+  settings
 
 Version 3.2.7 released on July 9, 2024
 

@@ -39,7 +39,7 @@
   "quoteBehindName": "* derrière le nom indique que la dernière position communiquée est plus ancienne que",
   "races": "Compétitions",
   "replay": "Replay",
-  "replayLoop": "Replay en boucle",
+  "replayLoop": "loop",
   "replaySpeed": "arrêté|1 sec/sec|10 sec/sec|30 sec/sec|1 min/sec|3 min/sec|5 min/sec|15 min/sec|30 min/sec|1 heure/sec",
   "routePortsBuoys": "Route, ports, bouées",
   "seconds[plural_one]": "seconde",

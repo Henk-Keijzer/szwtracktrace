@@ -5,7 +5,7 @@ import 'dart:math';
 
 import 'package:bordered_text/bordered_text.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -272,14 +272,14 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   // flutter routines for initialization, lifecyclechange and dispose
   //
   @override
-  initState() {
+  void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     initializeApp();
   }
 
   @override
-  didChangeAppLifecycleState(AppLifecycleState state) {
+  void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     if (!moveWhileNotInFocus && !showVideo) {
       switch (state) {
@@ -307,7 +307,7 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   }
 
   @override
-  dispose() {
+  void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     replayTicker.dispose();
     if (preEventTimer.isActive) preEventTimer.cancel();

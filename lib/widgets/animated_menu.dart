@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class AnimatedMenu extends StatelessWidget {
   const AnimatedMenu({super.key, required this.isVisible, required this.child});

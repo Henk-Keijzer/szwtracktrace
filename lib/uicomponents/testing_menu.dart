@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../main_common.dart';
 
@@ -14,8 +14,8 @@ class TestingMenu extends StatelessWidget {
       children: [
         SingleChildScrollView(
           child: Container(
+            decoration: BoxDecoration(color: appState.menuBackgroundColor, borderRadius: BorderRadius.all(Radius.circular(5))),
             width: 280,
-            color: appState.menuBackgroundColor,
             padding: EdgeInsets.fromLTRB(10, appState.menuOffset, 10, 10),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

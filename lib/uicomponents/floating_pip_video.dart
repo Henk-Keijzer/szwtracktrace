@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:szwtracktrace/widgets/video_player_widget.dart';
 
 import '../main_common.dart';

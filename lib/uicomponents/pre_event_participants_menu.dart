@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../main_common.dart'; // To get MyAppState
 
@@ -12,8 +12,8 @@ class PreEventParticipantsMenu extends StatelessWidget {
     final txt = appState.txt;
     return Row(mainAxisAlignment: MainAxisAlignment.end, children: [
       Container(
+          decoration: BoxDecoration(color: appState.menuBackgroundColor, borderRadius: BorderRadius.all(Radius.circular(5))),
           width: 280,
-          color: appState.menuBackgroundColor,
           padding: EdgeInsets.fromLTRB(10, appState.menuOffset, 0, 10),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Row(children: [

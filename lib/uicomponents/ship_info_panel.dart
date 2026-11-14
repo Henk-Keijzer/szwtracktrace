@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_html/flutter_html.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -46,7 +46,7 @@ class _ShipInfoPanelState extends State<ShipInfoPanel> {
                 constraints: BoxConstraints(
                     minHeight: 100, maxHeight: 500, maxWidth: appState.screenWidth - 55 < 350 ? appState.screenWidth - 55 : 350),
                 decoration:
-                    BoxDecoration(color: appState.menuBackgroundColor, border: Border.all(color: appState.menuForegroundColor, width: 1)),
+                    BoxDecoration(color: appState.menuBackgroundColor, borderRadius: BorderRadius.all(Radius.circular(5))),
                 padding: const EdgeInsets.all(10),
                 child: Stack(children: [
                   SingleChildScrollView(

@@ -2146,6 +2146,7 @@ url_launcher_macos
 url_launcher_web
 url_launcher_windows
 vector_graphics
+vector_graphics_codec
 vector_graphics_compiler
 vector_math
 webview_flutter
@@ -6154,7 +6155,6 @@ shared_preferences_linux
 shared_preferences_web
 shared_preferences_windows
 url_launcher_platform_interface
-vector_graphics_codec
 xdg_directories
 
 Copyright 2013 The Flutter Authors. All rights reserved.

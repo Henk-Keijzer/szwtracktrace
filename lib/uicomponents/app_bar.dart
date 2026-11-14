@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:country_flags/country_flags.dart';
 import 'package:fullscreen_window/fullscreen_window.dart';
 import 'package:url_launcher/url_launcher.dart';

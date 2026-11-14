@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -74,8 +74,10 @@ class _MenuButtonBarState extends State<MenuButtonBar> with TickerProviderStateM
       Column(children: [
         SizedBox(height: appState.menuOffset),
         Container(
+            decoration: BoxDecoration(
+                color: appState.menuBackgroundColor.withAlpha(appState.activeMenu == OpenMenu.none ? 0x7F : 0xFF),
+                borderRadius: BorderRadius.only( bottomLeft: Radius.circular(5))),
             width: 40,
-            color: appState.menuBackgroundColor.withAlpha(appState.activeMenu == OpenMenu.none ? 0x7F : 0xFF),
             child: Column(children: [
               if (appState.eventStart != appState.eventEnd)
                 IconButton(

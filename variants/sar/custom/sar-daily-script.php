@@ -10,15 +10,15 @@
 	$weekday = array('Zondag','Maandag','Dinsdag','Woensdag','Donderdag','Vrijdag','Zaterdag');
 	$month = array('januari','februari','maart','april','mei','juni','juli','augustus','september','oktober','november','december');
 	$eventtitle = 'Search & Rescue ' . $weekday[date('w', $start)] . ', ' . date('d ', $start) . $month[date('m', $start)-1] . date(' Y', $start);
-
+	
 	// create the new event folder using the date as foldername
 	$newpath = "../data/Reddingboten/" . $foldername;
 	$newdomain = 'Reddingboten/'.$foldername;
 	mkdir($newpath);
-
+	
 	// get the default event json file
 	$event = json_decode(file_get_contents('../data/Reddingboten/_default/event.json'), true);
-
+	
 	//replace eventid, eventtitle and start and end times
 	$event['eventid'] = 'Reddingboten-' . $foldername;
 	$event['eventtitle'] = $eventtitle;
@@ -35,18 +35,21 @@
 	// copy the participants of the live event to the new event
 	file_get_contents("https://sar.zeilvaartwarmond.nl/admin/me-handle-request.php?auth=special_script&req=copy-participants&event=Reddingboten/Live&newevent=".$newdomain);
 
+	// and copy the gpsbuoys of the live event to the new event
+	file_get_contents("https://sar.zeilvaartwarmond.nl/admin/me-handle-request.php?auth=special_script&req=copy-gpsbuoys&event=Reddingboten/Live&newevent=".$newdomain);
+
 	// force the system to generate a replaytracks.json file
 	file_get_contents("https://sar.zeilvaartwarmond.nl/get?req=replay&event=".$newdomain."&nostats=true");
-
+	
 	// one week back 7 * 24 * 60 * 60 = 604800)
 	$eventtodelete = 'Reddingboten/' . date('Y-m-d', $start - 604800);
-
+	
 	// delete the old event
 	file_get_contents("https://sar.zeilvaartwarmond.nl/admin/me-handle-request.php?auth=special_script&req=delete-event&event=" . $eventtodelete);
 
 	// delete old AIS positions from the traces table
 	$connection = mysqli_connect ($dbhost, $dbuser, $dbpassw, $dbname);
-	$query = "SELECT * FROM `participants` WHERE `eventdomain` = 'Reddingboten/Live';";
+	$query = "SELECT * FROM `participants` WHERE `eventdomain` LIKE 'Reddingboten/Live';";
 	$result = mysqli_query($connection, $query);
 	while ($data = mysqli_fetch_assoc($result)) {
 		$tracker = $data['trackerid'];
@@ -57,6 +60,6 @@
 	$query = "DELETE FROM `stats` WHERE `event` like 'Reddingboten%' AND `stamp` < '" . date('Y-m-d', $start - 604800) . "';";
 	mysqli_query($connection, $query);
 	//
-	// and thats'it
+	// and thats'it	
 	mysqli_close($connection);
 ?>

@@ -3,7 +3,7 @@
 // widget to show a floating frame with a child widget
 //
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter_box_transform/flutter_box_transform.dart';
 
 class FloatingFrame extends StatefulWidget {
