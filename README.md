@@ -15,7 +15,7 @@ Version 3.5.0/3.5.0
   - isEmbeddedInIframe() and timeconversion to milliseconds
   - wrong url when lauching from embedded
   - allow trailslider (when enabled) down to zero
-- replayloop added again as sliderbutton under zoom and follow
+- replayloop added again as sliding button under zoom and follow
 - slightly rounded menus
 
 Version 3.4.5, released on March 26, 2026
