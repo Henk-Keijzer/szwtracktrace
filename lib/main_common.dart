@@ -149,12 +149,12 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   bool allowTeams = false;
   int displayDelay = 30;
   int predictTime = 30;
-  int hfUpdateInterval = 100;
+  final int hfUpdateInterval = 100;    // fixed update live every 1/10 of a second
   bool allowShowWind = false;
   int trailsUpdateInterval = 30;
   int signalLostTime = 180;
-  int trailLength = 30;
-  int eventTrailLength = 30;
+  int trailLength = 30;                // current traillength in minutes
+  int eventTrailLength = 30;           // base traillength in minutes
   bool allowMaxTrailLengths = false;
   String socialMediaUrl = '';
   List<String> videoIdList = [];
@@ -240,6 +240,8 @@ class MyAppState extends State<MyApp> with WidgetsBindingObserver, SingleTickerP
   String infoPageHTML = '';
   bool testing = false;
   double gpsBuoyTotalLineLength = 0.0;
+
+  bool unreadNotifications = false;
 
   bool showWindMarkers = false;
   bool showWindParticles = false;

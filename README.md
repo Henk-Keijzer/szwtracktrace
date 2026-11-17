@@ -9,7 +9,13 @@ feature requests:
 
 
 ----------------------------------------------------------------------------------------------------
-Version 3.5.0/3.5.0
+Version 3.5.1
+
+- bug fixes:
+  - 
+- notifications
+
+Version 3.5.0, released on November 14, 2026
 
 - bug fixes 
   - isEmbeddedInIframe() and timeconversion to milliseconds

@@ -51,6 +51,14 @@ class CustomAppBar extends StatelessWidget implements PreferredSizeWidget {
               overflow: TextOverflow.ellipsis,
             )),
         actions: [
+          if (appState.eventStatus == EventStatus.preEvent || appState.eventStatus == EventStatus.live) IconButton(
+            onPressed: () {
+              appState.unreadNotifications = false;
+              appState.refreshUI();
+            },
+            icon: appState.unreadNotifications ?
+              Badge(backgroundColor: Colors.red, smallSize: 9, child: Icon(Icons.notifications)) :
+              Icon(Icons.notifications)),
           if (!appState.mapOnly && appState.supportedLanguages.length > 1)
             IconButton(
                 mouseCursor: SystemMouseCursors.click,
